@@ -13,12 +13,12 @@ Year 2 moves into the core of the programme: signals, electronics, electromagnet
 | S1 | COM202 | Engineering Physics II | [Past-Papers (1)](Semester-1/COM202_Engineering_Physics_II/Past-Papers) |
 | S1 | EEE202 | Engineers and Society | [Past-Papers (2)](Semester-1/EEE202_Engineers_and_Society/Past-Papers) · [Syllabus (1)](Semester-1/EEE202_Engineers_and_Society/Syllabus) |
 | S1 | COM205 | Microelectronic Devices and Circuits | [Past-Papers (1)](Semester-1/COM205_Microelectronic_Devices_and_Circuits/Past-Papers) |
-| S1 | EEE203 | Instrumentation | ⬜ 征集中 / wanted |
+| S1 | EEE203 | Instrumentation | [Syllabus (1)](Semester-1/EEE203_Instrumentation/Syllabus) |
 | S1 | — | Laboratory on Circuit Analysis | ⬜ 征集中 / wanted |
 | S1 | EEE215 | Artificial Intelligence | [Syllabus (1)](Semester-1/EEE215_Artificial_Intelligence/Syllabus) |
 | S1 | EEE312 | Programming Practice | [Syllabus (1)](Semester-1/EEE312_Programming_Practice/Syllabus) |
 | S2 | G0191 | Face Recognition with Machine Learning (elective) | [Syllabus (1)](Semester-2/G0191_Face_Recognition_with_Machine_Learning/Syllabus) |
-| S3 | COM208 | Engineering Mathematics IV | ⬜ 征集中 / wanted |
+| S3 | COM208 | Engineering Mathematics IV | [Syllabus (3)](Semester-3/COM208_Engineering_Mathematics_IV/Syllabus) |
 | S3 | COM209 | Engineering Mathematics V | [Past-Papers (2)](Semester-3/COM209_Engineering_Mathematics_V/Past-Papers) |
 | S3 | EEE313 | Semiconductor Physics and Device Processes | [Past-Papers (3)](Semester-3/EEE313_Semiconductor_Physics_and_Device_Processes/Past-Papers) · [Syllabus (1)](Semester-3/EEE313_Semiconductor_Physics_and_Device_Processes/Syllabus) |
 | S3 | EEE301 | Signals and Systems | [Past-Papers (1)](Semester-3/EEE301_Signals_and_Systems/Past-Papers) |

@@ -23,7 +23,7 @@ Year 1 is all about foundations: maths, circuits and programming basics, with pl
 | S3 | COM204 | Engineering Graphics | [Past-Papers (1)](Semester-3/COM204_Engineering_Graphics/Past-Papers) |
 | S3 | COM104 | Engineering Mathematics II | [Past-Papers (4)](Semester-3/COM104_Engineering_Mathematics_II/Past-Papers) |
 | S3 | COM105 | Engineering Physics I | [Past-Papers (4)](Semester-3/COM105_Engineering_Physics_I/Past-Papers) · [Syllabus (1)](Semester-3/COM105_Engineering_Physics_I/Syllabus) |
-| S3 | — | Introduction to the Constitution of Malaysia | ⬜ 征集中 / wanted |
+| S3 | MPU3.1 | Introduction to the Constitution of Malaysia | [Syllabus (1)](Semester-3/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/Syllabus) |
 | S3 | — | Community Service / Internet+ | ⬜ 征集中 / wanted |
 
 > 本表为 2021 入学（2025 届）的课程表；其他届请看各自目录。
