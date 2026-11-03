@@ -29,6 +29,8 @@ README.md
 DISCLAIMER.md
 CONTRIBUTING.md
 CONTRIBUTORS.md
+Lecturers.md               (教师档案 | lecturer profiles)
+Research-Opportunities.md  (研究机会 | research openings)
 EEE/
   README.md
   2021-2025/          (2021 入学、2025 届 | 2021 intake, Class of 2025)
@@ -74,6 +76,14 @@ Each course has its own folder, e.g. `EEE/2021-2025/Year-1/Semester-3/COM107_Cir
 - Blank past papers, syllabi, notes, lab tips, lecturer styles, assessment weightings: all welcome.
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for file naming, folder placement and the pre-upload checklist.
 - Not comfortable with git? Email us and we'll upload it for you, with credit.
+
+## 老师与研究机会 | Lecturers & research
+
+- [Lecturers.md](Lecturers.md) — 老师的授课风格、沟通方式、性格特点，只描述不打分。
+- [Research-Opportunities.md](Research-Opportunities.md) — 哪些老师正在招本科生进组，带更新日期。
+
+- [Lecturers.md](Lecturers.md) — lecturers' teaching style, communication and personality; descriptions only, no scores.
+- [Research-Opportunities.md](Research-Opportunities.md) — which lecturers are currently taking undergraduates, with update dates.
 
 ## 联系与获取访问 | Contact & access
 
