@@ -1,4 +1,4 @@
-# XMUM-EEE-Survival-Guide
+# XMUM-SAIR-Survival-Guide
 
 Ciallo～ (∠・ < )⌒☆
 
