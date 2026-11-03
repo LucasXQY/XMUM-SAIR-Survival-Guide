@@ -20,9 +20,9 @@ Welcome to the XMUM SAIR Survival Guide! This repo serves the three undergraduat
 
 ## 仓库结构 | Repository layout
 
-按专业 → 届（入学年-毕业年）→ 学年 → 学期 → 课程组织，不同届的资料分开存放。目前资料以 EEE 为主，AIT 和 ROBO 的位置已预留，等同学们加入。
+按专业 → 课程组织，每门课一个文件夹，所有年份的资料放在一起；各届的课程表（哪一年哪个学期上什么课）放在专业 README 里。目前资料以 EEE 为主，AIT 和 ROBO 的位置已预留，等同学们加入。
 
-Organised by programme → cohort (intake-graduation year) → year → semester → course, so each cohort's material stays separate. Most material so far is EEE; AIT and ROBO folders are ready and waiting for contributors.
+Organised by programme → course: one folder per course holding material from every year, with each cohort's curriculum (which course in which year and semester) tabled in the programme README. Most material so far is EEE; AIT and ROBO folders are ready and waiting for contributors.
 
 ```
 README.md
@@ -31,21 +31,20 @@ CONTRIBUTING.md
 CONTRIBUTORS.md
 Lecturers.md               (教师档案 | lecturer profiles)
 Research-Opportunities.md  (研究机会 | research openings)
+scripts/update_index.py    (重新生成课程索引 | regenerates the course index)
 EEE/
-  README.md
-  2021-2025/          (2021 入学、2025 届 | 2021 intake, Class of 2025)
-    Year-1/ … Year-4/ → Semester-1/2/3 → one folder per course
-  2022-2026/          (预留 | reserved)
-  2023-2027/
-  2024-2028/
-  2025-2029/
+  README.md                (课程索引 + 各届培养方案 | course index + curriculum per cohort)
+  COM107_Circuits_and_Devices/
+  COM204_Engineering_Graphics/
+  EEE220_Engineering_Graphics/
+  …                        (one folder per course)
 AIT/README.md       (人工智能 | Artificial Intelligence)
 ROBO/README.md      (机器人与自动化工程 | Robotics & Automation Engineering)
 ```
 
-每门课一个文件夹，例如 `EEE/2021-2025/Year-1/Semester-3/COM107_Circuits_and_Devices/`，里面按需包含：
+每门课一个文件夹，例如 `EEE/COM107_Circuits_and_Devices/`，里面按需包含：
 
-Each course has its own folder, e.g. `EEE/2021-2025/Year-1/Semester-3/COM107_Circuits_and_Devices/`, with any of these subfolders that have content:
+Each course has its own folder, e.g. `EEE/COM107_Circuits_and_Devices/`, with any of these subfolders that have content:
 
 - `Past-Papers/` — 空白往年试卷 | blank past papers (questions only)
 - `Syllabus/` — 教学大纲、课程介绍 | syllabus, teaching plan, course intro
@@ -60,13 +59,15 @@ Each course has its own folder, e.g. `EEE/2021-2025/Year-1/Semester-3/COM107_Cir
 
 ## 如何使用 | How to use
 
-- 先进 `EEE/`，选你那一届（入学年-毕业年），再按学年、学期找到课程文件夹。
-- 每一届的培养方案可能不同（比如 Engineering Graphics：2021 入学的同学大一时是 COM204，2025 入学的则是大二的 EEE220），所以各届分开存放。找不到时请按课程名或课程代码全库搜索，别只按学年翻。
+- 知道课程代码：直接进 `EEE/<代码>_<课程名>/`，或在 [EEE/README.md](EEE/README.md) 的课程索引里点进去。
+- 只知道自己是哪一届、哪一学期：看 [EEE/README.md](EEE/README.md) 里你那一届的培养方案表，按学年学期找课。
+- 课程代码会随届变化（比如 Engineering Graphics：2021 入学的同学大一时是 COM204，2025 入学的则是大二的 EEE220），课程 README 里有互相注明；找不到时按课程名全库搜索。
 - 在 GitHub 页面按 `T` 可以直接搜文件名。
 - 试卷只有题目，没有答案——自己做、和同学讨论、去问老师，才是正确打开方式。
 
-- Start in `EEE/`, pick your cohort (intake-graduation year), then go by year and semester to the course folder.
-- Curricula differ between cohorts (e.g. Engineering Graphics was COM204 in Year 1 for the 2021 intake but EEE220 in Year 2 for the 2025 intake), which is why cohorts are kept apart. If you can't find something, search the whole repo by course name or code instead of browsing by year only.
+- Know the course code: go straight to `EEE/<CODE>_<Course_Name>/`, or click through from the course index in [EEE/README.md](EEE/README.md).
+- Only know your cohort and semester: find your cohort's curriculum table in [EEE/README.md](EEE/README.md) and look up the course by year and semester.
+- Course codes change between cohorts (e.g. Engineering Graphics was COM204 in Year 1 for the 2021 intake but EEE220 in Year 2 for the 2025 intake); the course READMEs cross-reference each other. If you can't find something, search the whole repo by course name.
 - Press `T` on the GitHub repo page to search file names.
 - Papers contain questions only, no answers. Work them out yourself, discuss with classmates, ask your lecturer.
 

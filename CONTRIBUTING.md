@@ -144,23 +144,25 @@ Common labels: `Syllabus`, `Course_Intro`, `Assignment1`, `Lab1_Manual`, `Tutori
 
 ## 放在哪里 | Where to put it
 
-路径格式：`<专业>/<入学年>-<毕业年>/Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/<子文件夹>/`，例如：
+路径格式：`<专业>/<COURSECODE>_<Course_Name>/<子文件夹>/`，例如：
 
-Path format: `<Programme>/<intake-year>-<graduation-year>/Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/<subfolder>/`, for example:
+Path format: `<Programme>/<COURSECODE>_<Course_Name>/<subfolder>/`, for example:
 
 ```
-EEE/2021-2025/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
+EEE/COM107_Circuits_and_Devices/Past-Papers/
 ```
 
 - 专业：`EEE/`、`AIT/`、`ROBO/`。
+- 每门课一个文件夹，**所有年份、所有届的资料都放同一个课程文件夹**，靠文件名里的 `YYYYMM` 区分学期。不按届分目录。
 - 子文件夹：`Past-Papers/`、`Syllabus/`、`Assignments/`、`Labs/`、`Tutorials/`、`Handbooks/`、`Notes/`、`Exam-Review/`、`Tips/`，有内容才建。
-- 课程名用英文，单词之间用下划线，和大纲上的写法一致。
-- 先放进你自己那一届的目录（入学年-毕业年，例如 2023 入学就是 `2023-2027/`），没有就新建。各届分开存放，不要放进别的届。
+- 课程文件夹已存在就直接用；没有才新建，课程名用英文，单词之间用下划线，和大纲上的写法一致。
+- 课程改了代码（例如 COM204 → EEE220）就按新代码新建文件夹，并在两边的 `README.md` 里互相注明。
 
 - Programme: `EEE/`, `AIT/`, `ROBO/`.
+- One folder per course: **material from every year and every cohort goes in the same course folder**, distinguished by the `YYYYMM` in the file name. No per-cohort folders.
 - Subfolders: `Past-Papers/`, `Syllabus/`, `Assignments/`, `Labs/`, `Tutorials/`, `Handbooks/`, `Notes/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
-- Course names in English, words joined by underscores, spelled as on the syllabus.
-- Put files under your own cohort folder (intake-graduation year, e.g. `2023-2027/` for the 2023 intake); create it if missing. Cohorts stay separate: never put files in another cohort's tree.
+- Reuse the course folder if it exists; create one only if it doesn't, with the English name, words joined by underscores, spelled as on the syllabus.
+- If a course got a new code (e.g. COM204 → EEE220), create a folder under the new code and cross-reference both in their `README.md`.
 
 ## 需要一并修改的文件 | Files to update alongside
 
@@ -170,18 +172,14 @@ Dropping files in is step one. So that others can find them, also update the fil
 
 | 你做了什么 / What you did | 改哪里 / Where to edit | 怎么改 / How |
 |---|---|---|
-| 往已有课程加了文件 / Added files to an existing course | `<专业>/<届>/Year-N/README.md` 的"课程索引"表 / the "Course index" table in `<Programme>/<cohort>/Year-N/README.md` | 更新该课程那一行的子文件夹链接和数量，例如 `[Past-Papers (3)](...)`；如果原来是"⬜ 征集中"，替换成链接 / Update that course's row: subfolder links and counts, e.g. `[Past-Papers (3)](...)`; replace "⬜ 征集中 / wanted" with links |
-| 新建了一门课程 / Added a new course | 同上 / same Year README | 在表里按学期顺序加一行：`\| S2 \| CODE \| Course Name \| 链接 \|` / Add a row in semester order |
-| 加了第一份资料到一个空着的届 / First files into an empty cohort | `<专业>/README.md` 的"各届"表 / the cohorts table in `<Programme>/README.md` | 把该届的"⬜ 征集中"改成简短统计，例如"12 份空白试卷 / 12 blank papers" / Replace "wanted" with a short count |
-| | `<专业>/<届>/README.md` | 删掉"目前还空着"那句，可以加一句这届资料来自谁 / Remove the "empty for now" sentence; optionally say who contributed |
-| | 新建 `<专业>/<届>/Year-N/README.md` / create the Year README | 照抄 `EEE/2021-2025/Year-1/README.md` 的格式，表格只列你这届的课 / Copy the format of `EEE/2021-2025/Year-1/README.md`, listing only your cohort's courses |
-| 新建了一个届的目录 / Created a new cohort folder | `<专业>/README.md` 的"各届"表 | 加一行 `[2026-2030](2026-2030/)` / Add a row |
-| | 新建 `<专业>/<届>/README.md` | 照抄相邻届的 README，改年份 / Copy a neighbouring cohort's README and change the years |
-| AIT / ROBO 的第一份资料 / First files for AIT or ROBO | `AIT/README.md` 或 `ROBO/README.md` | 照 `EEE/README.md` 的格式加"各届"表 / Add a cohorts table in the style of `EEE/README.md` |
-| 已有资料的更新 / Updated existing material | `<专业>/README.md` 的"各届"表 | 更新那一届的统计数字 / Update that cohort's counts |
+| 加了或改了任何文件 / Added or changed any file | `<专业>/README.md` 的"课程索引"表 / the course index in `<Programme>/README.md` | 在仓库根目录运行 `python scripts/update_index.py EEE`，表格自动重生成；不想跑脚本就手动改那一行的链接和数量 / Run `python scripts/update_index.py EEE` from the repo root to regenerate the table, or edit that course's links and counts by hand |
+| 新建了一门课程 / Added a new course | `<专业>/README.md` 的"各届培养方案"表 / the curriculum tables in `<Programme>/README.md` | 在你那一届的表里把这门课那一行加上链接（`[CODE](CODE_Name/)`），没有这一行就按学年学期顺序加一行；然后跑一次索引脚本 / Link the course's row in your cohort's table (`[CODE](CODE_Name/)`), adding the row in year/semester order if missing; then run the index script |
+| 你那一届还没有培养方案表 / Your cohort has no curriculum table yet | `<专业>/README.md` 的"各届培养方案" | 照 2021 入学那张表的格式新加一节 `### <入学年> 入学（<毕业年> 届）| …`，列出你们每学年每学期的课（代码以你们的培养方案为准），有资料的行加链接 / Add a section `### <intake> 入学（<graduation> 届）| …` in the same format as the 2021 table, listing your courses by year and semester with your cohort's codes; link rows that have material |
+| AIT / ROBO 的第一份资料 / First files for AIT or ROBO | `AIT/README.md` 或 `ROBO/README.md` | 照 `EEE/README.md` 的格式加课程索引（带 `<!-- COURSE-INDEX -->` 标记）和培养方案表，然后 `python scripts/update_index.py AIT` / Add a course index (with the `<!-- COURSE-INDEX -->` markers) and curriculum tables in the style of `EEE/README.md`, then run `python scripts/update_index.py AIT` |
+| 课程换了代码 / A course got a new code | 新旧两个课程文件夹的 `README.md` | 各写一句"2021 入学时为 COM204 / 2025 入学起为 EEE220"互相链接，例子见 `EEE/EEE220_Engineering_Graphics/README.md` / One line in each README cross-linking the other; see `EEE/EEE220_Engineering_Graphics/README.md` |
 | 想写老师授课风格 / Lecturer teaching style | [Lecturers.md](Lecturers.md) | 找到老师的小节填空；没有就按模板新增。只描述不打分 / Fill in the lecturer's section, or add one from the template. Descriptions only, no scores |
 | 老师在招人 / A lecturer is recruiting | [Research-Opportunities.md](Research-Opportunities.md) | 在"当前招人"表加一行，带年月；不再招人时把状态改成"已关闭"并移到"历史记录" / Add a row to "Currently recruiting" with the date; when closed, mark it and move it to "Past entries" |
-| 课程的小贴士、考核比例 / Course tips, assessment weighting | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就新建，格式见 `EEE/2025-2029/Year-2/Semester-1/EEE220_Engineering_Graphics/README.md` / Create one if missing; see that file for the format |
+| 课程的小贴士、考核比例 / Course tips, assessment weighting | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就新建，格式见 `EEE/EEE220_Engineering_Graphics/README.md` / Create one if missing; see that file for the format |
 | 想署名 / Want to be credited | [CONTRIBUTORS.md](CONTRIBUTORS.md) | 在你那一届的表里加一行，昵称 / 真名 / 匿名都行，联系方式可留空 / Add a row under your cohort; nickname, name or anonymous, contact optional |
 | 规则本身要改 / Changing the rules | 本文件 [CONTRIBUTING.md](CONTRIBUTING.md) 及 [DISCLAIMER.md](DISCLAIMER.md) | 中英文都改，先在 PR 里说明原因 / Change both languages and explain why in the PR |
 | 改了总体介绍 / Changed the overview | 根目录 [README.md](README.md) | 目录树、子文件夹列表、链接要和实际一致 / Keep the tree, subfolder list and links in sync with reality |
@@ -215,7 +213,7 @@ Dropping files in is step one. So that others can find them, also update the fil
 - [ ] 文件属性里的作者已清空 | File metadata author cleared
 - [ ] 打码的是真涂黑，文字复制不出来 | Redactions are real: text can't be copied out
 - [ ] 文件能正常打开 | The file opens correctly
-- [ ] 放在了正确的届和文件夹 | It's in the correct cohort and folder
+- [ ] 放在了正确的课程文件夹和子文件夹 | It's in the correct course folder and subfolder
 - [ ] 文件名符合规范 | It follows the naming convention
 - [ ] 改了对应的 README 索引 | The matching README index is updated
 - [ ] 在 CONTRIBUTORS.md 里署名（可选）| Added yourself to CONTRIBUTORS.md (optional)
