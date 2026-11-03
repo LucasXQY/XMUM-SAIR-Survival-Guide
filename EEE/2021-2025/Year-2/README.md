@@ -17,7 +17,6 @@ Year 2 moves into the core of the programme: signals, electronics, electromagnet
 | S1 | — | Laboratory on Circuit Analysis | ⬜ 征集中 / wanted |
 | S1 | — | Artificial Intelligence | ⬜ 征集中 / wanted |
 | S1 | — | Programming Practice | ⬜ 征集中 / wanted |
-| S1 | EEE220 | Engineering Graphics (2025 intake) | [Assignments (1)](Semester-1/EEE220_Engineering_Graphics/Assignments) |
 | S3 | COM209 | Engineering Mathematics V | [Past-Papers (2)](Semester-3/COM209_Engineering_Mathematics_V/Past-Papers) |
 | S3 | — | Engineering Mathematics IV | ⬜ 征集中 / wanted |
 | S3 | EEE313 | Semiconductor Physics and Device Processes | [Past-Papers (3)](Semester-3/EEE313_Semiconductor_Physics_and_Device_Processes/Past-Papers) |
@@ -26,5 +25,5 @@ Year 2 moves into the core of the programme: signals, electronics, electromagnet
 | S3 | — | Computer Architecture | ⬜ 征集中 / wanted |
 | S3 | — | PCB Design | ⬜ 征集中 / wanted |
 
-> 课程表以 2021 入学（2025 届）为准，代码/年级可能因年级不同而变化；请按课程名或代码搜索。
-> Based on the 2021-intake timetable; codes and years may differ for other intakes. Search by course name or code.
+> 本表为 2021 入学（2025 届）的课程表；其他届请看各自目录。
+> Course list of the 2021 intake (Class of 2025); other cohorts have their own folders.

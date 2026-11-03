@@ -7,12 +7,14 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 ## 欢迎上传 | What to upload
 
 - 空白往年试卷（只有题目）：期末、期中、小测等
+- 教学大纲（syllabus / teaching plan）、第一周的课程介绍
 - 自己的笔记、复习总结
 - 实验经验、踩坑记录
 - 老师的教学风格、出题习惯
 - 课程考核比例（作业、实验、期中、期末各占多少）
 
 - Blank past papers (questions only): finals, midterms, quizzes, etc.
+- Syllabus / teaching plan and week-1 course-intro slides
 - Your own notes and revision summaries
 - Lab tips and lessons learned
 - Lecturers' teaching styles and exam habits
@@ -63,21 +65,21 @@ For notes and other files, start with the course code and describe the content c
 
 ## 放在哪里 | Where to put it
 
-路径格式：`<专业>/Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/<子文件夹>/`，例如：
+路径格式：`<专业>/<入学年>-<毕业年>/Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/<子文件夹>/`，例如：
 
-Path format: `<Programme>/Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/<subfolder>/`, for example:
+Path format: `<Programme>/<intake-year>-<graduation-year>/Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/<subfolder>/`, for example:
 
 ```
-EEE/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
+EEE/2021-2025/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
 ```
 
-- 子文件夹：`Past-Papers/`、`Notes/`、`Assignments/`、`Exam-Review/`、`Tips/`，有内容才建。
+- 子文件夹：`Past-Papers/`、`Syllabus/`、`Notes/`、`Assignments/`、`Exam-Review/`、`Tips/`，有内容才建。
 - 可以在课程文件夹里加一个 `README.md`，写授课老师、考核比例和小贴士。
-- 学年和课程代码以 2021 入学（2025 届）培养方案为准。如果你那一届不一样，先搜一下这门课是否已有文件夹，有就放进去，没有就按你那届的情况新建，并在 PR 里说明。
+- 先放进你自己那一届的目录（入学年-毕业年，例如 2023 入学就是 `2023-2027/`），没有就新建。各届分开存放，不要放进别的届。
 
-- Subfolders: `Past-Papers/`, `Notes/`, `Assignments/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
+- Subfolders: `Past-Papers/`, `Syllabus/`, `Notes/`, `Assignments/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
 - You can add a `README.md` in the course folder with the lecturer, assessment weighting and tips.
-- Years and codes follow the 2021-intake curriculum. If yours differs, search for the course first and use the existing folder; if there isn't one, create it based on your intake and mention this in the PR.
+- Put files under your own cohort folder (intake-graduation year, e.g. `2023-2027/` for the 2023 intake); create it if missing. Cohorts stay separate: never put files in another cohort's tree.
 
 ## 如何提交 | How to submit
 

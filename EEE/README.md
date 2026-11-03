@@ -1,32 +1,25 @@
 # EEE | 电子信息工程
 
-厦马 EEE 的资料都在这里，按学年 → 学期 → 课程整理。
+资料按**届**分目录存放：`EEE/<入学年>-<毕业年>/Year-N/Semester-N/<课程代码>_<课程名>/`。每一届的培养方案、课程代码都可能不同，所以不同届的资料分开放，不混在一起。先找你自己那一届；找不到再看相邻的届，很多课内容是相通的。
 
-All XMUM EEE material lives here, organised by year → semester → course.
+Material is stored **per cohort**: `EEE/<intake-year>-<graduation-year>/Year-N/Semester-N/<CODE>_<Course>/`. Curricula and course codes change between cohorts, so each cohort has its own tree. Look in your own cohort first, then in neighbouring ones: many courses overlap.
 
-## 学年 | Years
+## 各届 | Cohorts
 
-- [Year-1 | 大一](Year-1/README.md)
-- [Year-2 | 大二](Year-2/README.md)
-- [Year-3 | 大三](Year-3/README.md)
-- [Year-4 | 大四](Year-4/README.md)
+| 目录 / Folder | 入学 / Intake | 毕业 / Class of | 状态 / Status |
+|---|---|---|---|
+| [2021-2025](2021-2025/) | 2021 | 2025 | 39 份空白试卷 / 39 blank papers |
+| [2022-2026](2022-2026/) | 2022 | 2026 | ⬜ 征集中 / wanted |
+| [2023-2027](2023-2027/) | 2023 | 2027 | ⬜ 征集中 / wanted |
+| [2024-2028](2024-2028/) | 2024 | 2028 | ⬜ 征集中 / wanted |
+| [2025-2029](2025-2029/) | 2025 | 2029 | 1 份作业 / 1 assignment |
 
-## 不同年级培养方案不同 | Curriculum varies by intake
+更早或更晚的届：直接按同样格式新建目录即可。
 
-课程代码和所在学年以 2021 入学（2025 届）培养方案为准。之后的年级可能有调整，比如 Engineering Graphics：2021 入学的同学大一时是的 COM204，2025 入学的是大二的 EEE220。找资料时请按课程名或课程代码搜索（GitHub 页面按 `T`），不要只按学年翻。
+Earlier or later cohorts: just create a folder in the same format.
 
-Course codes and years follow the 2021-intake curriculum. Later intakes may differ: Engineering Graphics, for example, was COM204 in Year 1 for the 2021 intake but EEE220 in Year 2 for the 2025 intake. Search by course name or code (press `T` on GitHub) rather than browsing by year only.
+## 文件命名 | File naming
 
-## 命名规范 | Naming convention
+试卷：`<COURSECODE>_<YYYYMM>_<Assessment>[_SetA]_Question.<ext>`，大纲：`<COURSECODE>_<YYYYMM>_Syllabus.<ext>`。详见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
-课程文件夹：`Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/`，内含 `Past-Papers/`、`Notes/`、`Assignments/`、`Exam-Review/`、`Tips/`（有内容才建）和可选的 `README.md`。
-
-Course folders: `Year-<N>/Semester-<N>/<COURSECODE>_<Course_Name>/`, containing `Past-Papers/`, `Notes/`, `Assignments/`, `Exam-Review/`, `Tips/` (only those with content) and an optional `README.md`.
-
-试卷文件：`<COURSECODE>_<YYYYMM>_<Assessment>[_SetA]_Question.<ext>`，例如 `COM107_202204_Final_SetA_Question.pdf`。`YYYYMM` 是试卷上印的学期。
-
-Paper files: `<COURSECODE>_<YYYYMM>_<Assessment>[_SetA]_Question.<ext>`, e.g. `COM107_202204_Final_SetA_Question.pdf`. `YYYYMM` is the session printed on the paper.
-
-详见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
-
-Details in [CONTRIBUTING.md](../CONTRIBUTING.md).
+Papers: `<COURSECODE>_<YYYYMM>_<Assessment>[_SetA]_Question.<ext>`; syllabi: `<COURSECODE>_<YYYYMM>_Syllabus.<ext>`. See [CONTRIBUTING.md](../CONTRIBUTING.md).
