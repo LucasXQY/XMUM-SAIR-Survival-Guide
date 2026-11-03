@@ -2,9 +2,9 @@
 
 Ciallo～ (∠・ < )⌒☆
 
-欢迎来到厦马 EEE 生存指南！电子信息工程作为厦马课程强度较大、考试较为频繁、学习资源相对有限的专业之一，本仓库旨在为 XMUM 电子信息工程专业建立一个开放的学习资料共享平台。通过汇集同学们的学习笔记、实验经验、考试复习资料与重点总结，并整理教师教学风格与学习建议，实现资源互助与经验传承，帮助更多同学高效学习、顺利备考，取得好成绩，并为未来申请实习与心仪 offer 打下坚实基础。
+欢迎来到厦马 SAIR 生存指南！本仓库面向厦门大学马来西亚分校人工智能与机器人学院（School of Artificial Intelligence and Robotics, SAIR）的三个本科专业：电子信息工程（EEE）、人工智能（AIT）、机器人与自动化工程（ROBO）。这些专业课程强度较大、考试较为频繁、学习资源相对有限，本仓库旨在为大家建立一个开放的学习资料共享平台。通过汇集同学们的学习笔记、实验经验、考试复习资料与重点总结，并整理教师教学风格与学习建议，实现资源互助与经验传承，帮助更多同学高效学习、顺利备考，取得好成绩，并为未来申请实习与心仪 offer 打下坚实基础。
 
-Welcome to the XMUM EEE Survival Guide! Electrical & Electronic Engineering is one of the heaviest programmes at Xiamen University Malaysia: lots of courses, frequent exams, and not many shared resources. This repo is an open, student-run place to pool notes, lab experience, revision material and exam-prep summaries, plus honest notes on lecturers' teaching styles and study advice. The goal: help each other study smarter, get through exams with good grades, and build a solid base for internships and that dream offer.
+Welcome to the XMUM SAIR Survival Guide! This repo serves the three undergraduate programmes of XMUM's School of Artificial Intelligence and Robotics (SAIR): Electrical & Electronic Engineering (EEE), Artificial Intelligence (AIT) and Robotics & Automation Engineering (ROBO). They are among the heaviest programmes on campus: lots of courses, frequent exams, and not many shared resources. This repo is an open, student-run place to pool notes, lab experience, revision material and exam-prep summaries, plus honest notes on lecturers' teaching styles and study advice. The goal: help each other study smarter, get through exams with good grades, and build a solid base for internships and that dream offer.
 
 ## 初衷 | Why this exists
 
@@ -20,9 +20,9 @@ Welcome to the XMUM EEE Survival Guide! Electrical & Electronic Engineering is o
 
 ## 仓库结构 | Repository layout
 
-目前以 EEE 为主，按学年 → 学期 → 课程组织；AIT 和其他专业已预留位置。
+按专业 → 学年 → 学期 → 课程组织。目前资料以 EEE 为主，AIT 和 ROBO 的位置已预留，等同学们加入。
 
-The repo currently focuses on EEE, organised by year → semester → course. Space is reserved for AIT and other programmes.
+Organised by programme → year → semester → course. Most material so far is EEE; AIT and ROBO folders are ready and waiting for contributors.
 
 ```
 README.md
@@ -35,8 +35,8 @@ EEE/
   Year-2/README.md
   Year-3/README.md
   Year-4/README.md
-AIT/README.md
-Other-Programmes/README.md
+AIT/README.md       (人工智能 | Artificial Intelligence)
+ROBO/README.md      (机器人与自动化工程 | Robotics & Automation Engineering)
 ```
 
 每门课一个文件夹，例如 `EEE/Year-1/Semester-3/COM107_Circuits_and_Devices/`，里面按需包含：
@@ -96,10 +96,10 @@ This is a student-run project, not affiliated with or endorsed by XMUM. Papers r
 
 Thanks to everyone, from every intake, who chipped in. See [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
-## 其他专业 | Other programmes
+## 同院其他专业 | Other SAIR programmes
 
-- [AIT/](AIT/README.md) — 已预留，等待 AIT 同学加入。
-- [Other-Programmes/](Other-Programmes/README.md) — 其他专业的位置也留好了。
+- [AIT/](AIT/README.md) — 人工智能，已预留，等待 AIT 同学加入。
+- [ROBO/](ROBO/README.md) — 机器人与自动化工程，已预留，等待 ROBO 同学加入。
 
-- [AIT/](AIT/README.md) — reserved, waiting for AIT students to join in.
-- [Other-Programmes/](Other-Programmes/README.md) — a spot is ready for other programmes too.
+- [AIT/](AIT/README.md) — Artificial Intelligence, reserved for AIT students.
+- [ROBO/](ROBO/README.md) — Robotics & Automation Engineering, reserved for ROBO students.
