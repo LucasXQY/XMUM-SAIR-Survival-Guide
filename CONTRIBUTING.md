@@ -4,37 +4,103 @@
 
 Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 
+目录 | Contents
+
+1. [欢迎上传 / What to upload](#欢迎上传--what-to-upload)
+2. [请勿上传 / What NOT to upload](#请勿上传--what-not-to-upload)
+3. [打码规则 / Redaction rules](#打码规则--redaction-rules)
+4. [文件命名 / File naming](#文件命名--file-naming)
+5. [放在哪里 / Where to put it](#放在哪里--where-to-put-it)
+6. [需要一并修改的文件 / Files to update alongside](#需要一并修改的文件--files-to-update-alongside)
+7. [如何提交 / How to submit](#如何提交--how-to-submit)
+8. [上传前检查清单 / Pre-upload checklist](#上传前检查清单--pre-upload-checklist)
+9. [署名 / Credit](#署名--credit)
+
 ## 欢迎上传 | What to upload
 
 - 空白往年试卷（只有题目）：期末、期中、小测等
 - 教学大纲（syllabus / teaching plan）、第一周的课程介绍
+- 作业题目（assignment brief）、实验手册、习题（tutorial sheet）、评分表（rubric）、报告模板
 - 自己的笔记、复习总结
 - 实验经验、踩坑记录
-- 老师的教学风格、出题习惯
+- 老师的教学风格、出题习惯（写到 [Lecturers.md](Lecturers.md)）
+- 哪些老师在招本科生进组（写到 [Research-Opportunities.md](Research-Opportunities.md)）
 - 课程考核比例（作业、实验、期中、期末各占多少）
 
 - Blank past papers (questions only): finals, midterms, quizzes, etc.
 - Syllabus / teaching plan and week-1 course-intro slides
+- Assignment briefs, lab manuals, tutorial sheets, rubrics, report templates
 - Your own notes and revision summaries
 - Lab tips and lessons learned
-- Lecturers' teaching styles and exam habits
+- Lecturers' teaching styles and exam habits (go in [Lecturers.md](Lecturers.md))
+- Which lecturers are taking undergraduates (go in [Research-Opportunities.md](Research-Opportunities.md))
 - Assessment weightings (assignments, labs, midterm, final)
 
 ## 请勿上传 | What NOT to upload
 
-- 答案、评分标准（marking scheme）、参考解答
-- 写过的学生答卷
+- 答案、评分标准（marking scheme）、参考解答，包括括号里填好答案的习题
+- 写过的学生答卷、交过的作业、实验报告
 - 学生姓名、学号、签名等个人信息
 - 老师的私人联系方式（电话、私人邮箱等）
+- Moodle 选课密码（enrolment key）、群二维码、会议链接和密码
+- 整套课件 PPT（体积大、版权敏感；可以在课程 README 里放网盘链接）
+- 教材、出版社的习题集、MIT OCW 等外部公开资源（直接给链接）
+- 单个超过 100 MB 的文件（GitHub 不收）
 
-- Answers, marking schemes, model solutions
-- Filled-in student scripts
+- Answers, marking schemes, model solutions, including tutorial sheets with answers filled in brackets
+- Filled-in student scripts, submitted assignments, lab reports
 - Student names, IDs, signatures or any other personal data
 - Lecturers' private contact details (phone numbers, personal emails, etc.)
+- Moodle enrolment keys, group QR codes, meeting links and passcodes
+- Full lecture-slide decks (large and copyright-sensitive; link to a cloud drive from the course README instead)
+- Textbooks, publisher problem sets, MIT OCW and other public resources (just link them)
+- Any single file over 100 MB (GitHub rejects it)
 
 原因很简单：避免学术诚信问题，同时保护每个人的个人信息。
 
 Why: to stay clear of academic-integrity problems and to protect everyone's personal data.
+
+## 打码规则 | Redaction rules
+
+有些文件整体很有用，只是夹着几处敏感信息。这种情况不用放弃，打码后再上传。
+
+Some files are useful as a whole but contain a few sensitive bits. Don't drop them: redact, then upload.
+
+**必须打码 | Must be redacted**
+
+- 老师、助教的手机号、微信号、私人邮箱（hotmail / gmail / qq 等）
+- Moodle enrolment key、群二维码、Zoom / Teams 链接和密码
+- 任何学生的姓名、学号、签名、照片
+- 文件属性里的作者名（PDF / Word / PPT 的 metadata）
+
+- Lecturers' and TAs' phone numbers, WeChat IDs, private emails (hotmail / gmail / qq etc.)
+- Moodle enrolment keys, group QR codes, Zoom / Teams links and passcodes
+- Any student's name, ID, signature or photo
+- Author names in file properties (PDF / Word / PPT metadata)
+
+**可以保留 | OK to keep**
+
+- 老师的学校邮箱（`@xmu.edu.my`）和办公室号
+- 老师姓名、课程代码、学期
+- 学校、学院的公开信息
+
+- Lecturers' university email (`@xmu.edu.my`) and office number
+- Lecturer names, course codes, sessions
+- Public university / school information
+
+**怎么打码 | How to redact**
+
+- PDF：用真正的"涂黑"（redact）功能，不要只画一个黑框盖上去，文字还在底下能复制出来。Acrobat 的 Redact、PDF-XChange、或者 Python 的 PyMuPDF（`page.add_redact_annot()` + `page.apply_redactions()`）都可以。
+- Word / PPT：直接把文字改成 `[已打码 / redacted]`，再另存。
+- 图片 / 扫描件：用画图工具涂实色块后另存，不要用半透明或马赛克。
+- 清掉文件属性：Word / PPT 用"文件 → 信息 → 检查问题 → 检查文档"；PDF 用 PyMuPDF `doc.set_metadata({})`。
+- 打码后自己再打开一遍，全文搜索一下手机号和邮箱，确认搜不到。
+
+- PDF: use a real redaction tool, not a black rectangle drawn on top (the text underneath can still be copied). Acrobat Redact, PDF-XChange, or Python's PyMuPDF (`page.add_redact_annot()` + `page.apply_redactions()`) all work.
+- Word / PPT: replace the text with `[已打码 / redacted]` and save a copy.
+- Images / scans: paint a solid block in any image editor and save; no translucency or mosaic.
+- Strip file properties: Word / PPT via File → Info → Check for Issues → Inspect Document; PDF via PyMuPDF `doc.set_metadata({})`.
+- Reopen the file afterwards and search for phone numbers and emails to confirm they are gone.
 
 ## 文件命名 | File naming
 
@@ -50,18 +116,31 @@ Past papers follow this pattern:
 - `Assessment`：`Final`、`Midterm`、`Quiz1` 等。
 - `_SetA`：有多套卷时才加。
 
-- `YYYYMM`: the intake session printed on the paper, e.g. `202204` = April 2022 session.
+- `YYYYMM`: the session printed on the paper, e.g. `202204` = April 2022 session.
 - `Assessment`: `Final`, `Midterm`, `Quiz1`, etc.
 - `_SetA`: only if there are multiple sets.
+
+其他文件用同样的前缀，把 `Assessment` 换成内容标签：
+
+Other files use the same prefix with a content label in place of `Assessment`:
+
+```
+<COURSECODE>_<YYYYMM>_<Label>.<ext>
+```
 
 例子 | Examples:
 
 - `COM107_202204_Final_SetA_Question.pdf`
 - `COM108_202109_Quiz1_Question.pdf`
+- `COM106_202109_Syllabus.pdf`
+- `COM103_202204_Assignment1.pdf`
+- `COM103_202204_Lab2_Manual.pdf`
+- `COM105_202204_Tutorial3.pdf`
+- `EEE312_202209_Report_Template.docx`
 
-笔记等其他文件尽量以课程代码开头，名字说清楚内容即可。
+常用标签：`Syllabus`、`Course_Intro`、`Assignment1`、`Lab1_Manual`、`Tutorial1`、`Rubric`、`Report_Template`、`Handbook`、`Notes`。不知道学期就写课程开设的那一学期。
 
-For notes and other files, start with the course code and describe the content clearly.
+Common labels: `Syllabus`, `Course_Intro`, `Assignment1`, `Lab1_Manual`, `Tutorial1`, `Rubric`, `Report_Template`, `Handbook`, `Notes`. If unsure of the session, use the one the course ran in.
 
 ## 放在哪里 | Where to put it
 
@@ -73,30 +152,73 @@ Path format: `<Programme>/<intake-year>-<graduation-year>/Year-<N>/Semester-<N>/
 EEE/2021-2025/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
 ```
 
+- 专业：`EEE/`、`AIT/`、`ROBO/`。
 - 子文件夹：`Past-Papers/`、`Syllabus/`、`Assignments/`、`Labs/`、`Tutorials/`、`Handbooks/`、`Notes/`、`Exam-Review/`、`Tips/`，有内容才建。
-- 可以在课程文件夹里加一个 `README.md`，写授课老师、考核比例和小贴士。
+- 课程名用英文，单词之间用下划线，和大纲上的写法一致。
 - 先放进你自己那一届的目录（入学年-毕业年，例如 2023 入学就是 `2023-2027/`），没有就新建。各届分开存放，不要放进别的届。
 
+- Programme: `EEE/`, `AIT/`, `ROBO/`.
 - Subfolders: `Past-Papers/`, `Syllabus/`, `Assignments/`, `Labs/`, `Tutorials/`, `Handbooks/`, `Notes/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
-- You can add a `README.md` in the course folder with the lecturer, assessment weighting and tips.
+- Course names in English, words joined by underscores, spelled as on the syllabus.
 - Put files under your own cohort folder (intake-graduation year, e.g. `2023-2027/` for the 2023 intake); create it if missing. Cohorts stay separate: never put files in another cohort's tree.
+
+## 需要一并修改的文件 | Files to update alongside
+
+放好文件只是第一步。为了让别人找得到，请顺手改下面这些文件。按你做的事对号入座，用不到的跳过。
+
+Dropping files in is step one. So that others can find them, also update the files below. Pick the rows that match what you did and skip the rest.
+
+| 你做了什么 / What you did | 改哪里 / Where to edit | 怎么改 / How |
+|---|---|---|
+| 往已有课程加了文件 / Added files to an existing course | `<专业>/<届>/Year-N/README.md` 的"课程索引"表 / the "Course index" table in `<Programme>/<cohort>/Year-N/README.md` | 更新该课程那一行的子文件夹链接和数量，例如 `[Past-Papers (3)](...)`；如果原来是"⬜ 征集中"，替换成链接 / Update that course's row: subfolder links and counts, e.g. `[Past-Papers (3)](...)`; replace "⬜ 征集中 / wanted" with links |
+| 新建了一门课程 / Added a new course | 同上 / same Year README | 在表里按学期顺序加一行：`\| S2 \| CODE \| Course Name \| 链接 \|` / Add a row in semester order |
+| 加了第一份资料到一个空着的届 / First files into an empty cohort | `<专业>/README.md` 的"各届"表 / the cohorts table in `<Programme>/README.md` | 把该届的"⬜ 征集中"改成简短统计，例如"12 份空白试卷 / 12 blank papers" / Replace "wanted" with a short count |
+| | `<专业>/<届>/README.md` | 删掉"目前还空着"那句，可以加一句这届资料来自谁 / Remove the "empty for now" sentence; optionally say who contributed |
+| | 新建 `<专业>/<届>/Year-N/README.md` / create the Year README | 照抄 `EEE/2021-2025/Year-1/README.md` 的格式，表格只列你这届的课 / Copy the format of `EEE/2021-2025/Year-1/README.md`, listing only your cohort's courses |
+| 新建了一个届的目录 / Created a new cohort folder | `<专业>/README.md` 的"各届"表 | 加一行 `[2026-2030](2026-2030/)` / Add a row |
+| | 新建 `<专业>/<届>/README.md` | 照抄相邻届的 README，改年份 / Copy a neighbouring cohort's README and change the years |
+| AIT / ROBO 的第一份资料 / First files for AIT or ROBO | `AIT/README.md` 或 `ROBO/README.md` | 照 `EEE/README.md` 的格式加"各届"表 / Add a cohorts table in the style of `EEE/README.md` |
+| 已有资料的更新 / Updated existing material | `<专业>/README.md` 的"各届"表 | 更新那一届的统计数字 / Update that cohort's counts |
+| 想写老师授课风格 / Lecturer teaching style | [Lecturers.md](Lecturers.md) | 找到老师的小节填空；没有就按模板新增。只描述不打分 / Fill in the lecturer's section, or add one from the template. Descriptions only, no scores |
+| 老师在招人 / A lecturer is recruiting | [Research-Opportunities.md](Research-Opportunities.md) | 在"当前招人"表加一行，带年月；不再招人时把状态改成"已关闭"并移到"历史记录" / Add a row to "Currently recruiting" with the date; when closed, mark it and move it to "Past entries" |
+| 课程的小贴士、考核比例 / Course tips, assessment weighting | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就新建，格式见 `EEE/2025-2029/Year-2/Semester-1/EEE220_Engineering_Graphics/README.md` / Create one if missing; see that file for the format |
+| 想署名 / Want to be credited | [CONTRIBUTORS.md](CONTRIBUTORS.md) | 在你那一届的表里加一行，昵称 / 真名 / 匿名都行，联系方式可留空 / Add a row under your cohort; nickname, name or anonymous, contact optional |
+| 规则本身要改 / Changing the rules | 本文件 [CONTRIBUTING.md](CONTRIBUTING.md) 及 [DISCLAIMER.md](DISCLAIMER.md) | 中英文都改，先在 PR 里说明原因 / Change both languages and explain why in the PR |
+| 改了总体介绍 / Changed the overview | 根目录 [README.md](README.md) | 目录树、子文件夹列表、链接要和实际一致 / Keep the tree, subfolder list and links in sync with reality |
+
+几个小约定 | A few conventions
+
+- 所有文档都是中文一段、英文一段，改的时候两边都改。
+- 不要删别人的内容，补充就好；表格里的占位行 `[Name]` 留着给后来的人。
+- 统计数字不用太精确，差一两份没关系，别人能看出"这里有东西"就行。
+- 一次 PR 只做一件事（比如"加 COM107 试卷"），方便审核。
+
+- Every document alternates Chinese and English paragraphs; edit both.
+- Add, don't delete; leave the `[Name]` placeholder rows for the next person.
+- Counts needn't be exact. Off by one or two is fine; the point is to show there is something there.
+- One PR per change (e.g. "add COM107 papers") makes review easy.
 
 ## 如何提交 | How to submit
 
-- 会用 git：fork 本仓库，添加文件，然后提 Pull Request。
-- 不熟悉 git：直接把文件发到 `xieqiyi@ieee.org`，我们帮你上传，并按你的意愿署名。
+- 会用 git：fork 本仓库，添加文件，然后提 Pull Request。PR 标题写清楚课程和内容，例如 `EEE 2023-2027: COM107 past papers`。
+- 不熟悉 git：直接把文件发到 `xieqiyi@ieee.org`，附上课程代码、学期、你的届，我们帮你上传，并按你的意愿署名。
 
-- Comfortable with git: fork the repo, add your files, open a pull request.
-- Not familiar with git: email the files to `xieqiyi@ieee.org`. We'll upload them for you and credit you the way you prefer.
+- Comfortable with git: fork the repo, add your files, open a pull request. Name the PR after the course and content, e.g. `EEE 2023-2027: COM107 past papers`.
+- Not familiar with git: email the files to `xieqiyi@ieee.org` with the course code, session and your cohort. We'll upload them for you and credit you the way you prefer.
 
 ## 上传前检查清单 | Pre-upload checklist
 
 - [ ] 没有答案、评分标准或参考解答 | No answers, marking schemes or model solutions
 - [ ] 没有学生姓名、学号或签名 | No student names, IDs or signatures
 - [ ] 没有老师的电话或私人邮箱 | No lecturer phone numbers or private emails
+- [ ] 没有 Moodle 密码、群二维码、会议链接 | No Moodle keys, group QR codes or meeting links
+- [ ] 文件属性里的作者已清空 | File metadata author cleared
+- [ ] 打码的是真涂黑，文字复制不出来 | Redactions are real: text can't be copied out
 - [ ] 文件能正常打开 | The file opens correctly
-- [ ] 放在了正确的文件夹 | It's in the correct folder
+- [ ] 放在了正确的届和文件夹 | It's in the correct cohort and folder
 - [ ] 文件名符合规范 | It follows the naming convention
+- [ ] 改了对应的 README 索引 | The matching README index is updated
+- [ ] 在 CONTRIBUTORS.md 里署名（可选）| Added yourself to CONTRIBUTORS.md (optional)
 
 ## 署名 | Credit
 
