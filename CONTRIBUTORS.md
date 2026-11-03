@@ -12,14 +12,14 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
-| niconiconi-nico | [入学年 / Intake] | 仓库创建与维护 / Repo founder & maintainer | [maintainer-email@example.com] |
-| 谢骐熠 / Qiyi Xie | 2021 入学（2025 届）/ 2021 intake (Class of 2025) | 仓库整理、双语文档、试卷收集 / Repo structure, bilingual docs, past-paper collection | xieqiyi@ieee.org |
+| niconiconi-nico | 2024 入学（2028 届）/ 2024 intake (Class of 2028) | 仓库创建与维护 / Repo founder & maintainer | |
+| LucasXQY | 2021 入学（2025 届）/ 2021 intake (Class of 2025) | 仓库整理、双语文档、试卷收集 / Repo structure, bilingual docs, past-paper collection | xieqiyi@ieee.org |
 
 ## 2021 入学（2025 届）| 2021 intake (Class of 2025)
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
-| 谢骐熠 / Qiyi Xie | 2021 入学（2025 届）| 39 份空白试卷（Year 1–2、G0123）/ 39 blank past papers (Year 1–2, G0123) | xieqiyi@ieee.org |
+| LucasXQY | 2021 入学（2025 届）| 39 份空白试卷、25 份大纲、191 份作业题/实验手册/习题 / 39 blank past papers, 25 syllabi, 191 assignment briefs, lab manuals and tutorials | xieqiyi@ieee.org |
 | [Name] | 2021 入学（2025 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 2022 入学（2026 届）| 2022 intake (Class of 2026)
@@ -38,6 +38,7 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
+| niconiconi-nico | 2024 入学（2028 届）| 仓库创建 / Repo founder | |
 | [Name] | 2024 入学（2028 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 2025 入学（2029 届）| 2025 intake (Class of 2029)
