@@ -13,7 +13,7 @@ All XMUM EEE material lives here, organised by year → semester → course.
 
 ## 不同年级培养方案不同 | Curriculum varies by intake
 
-课程代码和所在学年以 2021 级培养方案为准。之后的年级可能有调整，比如 Engineering Graphics：2021 级是大一的 COM204，2025 级是大二的 EEE220。找资料时请按课程名或课程代码搜索（GitHub 页面按 `T`），不要只按学年翻。
+课程代码和所在学年以 2021 入学（2025 届）培养方案为准。之后的年级可能有调整，比如 Engineering Graphics：2021 入学的同学大一时是的 COM204，2025 入学的是大二的 EEE220。找资料时请按课程名或课程代码搜索（GitHub 页面按 `T`），不要只按学年翻。
 
 Course codes and years follow the 2021-intake curriculum. Later intakes may differ: Engineering Graphics, for example, was COM204 in Year 1 for the 2021 intake but EEE220 in Year 2 for the 2025 intake. Search by course name or code (press `T` on GitHub) rather than browsing by year only.
 

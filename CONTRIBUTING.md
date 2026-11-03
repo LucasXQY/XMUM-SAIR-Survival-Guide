@@ -73,7 +73,7 @@ EEE/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
 
 - 子文件夹：`Past-Papers/`、`Notes/`、`Assignments/`、`Exam-Review/`、`Tips/`，有内容才建。
 - 可以在课程文件夹里加一个 `README.md`，写授课老师、考核比例和小贴士。
-- 学年和课程代码以 2021 级培养方案为准。如果你那一届不一样，先搜一下这门课是否已有文件夹，有就放进去，没有就按你那届的情况新建，并在 PR 里说明。
+- 学年和课程代码以 2021 入学（2025 届）培养方案为准。如果你那一届不一样，先搜一下这门课是否已有文件夹，有就放进去，没有就按你那届的情况新建，并在 PR 里说明。
 
 - Subfolders: `Past-Papers/`, `Notes/`, `Assignments/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
 - You can add a `README.md` in the course folder with the lecturer, assessment weighting and tips.

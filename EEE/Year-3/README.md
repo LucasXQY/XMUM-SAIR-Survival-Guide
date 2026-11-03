@@ -27,5 +27,5 @@ Year 3 goes deeper, and it's also when internships and specialisation choices co
 | S3 | EEE401 | — | ⬜ 征集中 / wanted |
 | S3 | — | Statics | ⬜ 征集中 / wanted |
 
-> 课程表以 2021 级为准，代码/年级可能因年级不同而变化；请按课程名或代码搜索。
+> 课程表以 2021 入学（2025 届）为准，代码/年级可能因年级不同而变化；请按课程名或代码搜索。
 > Based on the 2021-intake timetable; codes and years may differ for other intakes. Search by course name or code.

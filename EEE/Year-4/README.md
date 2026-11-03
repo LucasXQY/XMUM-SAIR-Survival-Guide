@@ -19,5 +19,5 @@ Year 4 centres on the final-year project and electives: the last push towards gr
 | S3 | EEE423 | Power System Protection | ⬜ 征集中 / wanted |
 | S3 | — | Final Year Project II | ⬜ 征集中 / wanted |
 
-> 课程表以 2021 级为准，代码/年级可能因年级不同而变化；请按课程名或代码搜索。
+> 课程表以 2021 入学（2025 届）为准，代码/年级可能因年级不同而变化；请按课程名或代码搜索。
 > Based on the 2021-intake timetable; codes and years may differ for other intakes. Search by course name or code.
