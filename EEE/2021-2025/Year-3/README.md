@@ -9,14 +9,13 @@ Year 3 goes deeper, and it's also when internships and specialisation choices co
 <!-- COURSE-INDEX -->
 | 学期 / Sem | 代码 / Code | 课程 / Course | 资料 / Material |
 |---|---|---|---|
-| S1 | — | Control System | ⬜ 征集中 / wanted |
+| S1 | EEE319 | Control System | ⬜ 征集中 / wanted |
 | S1 | EEE314 | Digital System Design | ⬜ 征集中 / wanted |
-| S1 | EEE302 | Electromagnetic Field Theory and Waves | ⬜ 征集中 / wanted |
-| S1 | EEE303 | — | ⬜ 征集中 / wanted |
+| S1 | EEE302 | Electromagnetic Field Theory and Waves | [Syllabus (1)](Semester-1/EEE302_Electromagnetic_Field_Theory_and_Waves/Syllabus) |
+| S1 | EEE303 | Electrical Machinery and Drives | [Syllabus (1)](Semester-1/EEE303_Electrical_Machinery_and_Drives/Syllabus) |
+| S1 | EEE304 | High Voltage Engineering | [Syllabus (2)](Semester-1/EEE304_High_Voltage_Engineering/Syllabus) |
 | S1 | EEE326 | Power System Analysis | ⬜ 征集中 / wanted |
-| S1 | — | Electrical Machinery and Drive | ⬜ 征集中 / wanted |
 | S1 | EEE316 | Engineering Management | ⬜ 征集中 / wanted |
-| S1 | — | High Voltage Engineering | ⬜ 征集中 / wanted |
 | S1 | — | Laboratory on Electrical Power Engineering | ⬜ 征集中 / wanted |
 | S2 | — | Industrial Training (internship) | ⬜ 征集中 / wanted |
 | S3 | — | Capstone 1 | ⬜ 征集中 / wanted |
