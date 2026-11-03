@@ -73,11 +73,11 @@ Path format: `<Programme>/<intake-year>-<graduation-year>/Year-<N>/Semester-<N>/
 EEE/2021-2025/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
 ```
 
-- 子文件夹：`Past-Papers/`、`Syllabus/`、`Notes/`、`Assignments/`、`Exam-Review/`、`Tips/`，有内容才建。
+- 子文件夹：`Past-Papers/`、`Syllabus/`、`Assignments/`、`Labs/`、`Tutorials/`、`Handbooks/`、`Notes/`、`Exam-Review/`、`Tips/`，有内容才建。
 - 可以在课程文件夹里加一个 `README.md`，写授课老师、考核比例和小贴士。
 - 先放进你自己那一届的目录（入学年-毕业年，例如 2023 入学就是 `2023-2027/`），没有就新建。各届分开存放，不要放进别的届。
 
-- Subfolders: `Past-Papers/`, `Syllabus/`, `Notes/`, `Assignments/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
+- Subfolders: `Past-Papers/`, `Syllabus/`, `Assignments/`, `Labs/`, `Tutorials/`, `Handbooks/`, `Notes/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
 - You can add a `README.md` in the course folder with the lecturer, assessment weighting and tips.
 - Put files under your own cohort folder (intake-graduation year, e.g. `2023-2027/` for the 2023 intake); create it if missing. Cohorts stay separate: never put files in another cohort's tree.
 

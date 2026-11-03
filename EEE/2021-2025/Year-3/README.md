@@ -12,19 +12,18 @@ Year 3 goes deeper, and it's also when internships and specialisation choices co
 | S1 | EEE319 | Control System | [Syllabus (1)](Semester-1/EEE319_Control_System/Syllabus) |
 | S1 | EEE314 | Digital System Design | ⬜ 征集中 / wanted |
 | S1 | EEE302 | Electromagnetic Field Theory and Waves | [Syllabus (1)](Semester-1/EEE302_Electromagnetic_Field_Theory_and_Waves/Syllabus) |
-| S1 | EEE303 | Electrical Machinery and Drives | [Syllabus (1)](Semester-1/EEE303_Electrical_Machinery_and_Drives/Syllabus) |
-| S1 | EEE304 | High Voltage Engineering | [Syllabus (2)](Semester-1/EEE304_High_Voltage_Engineering/Syllabus) |
-| S1 | EEE326 | Power System Analysis | ⬜ 征集中 / wanted |
+| S1 | EEE303 | Electrical Machinery and Drives | [Assignments (1)](Semester-1/EEE303_Electrical_Machinery_and_Drives/Assignments) · [Labs (1)](Semester-1/EEE303_Electrical_Machinery_and_Drives/Labs) · [Syllabus (1)](Semester-1/EEE303_Electrical_Machinery_and_Drives/Syllabus) · [Tutorials (1)](Semester-1/EEE303_Electrical_Machinery_and_Drives/Tutorials) |
+| S1 | EEE304 | High Voltage Engineering | [Assignments (2)](Semester-1/EEE304_High_Voltage_Engineering/Assignments) · [Handbooks (3)](Semester-1/EEE304_High_Voltage_Engineering/Handbooks) · [Notes (1)](Semester-1/EEE304_High_Voltage_Engineering/Notes) · [Syllabus (2)](Semester-1/EEE304_High_Voltage_Engineering/Syllabus) |
+| S1 | EEE326 | Laboratory on Electrical Power Engineering | [Labs (2)](Semester-1/EEE326_Laboratory_on_Electrical_Power_Engineering/Labs) |
 | S1 | EEE316 | Engineering Management | [Syllabus (1)](Semester-1/EEE316_Engineering_Management/Syllabus) |
-| S1 | — | Laboratory on Electrical Power Engineering | ⬜ 征集中 / wanted |
 | S2 | — | Industrial Training (internship) | ⬜ 征集中 / wanted |
 | S3 | — | Capstone 1 | ⬜ 征集中 / wanted |
-| S3 | — | Digital Signal Processing | ⬜ 征集中 / wanted |
+| S3 | EEE323 | Digital Signal Processing | [Assignments (1)](Semester-3/EEE323_Digital_Signal_Processing/Assignments) |
 | S3 | EEE308 | RF / Microwave | ⬜ 征集中 / wanted |
 | S3 | EEE305 | Embedded Systems | ⬜ 征集中 / wanted |
-| S3 | EEE322 | Power Electronics | ⬜ 征集中 / wanted |
+| S3 | EEE322 | Power Electronics | [Assignments (1)](Semester-3/EEE322_Power_Electronics/Assignments) · [Handbooks (1)](Semester-3/EEE322_Power_Electronics/Handbooks) |
 | S3 | EEE401 | — | ⬜ 征集中 / wanted |
-| S3 | — | Statics | ⬜ 征集中 / wanted |
+| S3 | TBD | Numerical Methods and Statistics | [Notes (1)](Semester-3/TBD_Numerical_Methods_and_Statistics/Notes) · [Tutorials (10)](Semester-3/TBD_Numerical_Methods_and_Statistics/Tutorials) |
 
 > 本表为 2021 入学（2025 届）的课程表；其他届请看各自目录。
 > Course list of the 2021 intake (Class of 2025); other cohorts have their own folders.

@@ -8,7 +8,7 @@ Material is stored **per cohort**: `EEE/<intake-year>-<graduation-year>/Year-N/S
 
 | 目录 / Folder | 入学 / Intake | 毕业 / Class of | 状态 / Status |
 |---|---|---|---|
-| [2021-2025](2021-2025/) | 2021 | 2025 | 39 份空白试卷 + 25 份大纲 / 39 blank papers + 25 syllabi |
+| [2021-2025](2021-2025/) | 2021 | 2025 | 39 份空白试卷、25 份大纲、191 份作业题/实验手册/习题/模板 / 39 blank papers, 25 syllabi, 191 assignment briefs, lab manuals, tutorials and templates |
 | [2022-2026](2022-2026/) | 2022 | 2026 | ⬜ 征集中 / wanted |
 | [2023-2027](2023-2027/) | 2023 | 2027 | ⬜ 征集中 / wanted |
 | [2024-2028](2024-2028/) | 2024 | 2028 | ⬜ 征集中 / wanted |

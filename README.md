@@ -51,6 +51,9 @@ Each course has its own folder, e.g. `EEE/2021-2025/Year-1/Semester-3/COM107_Cir
 - `Syllabus/` — 教学大纲、课程介绍 | syllabus, teaching plan, course intro
 - `Notes/` — 笔记 | notes
 - `Assignments/` — 作业题目 | assignment briefs
+- `Labs/` — 实验手册、实验指导 | lab manuals and experiment sheets
+- `Tutorials/` — 习题课题目 | tutorial question sheets
+- `Handbooks/` — 官方指南、模板、评分标准 | official guidelines, templates, rubrics
 - `Exam-Review/` — 复习重点 | revision summaries
 - `Tips/` — 学习建议、实验经验 | study and lab tips
 - `README.md`（可选 | optional）— 授课老师、考核比例、小贴士 | lecturer, assessment weighting, tips
