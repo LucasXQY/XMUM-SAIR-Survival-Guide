@@ -4,15 +4,15 @@
 
 This page credits everyone who has shared material with fellow XMUM students, grouped by intake. Staying anonymous is totally fine.
 
-想被加进来？见 [CONTRIBUTING.md](CONTRIBUTING.md)，或发邮件到 `[contact-email@example.com]`。
+想被加进来？见 [CONTRIBUTING.md](CONTRIBUTING.md)，或发邮件到 `xieqiyi@ieee.org`。
 
-Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `[contact-email@example.com]`.
+Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee.org`.
 
 ## 维护者 | Maintainers
 
 | 昵称/Name | 年级/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
-| niconiconi-nico | [年级 / Intake] | 仓库创建与维护 / Repo founder & maintainer | [contact-email@example.com] |
+| niconiconi-nico | [年级 / Intake] | 仓库创建与维护 / Repo founder & maintainer | xieqiyi@ieee.org |
 | [Name] | [年级 / Intake] | [维护 / Maintenance] | [maintainer-email@example.com] |
 
 ## [2021 级 / 2021 intake]

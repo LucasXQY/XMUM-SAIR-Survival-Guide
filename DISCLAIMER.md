@@ -22,9 +22,9 @@ This repository is created and maintained by students on their own initiative. I
 
 ## 删除请求 | Takedown requests
 
-如果你是版权方，或者认为某份材料侵犯了你的权益或涉及你的个人信息，请发邮件到 `[contact-email@example.com]` 或提一个 Issue，说明是哪份文件。我们会尽快删除，不需要任何理由。
+如果你是版权方，或者认为某份材料侵犯了你的权益或涉及你的个人信息，请发邮件到 `xieqiyi@ieee.org` 或提一个 Issue，说明是哪份文件。我们会尽快删除，不需要任何理由。
 
-If you are a rights holder, or anyone affected by a file here (including your personal data), email `[contact-email@example.com]` or open an issue naming the file. We will remove it promptly, no questions asked.
+If you are a rights holder, or anyone affected by a file here (including your personal data), email `xieqiyi@ieee.org` or open an issue naming the file. We will remove it promptly, no questions asked.
 
 ## 只有空白试卷 | Blank papers only
 

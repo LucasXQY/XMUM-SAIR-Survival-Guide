@@ -82,10 +82,10 @@ EEE/Year-1/Semester-3/COM107_Circuits_and_Devices/Past-Papers/
 ## 如何提交 | How to submit
 
 - 会用 git：fork 本仓库，添加文件，然后提 Pull Request。
-- 不熟悉 git：直接把文件发到 `[contact-email@example.com]`，我们帮你上传，并按你的意愿署名。
+- 不熟悉 git：直接把文件发到 `xieqiyi@ieee.org`，我们帮你上传，并按你的意愿署名。
 
 - Comfortable with git: fork the repo, add your files, open a pull request.
-- Not familiar with git: email the files to `[contact-email@example.com]`. We'll upload them for you and credit you the way you prefer.
+- Not familiar with git: email the files to `xieqiyi@ieee.org`. We'll upload them for you and credit you the way you prefer.
 
 ## 上传前检查清单 | Pre-upload checklist
 

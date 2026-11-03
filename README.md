@@ -74,12 +74,12 @@ Each course has its own folder, e.g. `EEE/Year-1/Semester-3/COM107_Circuits_and_
 
 ## 联系与获取访问 | Contact & access
 
-- 邮箱：`[contact-email@example.com]`
+- 邮箱：`xieqiyi@ieee.org`
 - 其他维护者：`[maintainer-email@example.com]`
 - 欢迎直接提 Issue 或 Pull Request。
 - 找不到想要的资料、想加入成为贡献者、或者有任何问题，都可以发邮件来问。
 
-- Email: `[contact-email@example.com]`
+- Email: `xieqiyi@ieee.org`
 - Additional maintainers: `[maintainer-email@example.com]`
 - Issues and pull requests are welcome.
 - Email us if you need help finding material, want to be added as a contributor, or just have a question.
