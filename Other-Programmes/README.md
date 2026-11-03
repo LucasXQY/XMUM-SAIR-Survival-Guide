@@ -4,5 +4,5 @@
 
 This space is reserved for other XMUM programmes. Same layout and rules as EEE: one folder per programme, then year → semester → course. Want to bring your programme in? Email us!
 
-- 邮箱 | Email: `[contact-email@example.com]`
+- 邮箱 | Email: `xieqiyi@ieee.org`
 - 规则与命名 | Rules & naming: [CONTRIBUTING.md](../CONTRIBUTING.md)

@@ -4,5 +4,5 @@
 
 This space is reserved for future AIT materials and is empty for now. Same layout and rules as EEE: year → semester → course, blank papers only, no answers or personal data. If you're an AIT student and want to contribute, drop us an email!
 
-- 邮箱 | Email: `[contact-email@example.com]`
+- 邮箱 | Email: `xieqiyi@ieee.org`
 - 规则与命名 | Rules & naming: [CONTRIBUTING.md](../CONTRIBUTING.md)
