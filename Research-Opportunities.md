@@ -36,7 +36,7 @@ This page tracks which SAIR lecturers are currently taking undergraduates into t
 - **什么时候找**：大二下到大三是最合适的时间。FYP 分配前先找到老师，FYP 就能顺着组里现有的课题做，不用从零开始。
 - **第一封邮件怎么写**：用学校邮箱，标题写清楚「本科生想加入课题组」加专业年级。正文三段以内：你是谁（专业、年级、相关课程成绩或做过的项目）、为什么对他的方向感兴趣（具体到某篇论文或某个问题）、能投入多少时间、想以什么形式参与（FYP / 志愿者 / RA）。附上简历和 GitHub 链接。不要群发模板邮件。
 - **没回复怎么办**：一周没回就礼貌追问一次；还是没回，就去办公室或下课后当面问，大部分老师并不介意。
-- **进组前把约定说清楚**：每周大概要花多少时间、多久见一次面、有没有报酬（RA 一般靠老师的项目经费，有没有名额要直接问）、最后要交出什么（代码、报告还是论文）。
+- **进组前把约定说清楚**：每周大概要花多少时间、多久见一次面、最后要交出什么（代码、报告还是论文）。
 - **进组后的日常**：前几周基本是读文献、把组里已有的代码跑通；之后是每周例会汇报进度。老师最看重的是稳定：每周都有进展，哪怕很小；遇到卡点提前说，比临时消失好得多。
 - **留下能拿出手的东西**：代码放 GitHub、实验记录写清楚、报告按论文格式写。这些申请研究生、找实习时都能直接用，比成绩单更有说服力。
 - **想要推荐信**：至少跟满一个学期、做出一点实际成果再开口，老师才有东西可写。
@@ -46,7 +46,7 @@ This page tracks which SAIR lecturers are currently taking undergraduates into t
 - **When to ask**: the second half of Year 2 through Year 3 is the sweet spot. Find a supervisor before FYP allocation and your FYP can grow out of the group's existing work instead of starting from zero.
 - **The first email**: use your university email, with a subject line like "Undergraduate interested in joining your research group" plus your programme and year. Three short paragraphs at most: who you are (programme, year, relevant course results or projects), why their direction interests you (name a specific paper or problem), and how much time you can commit and in what form (FYP / volunteer / RA). Attach a CV and a GitHub link. Never mass-mail a template.
 - **No reply?** Follow up politely after a week. Still nothing: drop by the office or catch them after class. Most lecturers don't mind.
-- **Agree the terms before you join**: how many hours a week are expected, how often you meet, whether there is pay (RA positions usually depend on the lecturer's grant budget, so ask directly whether a slot exists) and what the deliverable is (code, a report or a paper).
+- **Agree the terms before you join**: how many hours a week are expected, how often you meet and what the deliverable is (code, a report or a paper).
 - **What day-to-day looks like**: the first few weeks are reading papers and getting the group's existing code to run; after that it's a weekly meeting where you report progress. What lecturers value most is consistency: some progress every week, however small, and flagging blockers early rather than going quiet.
 - **Leave something you can show**: code on GitHub, clean experiment logs, a report written in paper format. These feed straight into graduate-school and internship applications and say more than a transcript does.
 - **If you want a reference letter**: stay at least one semester and have something concrete done before you ask, so there is something to write about.
