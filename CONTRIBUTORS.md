@@ -32,6 +32,7 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
+| yuningwuyn-lgtm | 2023 入学（2027 届）| EEE322 2026-09 试卷扫描件 / EEE322 2026-09 question paper scan | |
 | [Name] | 2023 入学（2027 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 2024 入学（2028 届）| 2024 intake (Class of 2028)
@@ -51,5 +52,4 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
-| yuningwuyn-lgtm | | EEE322 2026-09 试卷扫描件 / EEE322 2026-09 question paper scan | |
 | [Name] | [入学年（毕业届）/ intake (class of)] | [贡献 / Contribution] | [可选 / optional] |
