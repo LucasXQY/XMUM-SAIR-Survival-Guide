@@ -20,7 +20,7 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
 | LucasXQY | 2021 入学（2025 届）| 39 份空白试卷、25 份大纲、191 份作业题/实验手册/习题 / 39 blank past papers, 25 syllabi, 191 assignment briefs, lab manuals and tutorials | xieqiyi@ieee.org |
-| Joyce | 2021 入学（2025 届）| COM108 / COM110 2025-04 期末复习题（含手写解答）、COM110 微积分习题与 tutorial 手写解答 30 份、微积分与线性代数期中复习讲义、马来语期末复习资料 / COM108 & COM110 2025-04 final revision sets with worked solutions, 30 handwritten COM110 exercise & tutorial solution sets, calculus & linear algebra midterm revision notes, Bahasa Melayu final revision notes | zhongyuanjing0410@gmail.com |
+| Joyce | 2021 入学（2025 届）| COM108 / COM110 2025-04 期末复习题（含手写解答）、COM110 微积分习题与 tutorial 手写解答 30 份、带笔记的 COM110 课件 9 份、微积分与线性代数期中复习讲义、马来语期末复习资料 / COM108 & COM110 2025-04 final revision sets with worked solutions, 30 handwritten COM110 exercise & tutorial solution sets, 9 annotated COM110 lecture decks, calculus & linear algebra midterm revision notes, Bahasa Melayu final revision notes | zhongyuanjing0410@gmail.com |
 | [Name] | 2021 入学（2025 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 2022 入学（2026 届）| 2022 intake (Class of 2026)
