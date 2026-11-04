@@ -3,11 +3,11 @@
 用法 / Usage:  python scripts/update_index.py EEE
 
 扫描 EEE/<CODE>_<Course_Name>/ 下的子文件夹，统计文件数，并从同一个 README 里
-"各届培养方案" 的表格读出每门课在哪一届哪个学期开，然后重写
-<!-- COURSE-INDEX --> 和 <!-- /COURSE-INDEX --> 之间的内容。培养方案表本身是手写的。
+"修课时间表" 的表格读出每门课被修读的学期（YYYY-MM），然后重写
+<!-- COURSE-INDEX --> 和 <!-- /COURSE-INDEX --> 之间的内容。时间表本身是手写的。
 
-Scans EEE/<CODE>_<Course_Name>/ subfolders, counts files, reads which cohort /
-year / semester each course appears in from the hand-written curriculum tables
+Scans EEE/<CODE>_<Course_Name>/ subfolders, counts files, reads the sessions
+(YYYY-MM) each course was taken in from the hand-written course-timeline tables
 in the same README, and rewrites everything between the COURSE-INDEX markers.
 """
 import os, re, sys
@@ -19,17 +19,15 @@ root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 readme = os.path.join(root, "README.md")
 text = open(readme, encoding="utf-8").read()
 
-# where each course is taught: parse "### 2021 入学（2025 届）..." + rows "| Y1 | S3 | [COM107](folder/) | ..."
+# when each course was taken: timeline rows "| 2022-04 | [COM107](folder/) | ..."
 taught = {}
-cohort = None
 for line in text.splitlines():
-    m = re.match(r"^### (\d{4}) 入学", line)
+    m = re.match(r"^\| (\d{4}-\d{2}) \| \[?([^\]|]+?)\]?(?:\([^)]*\))? \|", line)
     if m:
-        cohort = m.group(1); continue
-    m = re.match(r"^\| (Y\d) \| (S\d) \| \[?([^\]|]+?)\]?(?:\([^)]*\))? \|", line)
-    if m and cohort:
-        y, s, code = m.groups()
-        taught.setdefault(code.strip(), []).append(f"{cohort} {y}{s}")
+        sess, code = m.groups()
+        taught.setdefault(code.strip(), [])
+        if sess not in taught[code.strip()]:
+            taught[code.strip()].append(sess)
 
 rows = []
 for d in sorted(os.listdir(root)):
@@ -47,11 +45,11 @@ for d in sorted(os.listdir(root)):
     if os.path.exists(os.path.join(p, "README.md")):
         links.insert(0, f"[README]({d}/README.md)")
     mat = " · ".join(links) if links else "⬜ 征集中 / wanted"
-    when = "、".join(taught.get(code, [])) or "—"
+    when = "、".join(sorted(taught.get(code, []))) or "—"
     rows.append(f"| {code} | [{name}]({d}/) | {when} | {mat} |")
 
 table = "\n".join([
-    "| 代码 / Code | 课程 / Course | 开课（入学年 学年学期）/ Taught (intake Y·S) | 资料 / Material |",
+    "| 代码 / Code | 课程 / Course | 修课学期 / Taken in | 资料 / Material |",
     "|---|---|---|---|", *rows])
 new = re.sub(r"<!-- COURSE-INDEX -->.*?<!-- /COURSE-INDEX -->",
              f"<!-- COURSE-INDEX -->\n{table}\n<!-- /COURSE-INDEX -->", text, flags=re.S)
