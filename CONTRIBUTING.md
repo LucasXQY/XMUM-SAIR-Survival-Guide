@@ -227,10 +227,10 @@ Dropping files in is step one. So that others can find them, also update the fil
 
 ## 如何提交 | How to submit
 
-- 会用 git：fork 本仓库，添加文件，然后提 Pull Request。PR 标题写清楚课程和内容，例如 `EEE 2023-2027: COM107 past papers`。
+- 会用 git：fork 本仓库，添加文件，然后提 Pull Request。PR 标题写清楚课程和内容，例如 `EEE: COM107 2022-04 past papers`。
 - 不熟悉 git：直接把文件发到 `xieqiyi@ieee.org`，附上课程代码、学期、你的届，我们帮你上传，并按你的意愿署名。
 
-- Comfortable with git: fork the repo, add your files, open a pull request. Name the PR after the course and content, e.g. `EEE 2023-2027: COM107 past papers`.
+- Comfortable with git: fork the repo, add your files, open a pull request. Name the PR after the course and content, e.g. `EEE: COM107 2022-04 past papers`.
 - Not familiar with git: email the files to `xieqiyi@ieee.org` with the course code, session and your cohort. We'll upload them for you and credit you the way you prefer.
 
 ## 上传前检查清单 | Pre-upload checklist
