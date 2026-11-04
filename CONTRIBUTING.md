@@ -43,7 +43,7 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 - 学生姓名、学号、签名等个人信息
 - 老师的私人联系方式（电话、私人邮箱等）
 - Moodle 选课密码（enrolment key）、群二维码、会议链接和密码
-- 整套课件 PPT（体积大、版权敏感；可以在课程 README 里放网盘链接）
+- 整套课件 PPT（体积大、版权敏感；可以在课程 README 里放网盘链接）。写满自己笔记的课件例外，可作为 Notes 上传
 - 教材、出版社的习题集、MIT OCW 等外部公开资源（直接给链接）
 - 单个超过 100 MB 的文件（GitHub 不收）
 
@@ -52,7 +52,7 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 - Student names, IDs, signatures or any other personal data
 - Lecturers' private contact details (phone numbers, personal emails, etc.)
 - Moodle enrolment keys, group QR codes, meeting links and passcodes
-- Full lecture-slide decks (large and copyright-sensitive; link to a cloud drive from the course README instead)
+- Full lecture-slide decks (large and copyright-sensitive; link to a cloud drive from the course README instead). Decks covered in your own notes are the exception: they can go in as Notes
 - Textbooks, publisher problem sets, MIT OCW and other public resources (just link them)
 - Any single file over 100 MB (GitHub rejects it)
 
