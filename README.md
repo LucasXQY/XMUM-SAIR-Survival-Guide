@@ -55,7 +55,7 @@ Each course has its own folder, e.g. `EEE/COM107_Circuits_and_Devices/`, with an
 - `Handbooks/` — 官方指南、模板、评分标准 | official guidelines, templates, rubrics
 - `Exam-Review/` — 复习重点 | revision summaries
 - `Tips/` — 学习建议、实验经验 | study and lab tips
-- `README.md`（可选 | optional）— 授课老师、考核比例、小贴士 | lecturer, assessment weighting, tips
+- `README.md`（可选 | optional）— 每个修读学期一行：老师、考核比例、资料来自谁，外加小贴士 | one row per session: lecturer, assessment weighting, contributor, plus tips
 
 ## 如何使用 | How to use
 

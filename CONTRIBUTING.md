@@ -138,9 +138,13 @@ Other files use the same prefix with a content label in place of `Assessment`:
 - `COM105_202204_Tutorial3.pdf`
 - `EEE312_202209_Report_Template.docx`
 
-常用标签：`Syllabus`、`Course_Intro`、`Assignment1`、`Lab1_Manual`、`Tutorial1`、`Rubric`、`Report_Template`、`Handbook`、`Notes`。不知道学期就写课程开设的那一学期。
+常用标签：`Syllabus`、`Course_Intro`、`Assignment1`、`Lab1_Manual`、`Tutorial1`、`Rubric`、`Report_Template`、`Handbook`、`Notes`。不知道学期就写你修这门课的那一学期。
 
-Common labels: `Syllabus`, `Course_Intro`, `Assignment1`, `Lab1_Manual`, `Tutorial1`, `Rubric`, `Report_Template`, `Handbook`, `Notes`. If unsure of the session, use the one the course ran in.
+同一学期已经有同名文件时：先打开比较，内容一样就不要再传；不一样就加后缀区分，例如 `COM107_202204_Final_SetB_Question.pdf`、`COM103_202204_Lab2_Manual_v2.pdf`，并在课程 `README.md` 的备注里写一句区别。
+
+Common labels: `Syllabus`, `Course_Intro`, `Assignment1`, `Lab1_Manual`, `Tutorial1`, `Rubric`, `Report_Template`, `Handbook`, `Notes`. If unsure of the session, use the one you took the course in.
+
+If a file with the same name already exists for that session: open and compare first; identical content needn't be uploaded again. If it differs, add a suffix, e.g. `COM107_202204_Final_SetB_Question.pdf` or `COM103_202204_Lab2_Manual_v2.pdf`, and note the difference in the course `README.md`.
 
 ## 放在哪里 | Where to put it
 
@@ -156,12 +160,16 @@ EEE/COM107_Circuits_and_Devices/Past-Papers/
 - 每门课一个文件夹，**所有年份、所有届的资料都放同一个课程文件夹**，靠文件名里的 `YYYYMM` 区分学期。不按届分目录。
 - 子文件夹：`Past-Papers/`、`Syllabus/`、`Assignments/`、`Labs/`、`Tutorials/`、`Handbooks/`、`Notes/`、`Exam-Review/`、`Tips/`，有内容才建。
 - 课程文件夹已存在就直接用；没有才新建，课程名用英文，单词之间用下划线，和大纲上的写法一致。
+- **一门课会有很多学期的资料**（不同年级的同学陆续上传）。全部放进同一个子文件夹，不要按学期再建子文件夹：文件名以 `YYYYMM` 开头的部分会自动按时间排序，索引里的「资料学期」也会列出所有学期。
+- 上传前先看看同一学期的同类文件是否已经有人传过：内容一样就不用重复传；是另一套（例如 Set B）或版本不同，就在文件名里加区分，见下面的命名规则。
 - 课程改了代码（例如 COM204 → EEE220）就按新代码新建文件夹，并在两边的 `README.md` 里互相注明。
 
 - Programme: `EEE/`, `AIT/`, `ROBO/`.
 - One folder per course: **material from every year and every cohort goes in the same course folder**, distinguished by the `YYYYMM` in the file name. No per-cohort folders.
 - Subfolders: `Past-Papers/`, `Syllabus/`, `Assignments/`, `Labs/`, `Tutorials/`, `Handbooks/`, `Notes/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
 - Reuse the course folder if it exists; create one only if it doesn't, with the English name, words joined by underscores, spelled as on the syllabus.
+- **A course will accumulate material from many sessions** as students from different years upload. Keep it all in the same subfolder, with no per-session subfolders: the `YYYYMM` in the file name sorts files chronologically, and the index's "Sessions covered" column lists every session present.
+- Before uploading, check whether the same kind of file for that session is already there: identical content needn't be uploaded again; a different set (e.g. Set B) or version gets a distinguishing suffix, see the naming rules below.
 - If a course got a new code (e.g. COM204 → EEE220), create a folder under the new code and cross-reference both in their `README.md`.
 
 ## 需要一并修改的文件 | Files to update alongside
@@ -172,17 +180,34 @@ Dropping files in is step one. So that others can find them, also update the fil
 
 | 你做了什么 / What you did | 改哪里 / Where to edit | 怎么改 / How |
 |---|---|---|
-| 加了或改了任何文件 / Added or changed any file | `<专业>/README.md` 的"课程索引"表 / the course index in `<Programme>/README.md` | 在仓库根目录运行 `python scripts/update_index.py EEE`，表格自动重生成；不想跑脚本就手动改那一行的链接和数量 / Run `python scripts/update_index.py EEE` from the repo root to regenerate the table, or edit that course's links and counts by hand |
+| 加了或改了任何文件 / Added or changed any file | `<专业>/README.md` 的"课程索引"表 / the course index in `<Programme>/README.md` | 在仓库根目录运行 `python scripts/update_index.py EEE`，表格自动重生成（文件数、资料学期都会更新）；不想跑脚本就手动改那一行的链接、数量和学期 / Run `python scripts/update_index.py EEE` from the repo root to regenerate the table (counts and sessions covered update automatically), or edit that course's links, counts and sessions by hand |
+| 往已有课程加了另一个学期的资料 / Added another session's material to an existing course | 你自己的修课时间表 + 课程文件夹里的 `README.md` / your own timeline + the course folder's `README.md` | 时间表里加一行你修这门课的学期；课程 README 的学期表里加一行（学期、老师、考核、资料来自）；然后跑一次索引脚本 / Add a row for your session to your timeline; add a row (session, lecturer, assessment, contributed by) to the course README's session table; then run the index script |
 | 新建了一门课程 / Added a new course | `<专业>/README.md` 的"修课时间表" / the course-timeline tables in `<Programme>/README.md` | 在你自己的时间表里加一行 `\| 2024-09 \| [CODE](CODE_Name/) \| [Course Name](CODE_Name/) \|`，学期写你实际修读的 `YYYY-MM`；然后跑一次索引脚本，"修课学期"一栏会自动带上 / Add a row `\| 2024-09 \| [CODE](CODE_Name/) \| [Course Name](CODE_Name/) \|` to your own timeline with the session you actually took it in (`YYYY-MM`); then run the index script and the "Taken in" column picks it up |
 | 还没有你的时间表 / You have no timeline yet | `<专业>/README.md` 的"修课时间表" | 照 LucasXQY 那张表的格式新加一节 `### <你的昵称>`，按修读学期列出你的课；只想加几门就写进"其他同学" / Add a `### <your nickname>` section in the same format as the LucasXQY table, listing your courses by session; for just a few courses, use "Other contributors" |
 | AIT / ROBO 的第一份资料 / First files for AIT or ROBO | `AIT/README.md` 或 `ROBO/README.md` | 照 `EEE/README.md` 的格式加课程索引（带 `<!-- COURSE-INDEX -->` 标记）和修课时间表，然后 `python scripts/update_index.py AIT` / Add a course index (with the `<!-- COURSE-INDEX -->` markers) and a course timeline in the style of `EEE/README.md`, then run `python scripts/update_index.py AIT` |
 | 课程换了代码 / A course got a new code | 新旧两个课程文件夹的 `README.md` | 各写一句"2021 入学时为 COM204 / 2025 入学起为 EEE220"互相链接，例子见 `EEE/EEE220_Engineering_Graphics/README.md` / One line in each README cross-linking the other; see `EEE/EEE220_Engineering_Graphics/README.md` |
 | 想写老师授课风格 / Lecturer teaching style | [Lecturers.md](Lecturers.md) | 找到老师的小节填空；没有就按模板新增。只描述不打分 / Fill in the lecturer's section, or add one from the template. Descriptions only, no scores |
 | 老师在招人 / A lecturer is recruiting | [Research-Opportunities.md](Research-Opportunities.md) | 在"当前招人"表加一行，带年月；不再招人时把状态改成"已关闭"并移到"历史记录" / Add a row to "Currently recruiting" with the date; when closed, mark it and move it to "Past entries" |
-| 课程的小贴士、考核比例 / Course tips, assessment weighting | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就新建，格式见 `EEE/EEE220_Engineering_Graphics/README.md` / Create one if missing; see that file for the format |
+| 课程的老师、考核比例、小贴士 / Course lecturer, assessment weighting, tips | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就按下面的模板新建；**每个修读学期一行**，不同学期老师和考核可能不同，不要覆盖别人的行 / Create one from the template below if missing; **one row per session**, since lecturer and assessment can change between sessions; never overwrite someone else's row |
 | 想署名 / Want to be credited | [CONTRIBUTORS.md](CONTRIBUTORS.md) | 在你那一届的表里加一行，昵称 / 真名 / 匿名都行，联系方式可留空 / Add a row under your cohort; nickname, name or anonymous, contact optional |
 | 规则本身要改 / Changing the rules | 本文件 [CONTRIBUTING.md](CONTRIBUTING.md) 及 [DISCLAIMER.md](DISCLAIMER.md) | 中英文都改，先在 PR 里说明原因 / Change both languages and explain why in the PR |
 | 改了总体介绍 / Changed the overview | 根目录 [README.md](README.md) | 目录树、子文件夹列表、链接要和实际一致 / Keep the tree, subfolder list and links in sync with reality |
+
+课程 `README.md` 模板 | Course `README.md` template
+
+```markdown
+# <CODE> <Course Name>
+
+每个修读学期一行；有新学期的资料就加一行。One row per session; add a row when you contribute material from a new session.
+
+| 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
+|---|---|---|---|---|
+| 2022-04 | [Name] | [e.g. 30% assignments, 20% midterm, 50% final] | [nickname / anonymous] | |
+| 2024-09 | [Name] | | | [e.g. Set B paper differs from Set A in Q3] |
+
+- 代码变更 / Code change：[如果这门课换过代码，链接到新旧文件夹 / link old and new folders if the code changed]
+- 小贴士 / Tips：[怎么学、考试偏什么 / how to study, what exams lean towards]
+```
 
 几个小约定 | A few conventions
 

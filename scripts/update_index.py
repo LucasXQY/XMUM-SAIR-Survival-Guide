@@ -36,21 +36,25 @@ for d in sorted(os.listdir(root)):
         continue
     code, name = d.split("_", 1)
     name = name.replace("_", " ")
-    links = []
+    links, covered = [], set()
     for s in SUBS:
         sp = os.path.join(p, s)
         if os.path.isdir(sp):
-            n = sum(1 for f in os.listdir(sp) if not f.startswith("."))
-            if n: links.append(f"[{s} ({n})]({d}/{s})")
+            files = [f for f in os.listdir(sp) if not f.startswith(".")]
+            if files: links.append(f"[{s} ({len(files)})]({d}/{s})")
+            for f in files:  # <CODE>_<YYYYMM>_... -> YYYY-MM
+                m = re.match(r"[^_]+_(\d{4})(\d{2})_", f)
+                if m: covered.add(f"{m[1]}-{m[2]}")
     if os.path.exists(os.path.join(p, "README.md")):
         links.insert(0, f"[README]({d}/README.md)")
     mat = " · ".join(links) if links else "⬜ 征集中 / wanted"
     when = "、".join(sorted(taught.get(code, []))) or "—"
-    rows.append(f"| {code} | [{name}]({d}/) | {when} | {mat} |")
+    cov = "、".join(sorted(covered)) or "—"
+    rows.append(f"| {code} | [{name}]({d}/) | {when} | {cov} | {mat} |")
 
 table = "\n".join([
-    "| 代码 / Code | 课程 / Course | 修课学期 / Taken in | 资料 / Material |",
-    "|---|---|---|---|", *rows])
+    "| 代码 / Code | 课程 / Course | 修课学期 / Taken in | 资料学期 / Sessions covered | 资料 / Material |",
+    "|---|---|---|---|---|", *rows])
 new = re.sub(r"<!-- COURSE-INDEX -->.*?<!-- /COURSE-INDEX -->",
              f"<!-- COURSE-INDEX -->\n{table}\n<!-- /COURSE-INDEX -->", text, flags=re.S)
 assert new != text or "<!-- COURSE-INDEX -->" in text, "markers not found"

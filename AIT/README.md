@@ -14,8 +14,8 @@ This space is reserved for Artificial Intelligence (AIT) material and is empty f
 Run `python scripts/update_index.py AIT` from the repo root after adding files; the table below is generated.
 
 <!-- COURSE-INDEX -->
-| 代码 / Code | 课程 / Course | 修课学期 / Taken in | 资料 / Material |
-|---|---|---|---|
+| 代码 / Code | 课程 / Course | 修课学期 / Taken in | 资料学期 / Sessions covered | 资料 / Material |
+|---|---|---|---|---|
 <!-- /COURSE-INDEX -->
 
 ## 修课时间表 | Course timeline
