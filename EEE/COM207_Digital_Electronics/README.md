@@ -4,6 +4,6 @@
 
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
-| 2023-04 |  | | LucasXQY |  |
+| [2023-04](2023-04/) |  |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Handbooks](2023-04/Handbooks/) · [Tutorials](2023-04/Tutorials/) |
 
 - 小贴士 / Tips：

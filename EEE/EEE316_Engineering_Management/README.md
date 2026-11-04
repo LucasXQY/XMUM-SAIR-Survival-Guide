@@ -4,6 +4,6 @@
 
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
-| 2023-09 | Kang Chia Chao | | LucasXQY |  |
+| [2023-09](2023-09/) | Kang Chia Chao |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Assignments](2023-09/Assignments/) |
 
 - 小贴士 / Tips：
