@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | 2022-09 |  | | LucasXQY |  |
 | 2024-04 |  | | LucasXQY |  |
-| [2024-09](2024-09/) |  |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Past-Papers](2024-09/Past-Papers/) · [Tutorials](2024-09/Tutorials/) |
+| [2024-09](2024-09/) |  |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Past-Papers](2024-09/Past-Papers/) · [Tutorials](2024-09/Tutorials/) · [Syllabus](2024-09/Syllabus/) · [Assignments](2024-09/Assignments/) · [Handbooks](2024-09/Handbooks/) |
 | [2025-04](2025-04/) | | | [nsd-chen](https://github.com/nsd-chen) | [Past-Papers](2025-04/Past-Papers/) |
 
 - 小贴士 / Tips：

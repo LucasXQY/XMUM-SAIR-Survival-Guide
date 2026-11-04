@@ -4,7 +4,7 @@
 
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
-| 2021-09 |  | | LucasXQY |  |
+| [2021-09](2021-09/) |  |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Syllabus](2021-09/Syllabus/) · [Assignments](2021-09/Assignments/) · [Handbooks](2021-09/Handbooks/) |
 | 2026-09 | | | Joyce | 零基础中马双语期末复习资料（Lesson 1–14，覆盖 Listening and Writing Assessment 各部分）；该学期课程代码为 MPU1012 / Beginner Chinese–Malay final revision notes (Lessons 1–14, covers each part of the Listening and Writing Assessment); the course code that session was MPU1012 |
 
 - 小贴士 / Tips：

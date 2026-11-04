@@ -5,7 +5,7 @@
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
 | 2021-09 |  | | LucasXQY |  |
-| 2022-09 | Fotopoulos | | LucasXQY |  |
+| [2022-09](2022-09/) | Fotopoulos |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Past-Papers](2022-09/Past-Papers/) |
 | [2023-04](2023-04/) | | | [nsd-chen](https://github.com/nsd-chen) | [Past-Papers](2023-04/Past-Papers/) |
 | [2024-04](2024-04/) | | | [nsd-chen](https://github.com/nsd-chen) | [Assignments](2024-04/Assignments/) · [Past-Papers](2024-04/Past-Papers/) · [Tutorials](2024-04/Tutorials/) |
 

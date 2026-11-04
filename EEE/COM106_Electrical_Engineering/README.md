@@ -4,7 +4,7 @@
 
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
-| [2021-09](2021-09/) | Wong Shen Yuong |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Handbooks](2021-09/Handbooks/) |
+| [2021-09](2021-09/) | Wong Shen Yuong |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Handbooks](2021-09/Handbooks/) · [Past-Papers](2021-09/Past-Papers/) · [Syllabus](2021-09/Syllabus/) · [Labs](2021-09/Labs/) · [Tutorials](2021-09/Tutorials/) |
 | [2022-04](2022-04/) | | | [nsd-chen](https://github.com/nsd-chen) | [Labs](2022-04/Labs/) · [Past-Papers](2022-04/Past-Papers/) · [Tutorials](2022-04/Tutorials/) |
 
 - 小贴士 / Tips：
