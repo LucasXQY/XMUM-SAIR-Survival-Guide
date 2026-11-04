@@ -20,6 +20,7 @@ This page tracks which SAIR lecturers are currently taking undergraduates into t
 
 | 更新 / Updated | 老师 / Lecturer | 专业 / Programme | 方向 / Area | 形式 / Type | 要求 / Looking for | 联系 / Contact | 状态 / Status |
 |---|---|---|---|---|---|---|---|
+| 2026-11 | Tan Jian Ding（副教授，ROBO 本科项目主任 / Assoc. Prof., Head of the ROBO undergraduate programme） | ROBO，其他专业也可联系 / ROBO, other SAIR programmes welcome to ask | 世界模型 / World models | FYP、志愿者；同时也在找做世界模型的新讲师 / FYP, volunteer; also looking for new lecturers working on world models | 对世界模型感兴趣的同学 / Students interested in world models | jianding.tan@xmu.edu.my（办公室 / office A1#434） | 招人中 / open |
 | [YYYY-MM] | [Name] | [EEE / AIT / ROBO] | [e.g. computer vision, power systems] | [FYP / RA / volunteer / paid] | [e.g. Python, Year 3+] | [name@xmu.edu.my] | 招人中 / open |
 
 ## 历史记录 | Past entries
