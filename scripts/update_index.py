@@ -2,13 +2,14 @@
 
 用法 / Usage:  python scripts/update_index.py EEE
 
-扫描 EEE/<CODE>_<Course_Name>/ 下的子文件夹，统计文件数，并从同一个 README 里
-"修课时间表" 的表格读出每门课被修读的学期（YYYY-MM），然后重写
+扫描 EEE/<CODE>_<Course_Name>/<YYYY-MM>/<子文件夹>/，统计每个学期每类资料的文件数，
+并从同一个 README 里"修课时间表"的表格读出每门课被修读的学期（YYYY-MM），然后重写
 <!-- COURSE-INDEX --> 和 <!-- /COURSE-INDEX --> 之间的内容。时间表本身是手写的。
 
-Scans EEE/<CODE>_<Course_Name>/ subfolders, counts files, reads the sessions
-(YYYY-MM) each course was taken in from the hand-written course-timeline tables
-in the same README, and rewrites everything between the COURSE-INDEX markers.
+Scans EEE/<CODE>_<Course_Name>/<YYYY-MM>/<subfolder>/, counts files per session
+and type, reads the sessions (YYYY-MM) each course was taken in from the
+hand-written course-timeline tables in the same README, and rewrites everything
+between the COURSE-INDEX markers.
 """
 import os, re, sys
 
@@ -36,20 +37,24 @@ for d in sorted(os.listdir(root)):
         continue
     code, name = d.split("_", 1)
     name = name.replace("_", " ")
-    links, covered = [], set()
-    for s in SUBS:
-        sp = os.path.join(p, s)
-        if os.path.isdir(sp):
-            files = [f for f in os.listdir(sp) if not f.startswith(".")]
-            if files: links.append(f"[{s} ({len(files)})]({d}/{s})")
-            for f in files:  # <CODE>_<YYYYMM>_... -> YYYY-MM
-                m = re.match(r"[^_]+_(\d{4})(\d{2})_", f)
-                if m: covered.add(f"{m[1]}-{m[2]}")
+    sessions = sorted(x for x in os.listdir(p)
+                      if os.path.isdir(os.path.join(p, x)) and (re.fullmatch(r"\d{4}-\d{2}", x) or x == "unknown"))
+    sess_links, mat_lines = [], []
+    for sess in sessions:
+        links = []
+        for s in SUBS:
+            sp = os.path.join(p, sess, s)
+            if os.path.isdir(sp):
+                n = sum(1 for f in os.listdir(sp) if not f.startswith("."))
+                if n: links.append(f"[{s} ({n})]({d}/{sess}/{s})")
+        if not links: continue
+        sess_links.append(f"[{sess}]({d}/{sess})")
+        mat_lines.append((f"{sess}: " if len(sessions) > 1 else "") + " · ".join(links))
     if os.path.exists(os.path.join(p, "README.md")):
-        links.insert(0, f"[README]({d}/README.md)")
-    mat = " · ".join(links) if links else "⬜ 征集中 / wanted"
+        mat_lines.insert(0, f"[README]({d}/README.md)")
+    mat = "<br>".join(mat_lines) if mat_lines else "⬜ 征集中 / wanted"
     when = "、".join(sorted(taught.get(code, []))) or "—"
-    cov = "、".join(sorted(covered)) or "—"
+    cov = " · ".join(sess_links) or "—"
     rows.append(f"| {code} | [{name}]({d}/) | {when} | {cov} | {mat} |")
 
 table = "\n".join([
