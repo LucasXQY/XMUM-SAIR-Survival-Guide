@@ -4,6 +4,6 @@
 
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
-| 2022-09 |  | | LucasXQY |  |
+| [2022-09](2022-09/) |  |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Labs](2022-09/Labs/) · [Handbooks](2022-09/Handbooks/) |
 
 - 小贴士 / Tips：
