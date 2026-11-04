@@ -1,7 +1,10 @@
 # EEE322 Power Electronics
 
-## 往年试卷 | Past papers
+每个修读学期一行；有新学期的资料就加一行。One row per session; add a row when you contribute material from a new session.
 
-- [2026/09 试题扫描件](Past-Papers/EEE322_202609_Exam_Question.pdf)：图片标注为 `202609/EEE322`，包含第 1–3 题，总分 100 分。原图有划线和圈注，上传版本保留原貌。图片未注明 Final、Midterm 或 Quiz，暂以 `Exam` 命名。
+| 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
+|---|---|---|---|---|
+| 2024-04 | | | LucasXQY | 作业题和评分表 / assignment brief and rubric |
+| 2026-09 | | | yuningwuyn-lgtm | 试题扫描件一页（第 1–3 题，共 100 分），图上未注明是 Final 还是 Midterm，故文件名用 `Exam`；原图的划线和圈注保留。One-page scanned question paper (Q1–3, 100 marks); the image doesn't say Final or Midterm, hence `Exam` in the file name; underlines and circles from the source are kept. |
 
-- [2026/09 scanned question paper](Past-Papers/EEE322_202609_Exam_Question.pdf): the supplied image is labelled `202609/EEE322` and contains Questions 1–3, totalling 100 marks. Underlines and circles from the source image are preserved. The image does not identify the assessment as a final, midterm, or quiz, so the filename uses `Exam`.
+- 小贴士 / Tips：

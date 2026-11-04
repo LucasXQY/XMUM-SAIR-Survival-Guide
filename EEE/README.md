@@ -41,7 +41,7 @@ Material is organised **per course, then per session**: `EEE/<CODE>_<Course_Name
 | EEE313 | [Semiconductor Physics and Device Processes](EEE313_Semiconductor_Physics_and_Device_Processes/) | 2023-04 | [2021-09](EEE313_Semiconductor_Physics_and_Device_Processes/2021-09) · [2023-04](EEE313_Semiconductor_Physics_and_Device_Processes/2023-04) | 2021-09: [Past-Papers (3)](EEE313_Semiconductor_Physics_and_Device_Processes/2021-09/Past-Papers)<br>2023-04: [Syllabus (1)](EEE313_Semiconductor_Physics_and_Device_Processes/2023-04/Syllabus) · [Assignments (2)](EEE313_Semiconductor_Physics_and_Device_Processes/2023-04/Assignments) · [Handbooks (2)](EEE313_Semiconductor_Physics_and_Device_Processes/2023-04/Handbooks) |
 | EEE316 | [Engineering Management](EEE316_Engineering_Management/) | 2023-09 | [2023-09](EEE316_Engineering_Management/2023-09) | [Syllabus (1)](EEE316_Engineering_Management/2023-09/Syllabus) |
 | EEE319 | [Control System](EEE319_Control_System/) | 2023-09 | [2023-09](EEE319_Control_System/2023-09) | [Syllabus (1)](EEE319_Control_System/2023-09/Syllabus) |
-| EEE322 | [Power Electronics](EEE322_Power_Electronics/) | 2024-04 | [2024-04](EEE322_Power_Electronics/2024-04) | [Assignments (1)](EEE322_Power_Electronics/2024-04/Assignments) · [Handbooks (1)](EEE322_Power_Electronics/2024-04/Handbooks) |
+| EEE322 | [Power Electronics](EEE322_Power_Electronics/) | 2024-04、2026-09 | [2024-04](EEE322_Power_Electronics/2024-04) · [2026-09](EEE322_Power_Electronics/2026-09) | [README](EEE322_Power_Electronics/README.md)<br>2024-04: [Assignments (1)](EEE322_Power_Electronics/2024-04/Assignments) · [Handbooks (1)](EEE322_Power_Electronics/2024-04/Handbooks)<br>2026-09: [Past-Papers (1)](EEE322_Power_Electronics/2026-09/Past-Papers) |
 | EEE323 | [Digital Signal Processing](EEE323_Digital_Signal_Processing/) | 2024-04 | [2024-04](EEE323_Digital_Signal_Processing/2024-04) | [Assignments (1)](EEE323_Digital_Signal_Processing/2024-04/Assignments) |
 | EEE324 | [Data Communication Networks](EEE324_Data_Communication_Networks/) | 2024-09 | [2024-09](EEE324_Data_Communication_Networks/2024-09) | [Assignments (2)](EEE324_Data_Communication_Networks/2024-09/Assignments) |
 | EEE326 | [Laboratory on Electrical Power Engineering](EEE326_Laboratory_on_Electrical_Power_Engineering/) | 2023-09 | [2023-09](EEE326_Laboratory_on_Electrical_Power_Engineering/2023-09) | [Labs (2)](EEE326_Laboratory_on_Electrical_Power_Engineering/2023-09/Labs) |
@@ -140,6 +140,7 @@ Each contributor's courses are listed by the session they actually took them in 
 | 学期 / Session | 代码 / Code | 课程 / Course | 贡献者 / Contributor |
 |---|---|---|---|
 | 2025-09 | [EEE220](EEE220_Engineering_Graphics/) | [Engineering Graphics](EEE220_Engineering_Graphics/) | 匿名 / anonymous |
+| 2026-09 | [EEE322](EEE322_Power_Electronics/) | [Power Electronics](EEE322_Power_Electronics/) | yuningwuyn-lgtm |
 
 还没有你的表？照上面的格式加一节 `### <你的昵称>`，或者把课程加到「其他同学」里。
 
