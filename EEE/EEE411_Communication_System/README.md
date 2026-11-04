@@ -5,5 +5,7 @@
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
 | 2024-09 |  | | LucasXQY |  |
+| [2025-04](2025-04/) | | | [nsd-chen](https://github.com/nsd-chen) | [Assignments](2025-04/Assignments/) |
+| [2025-09](2025-09/) | | | [nsd-chen](https://github.com/nsd-chen) | [Assignments](2025-09/Assignments/) |
 
 - 小贴士 / Tips：
