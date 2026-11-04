@@ -41,7 +41,7 @@ Material is organised **per course**: `EEE/<CODE>_<Course_Name>/`, one folder pe
 | EEE313 | [Semiconductor Physics and Device Processes](EEE313_Semiconductor_Physics_and_Device_Processes/) | 2021 Y2S3 | [Past-Papers (3)](EEE313_Semiconductor_Physics_and_Device_Processes/Past-Papers) · [Syllabus (1)](EEE313_Semiconductor_Physics_and_Device_Processes/Syllabus) · [Assignments (2)](EEE313_Semiconductor_Physics_and_Device_Processes/Assignments) · [Handbooks (2)](EEE313_Semiconductor_Physics_and_Device_Processes/Handbooks) |
 | EEE316 | [Engineering Management](EEE316_Engineering_Management/) | 2021 Y3S1 | [Syllabus (1)](EEE316_Engineering_Management/Syllabus) |
 | EEE319 | [Control System](EEE319_Control_System/) | 2021 Y3S1 | [Syllabus (1)](EEE319_Control_System/Syllabus) |
-| EEE322 | [Power Electronics](EEE322_Power_Electronics/) | 2021 Y3S3 | [Assignments (1)](EEE322_Power_Electronics/Assignments) · [Handbooks (1)](EEE322_Power_Electronics/Handbooks) |
+| EEE322 | [Power Electronics](EEE322_Power_Electronics/) | 2021 Y3S3 | [README](EEE322_Power_Electronics/README.md) · [Past-Papers (1)](EEE322_Power_Electronics/Past-Papers) · [Assignments (1)](EEE322_Power_Electronics/Assignments) · [Handbooks (1)](EEE322_Power_Electronics/Handbooks) |
 | EEE323 | [Digital Signal Processing](EEE323_Digital_Signal_Processing/) | 2021 Y3S3 | [Assignments (1)](EEE323_Digital_Signal_Processing/Assignments) |
 | EEE324 | [Data Communication Networks](EEE324_Data_Communication_Networks/) | 2021 Y4S1 | [Assignments (2)](EEE324_Data_Communication_Networks/Assignments) |
 | EEE326 | [Laboratory on Electrical Power Engineering](EEE326_Laboratory_on_Electrical_Power_Engineering/) | 2021 Y3S1 | [Labs (2)](EEE326_Laboratory_on_Electrical_Power_Engineering/Labs) |
