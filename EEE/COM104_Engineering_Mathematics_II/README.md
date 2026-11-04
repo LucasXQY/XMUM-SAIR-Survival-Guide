@@ -6,5 +6,6 @@
 |---|---|---|---|---|
 | 2021-02 |  | | LucasXQY |  |
 | 2022-04 | Lohgheswary A/P Nagarethinam | | LucasXQY |  |
+| 2026-09 | | | Joyce | 线性代数期中复习讲义（中文，含英文答题模板）；文件属性里写的课程代码是 BSC124，待核实 / Linear algebra midterm revision notes (Chinese, with English answer templates); the file properties name the course BSC124, unconfirmed |
 
 - 小贴士 / Tips：
