@@ -7,6 +7,9 @@ Design in intake/DESIGN.md; tests: python intake/test_intake.py.
 from __future__ import annotations
 
 import math
+import shutil
+import subprocess
+import sys
 import os
 import re
 import zipfile
@@ -394,3 +397,217 @@ def thumbnails(pdfs: list[Path], out_png: Path, cols: int = 5, cell: tuple[int, 
     page.get_pixmap(dpi=96).save(out_png)
     sheet.close()
     return len(cells)
+
+
+# ---------------------------------------------------------------- registry: course README, timeline, CONTRIBUTORS
+
+ANON = "匿名 / anonymous"
+COURSE_TABLE_HEADER = "| 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |"
+TIMELINE_HEADING = "### 其他同学 | Other contributors"
+TIMELINE_HEADER = "| 学期 / Session | 代码 / Code | 课程 / Course | 贡献者 / Contributor |"
+PLACEHOLDER = "| [Name] |"
+
+
+def _cell(text: str) -> str:
+    """User text that goes into a table cell: no newlines, pipes escaped."""
+    return re.sub(r"\s*\n\s*", " ", text.strip()).replace("|", "\\|")
+
+
+def credit_name(f: Form, login: str) -> str:
+    if f.credit == CREDIT_ANON:
+        return ANON
+    if f.credit == CREDIT_NICK:
+        return _cell(f.nickname)
+    return f"[{login}](https://github.com/{login})"
+
+
+def find_course_dir(root: Path, code: str) -> Path | None:
+    """The existing course folder for a code, whichever programme it sits under."""
+    for prog in PROGS:
+        hits = sorted(d for d in (root / prog).glob(f"{code}_*") if d.is_dir())
+        if hits:
+            return hits[0]
+    return None
+
+
+def course_dir_name(code: str, name: str) -> str:
+    return f"{code}_{re.sub(r'[^A-Za-z0-9_-]', '', name.strip().replace(' ', '_')).strip('_')}"
+
+
+def new_course_readme(code: str, name: str) -> str:
+    return (f"# {code} {name}\n\n"
+            "每个修读学期一行；有新学期的资料就加一行。One row per session; add a row when you contribute material from a new session.\n\n"
+            f"{COURSE_TABLE_HEADER}\n|---|---|---|---|---|\n\n- 小贴士 / Tips：\n")
+
+
+def _split_lines(text: str) -> tuple[list[str], str]:
+    eol = "\r\n" if "\r\n" in text else "\n"
+    return text.replace("\r\n", "\n").split("\n"), eol
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in re.split(r"(?<!\\)\|", line)[1:-1]]
+
+
+def _row(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
+def _table(lines: list[str], header_idx: int) -> tuple[int, int]:
+    """(first data row, one past the last data row) of the table whose header is at header_idx."""
+    start = header_idx + 2
+    end = start
+    while end < len(lines) and lines[end].startswith("|"):
+        end += 1
+    return start, end
+
+
+def _add_token(cell: str, token: str) -> str:
+    parts = [t.strip() for t in cell.split(" · ") if t.strip()]
+    if token not in parts:
+        parts.append(token)
+    return " · ".join(parts)
+
+
+def update_course_readme(text: str, f: Form, credit: str) -> str:
+    lines, eol = _split_lines(text)
+    type_link = f"[{f.type}]({f.session}/{f.type}/)"
+    notes = _cell(f.notes)
+    try:
+        header = next(i for i, l in enumerate(lines) if l.startswith("| 学期"))
+    except StopIteration:
+        lines += ["", COURSE_TABLE_HEADER, "|---|---|---|---|---|"]
+        header = len(lines) - 2
+    start, end = _table(lines, header)
+    insert_at = end
+    for i in range(start, end):
+        cells = _cells(lines[i])
+        if len(cells) < 5:
+            cells += [""] * (5 - len(cells))
+        m = re.search(r"\d{4}-\d{2}", cells[0])
+        placeholder = not m or cells[1] == "[Name]" or ("[" in cells[0] and "](" not in cells[0])
+        if placeholder:
+            insert_at = min(insert_at, i)
+            continue
+        if m.group(0) == f.session:
+            cells[0] = f"[{f.session}]({f.session}/)"
+            if not cells[1] and f.lecturer:
+                cells[1] = _cell(f.lecturer)
+            if not cells[2] and f.weighting:
+                cells[2] = _cell(f.weighting)
+            cells[3] = _add_token(cells[3], credit)
+            cells[4] = _add_token(cells[4], type_link)
+            if notes:
+                cells[4] = _add_token(cells[4], notes)
+            lines[i] = _row(cells)
+            return eol.join(lines)
+        if m.group(0) > f.session:
+            insert_at = min(insert_at, i)
+    new_row = _row([f"[{f.session}]({f.session}/)", _cell(f.lecturer), _cell(f.weighting), credit,
+                    type_link + (f" · {notes}" if notes else "")])
+    lines.insert(insert_at, new_row)
+    return eol.join(lines)
+
+
+def update_timeline(text: str, f: Form, credit: str, dir_name: str) -> str:
+    lines, eol = _split_lines(text)
+    name = dir_name.split("_", 1)[1].replace("_", " ") if "_" in dir_name else dir_name
+    row = f"| {f.taken} | [{f.code}]({dir_name}/) | [{name}]({dir_name}/) | {credit} |"
+    if row in lines:
+        return text
+    try:
+        heading = next(i for i, l in enumerate(lines) if l.strip() == TIMELINE_HEADING)
+        header = next(i for i in range(heading, len(lines)) if lines[i].startswith("|"))
+        _, end = _table(lines, header)
+        lines.insert(end, row)
+    except StopIteration:
+        block = ["", TIMELINE_HEADING, "", TIMELINE_HEADER, "|---|---|---|---|", row, ""]
+        at = next((i for i, l in enumerate(lines) if l.startswith("## 文件命名")), None)
+        if at is None:
+            while lines and lines[-1] == "":
+                lines.pop()
+            lines += block
+        else:
+            lines[at:at] = block
+    return eol.join(lines)
+
+
+def update_contributors(text: str, f: Form, credit: str, n: int) -> str:
+    if f.credit == CREDIT_ANON or credit in text:
+        return text
+    lines, eol = _split_lines(text)
+    if f.intake.isdigit():
+        heading, intake_cell = f"## {f.intake} 入学", f"{f.intake} 入学（{int(f.intake) + 4} 届）"
+    else:
+        heading, intake_cell = "## 其他入学年份", "待补充 / tbc"
+    row = f"| {credit} | {intake_cell}| {n} 份 {f.code} {f.session} {f.type} / {n} {f.type} files for {f.code} {f.session} | |"
+    start = next((i for i, l in enumerate(lines) if l.startswith(heading)),
+                 next((i for i, l in enumerate(lines) if l.startswith("## 其他入学年份")), None))
+    if start is None:
+        return text
+    at = next((i for i in range(start, len(lines)) if lines[i].startswith(PLACEHOLDER)), None)
+    if at is None:  # section without a placeholder row: append to its table
+        header = next(i for i in range(start, len(lines)) if lines[i].startswith("|"))
+        at = _table(lines, header)[1]
+    lines.insert(at, row)
+    return eol.join(lines)
+
+
+@dataclass
+class Placement:
+    course_dir: str
+    created_readme: bool
+    placed: list[tuple[str, str]]
+    notes: list[str]
+    meta: dict[str, str]
+
+
+def _edit(path: Path, fn) -> None:
+    text = path.read_bytes().decode("utf-8")
+    new = fn(text)
+    if new != text:
+        path.write_bytes(new.encode("utf-8"))
+
+
+def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Placement:
+    """Copy the accepted files into the tree, clear their metadata, register them, regenerate the index."""
+    credit = credit_name(f, login)
+    notes: list[str] = []
+    course = find_course_dir(root, f.code)
+    created = False
+    if course is None:
+        course = root / f.prog / course_dir_name(f.code, f.name)
+        course.mkdir(parents=True, exist_ok=True)
+    else:
+        prog = course.parent.name
+        if prog != f.prog:
+            notes.append(f"{f.code} 的课程目录已在 {prog}/ 下，文件归入那里而不是 {f.prog}/ "
+                         f"| the {f.code} folder already lives under {prog}/, so the files went there rather than {f.prog}/")
+        existing = course.name.split("_", 1)[1].replace("_", " ") if "_" in course.name else ""
+        if existing and existing.lower() != " ".join(f.name.split()).lower():
+            notes.append(f"表单课名「{f.name}」与目录名「{existing}」不同，沿用目录名 "
+                         f"| form says \"{f.name}\" but the folder is \"{existing}\"; the folder name stands")
+    if not (course / "README.md").exists():
+        (course / "README.md").write_bytes(new_course_readme(f.code, f.name).encode("utf-8"))
+        created = True
+        notes.append(f"新建了课程目录和 README：{course.parent.name}/{course.name}/ "
+                     f"| created the course folder and README: {course.parent.name}/{course.name}/")
+    prog = course.parent.name
+    target = course / f.session / f.type
+    target.mkdir(parents=True, exist_ok=True)
+    taken = {p.name for p in target.iterdir()}
+    placed: list[tuple[str, str]] = []
+    meta: dict[str, str] = {}
+    for original, path in files:
+        name = target_name(f, original, len(files), taken)
+        dest = target / name
+        shutil.copyfile(path, dest)
+        rel = dest.relative_to(root).as_posix()
+        meta[rel] = clear_metadata(dest)
+        placed.append((original, rel))
+    _edit(course / "README.md", lambda t: update_course_readme(t, f, credit))
+    _edit(root / prog / "README.md", lambda t: update_timeline(t, f, credit, course.name))
+    _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, f, credit, len(files)))
+    subprocess.run([sys.executable, str(root / "scripts" / "update_index.py"), prog],
+                   check=True, cwd=root, capture_output=True, text=True)
+    return Placement(f"{prog}/{course.name}", created, placed, notes, meta)
