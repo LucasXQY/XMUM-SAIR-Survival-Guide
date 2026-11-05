@@ -49,6 +49,7 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
+| XHZ | 2025 入学（2029 届）| COM111、COM110、COM102、MPU1.1 2025-09 的大纲、习题、实验手册、作业说明、复习资料和 7 份带批注的微积分课件，以及 CST103 2020-09 / 2021-04 和 MPU1.1 2024-09 的空白试卷，共 50 份 / 50 files: syllabi, tutorials, lab manuals, coursework briefs, revision material and 7 annotated calculus decks for COM111, COM110, COM102 and MPU1.1 (2025-09), plus blank CST103 (2020-09, 2021-04) and MPU1.1 (2024-09) papers | |
 | [Name] | 2025 入学（2029 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 其他入学年份 | Other intakes
