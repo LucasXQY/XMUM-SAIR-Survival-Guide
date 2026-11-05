@@ -333,7 +333,7 @@ def test_ratings_hooks_and_reviews_page():
     lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
     assert 'class="ratings"' not in lect and "giscus" not in lect              # lecturer pages carry no scores and no threads
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
-    assert 'class="ratings" data-all' in table and "Click a header to sort" in table
+    assert 'class="ratings" data-all' in table and "click a header of the table below to sort" in table
     assert "ratings.json" in (out / "static/ratings.js").read_text(encoding="utf-8") and f"{build.SITE_URL}reviews/" in (out / "sitemap.xml").read_text(encoding="utf-8")
 
 
@@ -365,6 +365,18 @@ def test_lecturer_pages_are_a_directory():
     assert 'id="rate-q"' in rate and "写描述" not in rate and build.REVIEW_FORM in rate
     for word in ("教师 | Lecturer:", "Lecturer Profiles", "教师档案"):
         assert word not in idx and word not in pg, word
+
+
+def test_reviews_page_search_and_course_panel():
+    """One add-review button, a search box, and a course panel (tiles + per-lecturer table) that ratings.js fills."""
+    _, out = _build()
+    table = (out / "reviews/index.html").read_text(encoding="utf-8")
+    assert table.count("添加评价 | Add a review") == 1 and "评价这门课" not in table         # no second button for the same thing
+    assert 'id="rv-q"' in table and 'id="rv-panel"' in table and 'data-courses="' + P + 'search.json"' in table
+    js = (out / "static/ratings.js").read_text(encoding="utf-8")
+    assert "rv-panel" in js and "tile" in js and "data.courses[" in js and ".all" in js
+    css = (out / "static/style.css").read_text(encoding="utf-8")
+    assert ".tile {" in css and "--v" in css.split(".tile {")[1][:300]
 
 
 def test_goatcounter_snippet_on_every_page():

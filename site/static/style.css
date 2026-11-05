@@ -166,3 +166,23 @@ ul.links { columns: 2 14em; padding-left: 1.2em; }
 .rate-lect { color: var(--muted); }
 .rate-row .btn:first-of-type { margin-left: auto; }
 @media (max-width: 600px) { .rate-row .btn:first-of-type { margin-left: 0; } }
+
+/* course review panel */
+.rv-list { list-style: none; padding: 0; margin: 0 0 12px; }
+.rv-list li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rv-list small { color: var(--muted); }
+.rv-panel { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 16px; margin: 12px 0 20px; }
+.rv-back { display: inline-block; margin-bottom: 8px; }
+.rv-head { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: flex-start; }
+.rv-code { font-size: 1.8rem; font-weight: 700; margin: 0; line-height: 1.1; }
+.rv-name { margin: 2px 0 10px; font-size: 1.05rem; }
+.rv-links { margin: 0; }
+.rv-label { margin: 0 0 6px; font-weight: 600; }
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+.tile {
+  width: 76px; height: 76px; border-radius: 10px; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: hsl(212 70% calc(66% - var(--v, 0) * 34%));
+}
+.tile b { font-size: 1.45rem; line-height: 1.1; }
+.tile span { font-size: .68rem; opacity: .92; margin-top: 3px; text-align: center; }
+.tile.empty { background: var(--line); color: var(--muted); }
