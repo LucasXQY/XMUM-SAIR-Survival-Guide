@@ -220,6 +220,37 @@ def test_build_refuses_to_delete_a_foreign_directory():
     assert (out / "keep.txt").is_file()
 
 
+def test_forbidden_words_checked_in_generator_not_content():
+    """A lecturer or file may legitimately be called Claude; only the generator's own files must stay clean."""
+    import shutil
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "repo"
+    course = "EEE/COM107_Circuits_and_Devices"
+    for p in ["README.md", "DISCLAIMER.md", "CONTRIBUTING.md", "CONTRIBUTORS.md", "Lecturers.md", "Research-Opportunities.md",
+              "EEE/README.md", "AIT/README.md", "ROBO/README.md", f"{course}/README.md"]:
+        (tmp / p).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / p, tmp / p)
+    (tmp / course / "2022-04/Tutorials").mkdir(parents=True)
+    (tmp / course / "2022-04/Tutorials/Claude_Shannon_notes.pdf").write_bytes(b"%PDF")
+    with open(tmp / course / "README.md", "a", encoding="utf-8") as fh:
+        fh.write("\n- 小贴士 / Tips：read Claude Shannon's paper\n")
+    out = pathlib.Path(tempfile.mkdtemp()) / "_site"
+    import contextlib, io
+    with contextlib.redirect_stderr(io.StringIO()):     # the partial copy has many dangling links; not the point here
+        build.check(build.build(tmp, out, P), out)      # must not raise
+    assert build.check_generator_sources() == []
+
+
+UPLOAD_URL = "https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml"
+
+
+def test_upload_button_everywhere():
+    _, out = _build()
+    for p in ["index.html", "EEE/index.html", "contributing/index.html"]:
+        assert UPLOAD_URL in (out / p).read_text(encoding="utf-8"), p
+    assert "上传 | Upload" in (out / "index.html").read_text(encoding="utf-8")
+    assert "上传表单" in (out / "contributing/index.html").read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

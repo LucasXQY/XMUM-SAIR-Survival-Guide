@@ -1,0 +1,77 @@
+name: intake
+
+# 上传通道：把带 upload 标签的 Issue 整理成 PR；main 有新提交时把所有打开的上传 PR 重建一遍。见 intake/DESIGN.md
+# Upload channel: turns an issue labelled `upload` into a pull request; every push to main rebuilds all open upload PRs. See intake/DESIGN.md
+on:
+  issues:
+    types: [opened, edited]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to rebuild"
+        required: true
+        type: string
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  intake:
+    if: >-
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'upload'))
+      || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # one group per issue (and one for the push-triggered sweep): a newer run for the same issue replaces the queued one,
+    # runs for different issues touch different branches and may overlap. GitHub keeps a single queued run per group and
+    # cancels older ones, so the sweep on push also picks up upload issues that never got an answer.
+    concurrency:
+      group: intake-${{ github.event.issue.number || inputs.issue || 'all' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pymupdf>=1.24,<2" "markdown>=3.4,<4"
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Rebuild upload pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            python intake/intake.py --all-open
+          else
+            python intake/intake.py --issue "$ISSUE"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: thumbnails
+          path: _intake/thumbs
+          if-no-files-found: ignore
+
+  # a rejected upload must not stay on a public branch: delete the branch of an upload PR that was closed without merging
+  # ("Automatically delete head branches" only covers merged ones)
+  cleanup:
+    if: >-
+      github.event_name == 'pull_request_target' && github.event.pull_request.merged == false
+      && startsWith(github.event.pull_request.head.ref, 'upload/issue-')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"

@@ -249,6 +249,7 @@ NAV = [("EEE", "EEE/"), ("AIT", "AIT/"), ("ROBO", "ROBO/"), ("问答 | Q&A", "qa
        ("研究机会 | Research", "research/"), ("教师 | Lecturers", "lecturers/"),
        ("贡献者 | Contributors", "contributors/"), ("如何贡献 | Contribute", "contributing/"),
        ("关于 | About", "about/")]
+UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md)
 
 
 def template() -> Template:
@@ -257,7 +258,7 @@ def template() -> Template:
 
 def nav_html(site: Site) -> str:
     links = "".join(f'<a href="{site.prefix}{p}">{esc(t)}</a>' for t, p in NAV)
-    links += f'<a href="{GH}">GitHub</a>'
+    links += f'<a href="{GH}">GitHub</a><a class="btn upload" href="{UPLOAD_URL}">上传 | Upload</a>'
     form = (f'<form class="mini-search" action="{site.prefix}" method="get" role="search">'
             '<label class="sr-only" for="nav-q">搜索 | Search</label>'
             '<input id="nav-q" name="q" type="search" placeholder="搜索 | Search"></form>')
@@ -342,7 +343,11 @@ def prog_page(site: Site, prog: str) -> str:
 def root_page(site: Site, md: str) -> str:
     text = (site.root / md).read_text(encoding="utf-8")
     m = re.search(r"^# (.+)$", text, flags=re.M)
-    return page(site, m.group(1).strip() if m else md, render_md(site, text, md))
+    body = render_md(site, text, md)
+    if md == "CONTRIBUTING.md":
+        body = (f'<p class="notice">最简单的方式：填<a href="{UPLOAD_URL}">上传表单</a>，机器人会整理文件并开一个 PR 等维护者审核。<br>'
+                f'Easiest way: fill in the <a href="{UPLOAD_URL}">upload form</a>; the bot files everything and opens a PR for review.</p>') + body
+    return page(site, m.group(1).strip() if m else md, body)
 
 
 def home_page(site: Site) -> str:
@@ -353,7 +358,8 @@ def home_page(site: Site) -> str:
         cards.append(f'<a class="card" href="{site.prefix}{prog}/"><h3>{prog}</h3><p>{esc(name)}</p>'
                      f'<p class="stats">{n_mat} / {len(cs)} 门课有资料 · {n_files} 份文件<br>'
                      f'{n_mat} of {len(cs)} courses with material · {n_files} files</p></a>')
-    links = [("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
+    links = [("上传资料 | Upload material", UPLOAD_URL),
+             ("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
              ("教师档案 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
              ("如何贡献 | How to contribute", f"{site.prefix}contributing/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
              ("关于 | About", f"{site.prefix}about/"), ("GitHub 仓库 | Repository", GH)]
@@ -434,10 +440,27 @@ FORBIDDEN = ("Co-Authored", "Claude", "Anthropic")
 
 def stragglers(site: Site) -> list[str]:
     """Tracked files under the programme folders that the scan did not pick up (wrong depth or name)."""
-    raw = subprocess.run(["git", "ls-files", "-z", *PROGS], cwd=site.root, capture_output=True, check=True).stdout
+    try:
+        raw = subprocess.run(["git", "ls-files", "-z", *PROGS], cwd=site.root, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):  # no git, or the root is not a checkout (intake dry run)
+        warn("git unavailable, straggler check skipped")
+        return []
     tracked = [p for p in raw.decode("utf-8").split("\0") if p]
     seen = {f.path for f in all_files(site.courses)}
     return [p for p in tracked if p not in seen and posixpath.basename(p) != "README.md"]
+
+
+def check_generator_sources() -> list[str]:
+    """Forbidden words in the generator's own files. Repo content is not scanned: people and papers may carry any name."""
+    hits = []
+    for p in sorted(HERE.rglob("*")):
+        if p.suffix not in (".py", ".html", ".css", ".js") or "__pycache__" in p.parts or p.name.startswith("test_"):
+            continue
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if "FORBIDDEN" in line:
+                continue
+            hits += [f"{p.relative_to(HERE).as_posix()}:{i}: {w}" for w in FORBIDDEN if w in line]
+    return hits
 
 
 def check(site: Site, out: Path) -> None:
@@ -449,10 +472,10 @@ def check(site: Site, out: Path) -> None:
     assert len(idx["files"]) == len(all_files(site.courses)), "search.json file count differs from the scan"
     for f in idx["files"]:
         assert (site.root / f["path"]).is_file(), f"search.json path missing: {f['path']}"
+    bad = check_generator_sources()
+    assert not bad, f"generator sources contain forbidden words: {bad}"
     for page_file in out.rglob("*.html"):
         text = page_file.read_text(encoding="utf-8")
-        for word in FORBIDDEN:
-            assert word not in text, f"{page_file.relative_to(out)}: contains {word!r}"
         for href in re.findall(r'href="([^"]*)"', text):
             href = html_mod.unescape(href)
             if not href.startswith(site.prefix):
@@ -468,8 +491,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="_site")
     ap.add_argument("--prefix", default="/XMUM-SAIR-Survival-Guide/", help="URL path the site is served under")
+    ap.add_argument("--root", default=str(HERE.parent), help="repository tree to build from")
     args = ap.parse_args(argv)
-    root = HERE.parent
+    root = Path(args.root).resolve()
     site = build(root, Path(args.out), args.prefix)
     try:
         check(site, Path(args.out))

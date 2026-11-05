@@ -1,0 +1,169 @@
+# 上传表单。字段标题是机器人 intake/intake.py 的解析键（FIELDS / CHECKS），改标题要同时改脚本；见 intake/DESIGN.md
+# The upload form. Field labels are the parse keys of intake/intake.py (FIELDS / CHECKS); change both or neither. See intake/DESIGN.md
+name: 上传资料 | Upload material
+description: 把试卷、大纲、笔记等交给机器人整理，它会开一个 PR 等维护者审核 | Hand papers, syllabi or notes to the bot; it files them and opens a PR for review
+title: "[上传 | Upload] "
+labels: [upload]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢分享！填好下面的表、把文件拖进「文件」框、点 **Submit new issue**。几分钟内机器人会在这个 Issue 下回复：要么是一个整理好的 PR 链接，要么是需要补充的信息。维护者审核合并后网站随即更新。
+
+        - 单个附件最大 **25 MB**；多份文件可以打成一个 zip。更大的文件请拆分，或发邮件到 `xieqiyi@ieee.org`。
+        - 只收 pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv。**照片请先合成一个 PDF**，单独的图片不收。
+        - 一次提交只选一种资料类型；不同类型请分开提交。
+        - 规则见 [CONTRIBUTING.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/CONTRIBUTING.md) 与 [DISCLAIMER.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/DISCLAIMER.md)。
+        - 选「匿名」时仓库里不会出现你的名字，但 GitHub 本身仍会显示这个 Issue 和 PR 是谁发的。
+
+        Thanks for sharing! Fill in the form, drag your files into the **Files** box and press **Submit new issue**. Within a few minutes the bot replies here with either a link to the pull request it filed or a list of things to fix. Once a maintainer merges it, the website updates.
+
+        - Each attachment is at most **25 MB**; several files can go in one zip. Split bigger files or email `xieqiyi@ieee.org`.
+        - Accepted: pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv. **Combine photos into one PDF**; images on their own are not accepted.
+        - One type of material per submission; submit different types separately.
+        - Rules: [CONTRIBUTING.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/CONTRIBUTING.md) and [DISCLAIMER.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/DISCLAIMER.md).
+        - "Anonymous" keeps your name out of the repository files, but GitHub itself still shows who opened this issue and the PR.
+
+  - type: dropdown
+    id: prog
+    attributes:
+      label: "专业 | Programme"
+      options:
+        - "EEE"
+        - "AIT"
+        - "ROBO"
+    validations:
+      required: true
+
+  - type: input
+    id: code
+    attributes:
+      label: "课程代码 | Course code"
+      description: "如 COM107、EEE212、MPU1.1、G0191 | e.g. COM107, EEE212, MPU1.1, G0191"
+      placeholder: "COM107"
+    validations:
+      required: true
+
+  - type: input
+    id: name
+    attributes:
+      label: "课程名称 | Course name"
+      description: "试卷或大纲上的英文名 | The English name as printed on the paper or syllabus"
+      placeholder: "Circuits and Devices"
+    validations:
+      required: true
+
+  - type: input
+    id: session
+    attributes:
+      label: "学期 | Session"
+      description: "资料上印的学期，YYYY-MM | The session printed on the material, YYYY-MM"
+      placeholder: "2022-04"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: "资料类型 | Type"
+      description: "一次只选一种 | One type per submission"
+      options:
+        - "Past-Papers"
+        - "Syllabus"
+        - "Assignments"
+        - "Labs"
+        - "Tutorials"
+        - "Handbooks"
+        - "Notes"
+        - "Exam-Review"
+        - "Tips"
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: "文件 | Files"
+      description: "把文件拖进这个框（或点击框内上传）。可以多份，也可以打成一个 zip；照片请先合成 PDF | Drag the files into this box (or click to upload). Several files or one zip are fine; combine photos into a PDF first"
+      placeholder: "拖文件到这里 | Drop files here"
+    validations:
+      required: true
+
+  - type: input
+    id: assessment
+    attributes:
+      label: "考核名称 | Assessment（试卷用）"
+      description: "只在类型是 Past-Papers 时填：Final、Midterm、Test 1、Quiz 2… | Only for Past-Papers: Final, Midterm, Test 1, Quiz 2…"
+      placeholder: "Final"
+
+  - type: input
+    id: lecturer
+    attributes:
+      label: "老师 | Lecturer"
+      description: "不确定可留空 | Leave blank if unsure"
+
+  - type: input
+    id: weighting
+    attributes:
+      label: "考核比例 | Assessment weighting"
+      placeholder: "作业 20%、期中 30%、期末 50% | 20% assignments, 30% midterm, 50% final"
+
+  - type: input
+    id: taken
+    attributes:
+      label: "你修这门课的学期 | Session you took it"
+      description: "YYYY-MM；留空表示和资料学期相同。用于专业页的「修课时间表」 | YYYY-MM; blank means the same as the material's session. Feeds the programme's course timeline"
+      placeholder: "2022-04"
+
+  - type: dropdown
+    id: credit
+    attributes:
+      label: "署名方式 | Credit"
+      description: "写进课程 README、修课时间表和 CONTRIBUTORS 的名字 | The name written into the course README, the timeline and CONTRIBUTORS"
+      options:
+        - "用我的 GitHub 用户名 | My GitHub username"
+        - "用下面填的昵称 | The nickname below"
+        - "匿名 | Anonymous"
+    validations:
+      required: true
+
+  - type: input
+    id: nickname
+    attributes:
+      label: "昵称 | Nickname"
+      description: "选了「用下面填的昵称」才需要填 | Only needed with the nickname option"
+
+  - type: dropdown
+    id: intake
+    attributes:
+      label: "入学年份 | Intake year"
+      description: "用于 CONTRIBUTORS 分组，可不选 | Groups you in CONTRIBUTORS; optional"
+      options:
+        - "2019"
+        - "2020"
+        - "2021"
+        - "2022"
+        - "2023"
+        - "2024"
+        - "2025"
+        - "2026"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "备注 / 小贴士 | Notes"
+      description: "写进课程 README 备注列的一句话，比如 Set B 与 Set A 第 3 题不同 | One line for the course README's notes column, e.g. Set B differs from Set A in Q3"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "确认 | Checklist"
+      options:
+        - label: "没有答案、评分标准、参考解答 | No answers, marking schemes or model solutions"
+          required: true
+        - label: "没有学生姓名、学号、签名，没有老师的私人联系方式和 Moodle 密钥 | No student names, IDs or signatures; no lecturers' private contacts or Moodle keys"
+          required: true
+        - label: "这门课是我自己修的，或我有权分享这些文件 | I took this course myself, or I have the right to share these files"
+          required: true
+        - label: "我已读 DISCLAIMER，同意这些文件免费公开、非商业使用 | I have read the DISCLAIMER and agree to these files being public, free and non-commercial"
+          required: true
