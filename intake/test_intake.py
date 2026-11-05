@@ -1,5 +1,5 @@
 """Checks for intake/intake.py. Run from the repo root: python intake/test_intake.py (no network needed)."""
-import sys, pathlib, tempfile
+import re, sys, pathlib, tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -302,6 +302,133 @@ def test_issue_form_matches_parser():
         assert f'- "{opt}"\n' in yml, opt
     assert "labels: [upload]" in yml
     assert (ROOT / ".github/ISSUE_TEMPLATE/config.yml").read_text(encoding="utf-8").strip() == "blank_issues_enabled: true"
+
+
+# ---- review fixes
+
+def test_validate_accepts_general_education_codes():
+    for code in ("MPU3.1", "MPU1.1", "G0191", "GE0227", "EEE999", "com107"):
+        f = intake.parse_form(_body(com107=code))
+        assert intake.validate(f) == [], (code, intake.validate(f))
+    for code in ("MP.1", "COM1", "MPU3.1.2", "1234"):
+        assert any("Course code" in p for p in intake.validate(intake.parse_form(_body(com107=code)))), code
+
+
+def test_cell_neutralizes_html_and_course_name_too():
+    assert intake._cell("<b>x</b> | y\nz") == "&lt;b&gt;x&lt;/b&gt; \\| y z"
+    readme = intake.new_course_readme("AIT101", "Intro <b>AI</b>")
+    assert "<b>" not in readme and readme.startswith("# AIT101 Intro &lt;b&gt;AI&lt;/b&gt;")
+
+
+def test_pr_body_keeps_user_text_in_code_spans():
+    f = intake.parse_form(_body())
+    pl = intake.Placement("EEE/COM107_Circuits_and_Devices", False,
+                          [("@someone fixes #3 `x`.pdf", "EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question.pdf")], [], {})
+    body = intake.pr_body(f, pl, [("<img src=x onerror=1>.jpg", "r | r")], {}, {}, (True, []), "abc1234", None, "upload/issue-9", 9)
+    assert body.count("@someone") == 1 and re.search(r"`[^`\n]*@someone fixes #3 'x'\.pdf`", body)
+    assert "<img" not in body and "Closes #9" in body
+
+
+def test_unpack_reports_broken_zip_members():
+    import zipfile
+    work = pathlib.Path(tempfile.mkdtemp()); z = work / "b.zip"
+    with zipfile.ZipFile(z, "w", zipfile.ZIP_STORED) as zf:
+        zf.writestr("ok.pdf", b"%PDF ok"); zf.writestr("x.pdf", b"%PDF hello world")
+    raw = bytearray(z.read_bytes()); i = raw.find(b"hello world"); raw[i:i + 5] = b"HELLO"; z.write_bytes(bytes(raw))   # bad CRC
+    ok, bad = intake.unpack([("b.zip", z)], work)
+    assert [n for n, _ in ok] == ["ok.pdf"] and [n for n, _ in bad] == ["x.pdf"] and " | " in bad[0][1]
+
+
+def test_zip_entry_names_with_backslashes():
+    """Python's zipfile normalises separators on Windows but not on the Linux runner, so the helpers are tested directly."""
+    assert intake._basename("dir\\c.pdf") == "c.pdf" and intake._basename("a/b/c.pdf") == "c.pdf"
+    assert intake._skip("__MACOSX\\._c.pdf") and intake._skip("__MACOSX/._c.pdf") and not intake._skip("dir\\c.pdf")
+    assert intake._reject_reason("..\\x.pdf", "pdf") and intake._reject_reason("../x.pdf", "pdf")
+
+
+def test_contributors_dedupe_by_name_cell():
+    c = (ROOT / "CONTRIBUTORS.md").read_text(encoding="utf-8")
+    f = intake.parse_form(_body(Joyce="Lu").replace("2021", "2023"))
+    assert "| Lu | 2023 入学（2027 届）|" in intake.update_contributors(c, f, "Lu", 1)        # "Lu" is inside "LucasXQY" but not a listed name
+    g = intake.parse_form(_body().replace(intake.CREDIT_NICK, intake.CREDIT_LOGIN))
+    assert intake.update_contributors(c, g, "[LucasXQY](https://github.com/LucasXQY)", 1) == c   # listed as plain LucasXQY
+
+
+def test_course_readme_order_and_login_variant():
+    text = ("# X\n\n| 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |\n|---|---|---|---|---|\n"
+            "| [unknown](unknown/) |  |  | LucasXQY | [Notes](unknown/Notes/) |\n"
+            "| [2024-09](2024-09/) |  |  | LucasXQY | [Tutorials](2024-09/Tutorials/) |\n"
+            "| [2025-04](2025-04/) |  |  | LucasXQY | [Labs](2025-04/Labs/) |\n")
+    out = intake.update_course_readme(text, intake.parse_form(_body().replace("2022-04", "2026-04")), "Joyce").splitlines()
+    assert out[-1].startswith("| [2026-04]") and out[-2].startswith("| [2025-04]")
+    g = intake.parse_form(_body().replace("2022-04", "2024-09"))
+    row = next(l for l in intake.update_course_readme(text, g, "[LucasXQY](https://github.com/LucasXQY)").splitlines() if l.startswith("| [2024-09]"))
+    assert row.count("LucasXQY") == 1
+
+
+def test_rejected_lines_capped():
+    text = intake.rejected_lines([(f"p{i}.jpg", "no | no") for i in range(100)])
+    assert text.count("\n") < 40 and "70" in text
+
+
+def test_course_dir_name_collapses_separators():
+    assert intake.course_dir_name("EEE212", "Signals & Systems") == "EEE212_Signals_Systems"
+    assert intake.course_dir_name("MPU3.1", " Intro  to  Law ") == "MPU3.1_Intro_to_Law"
+
+
+def test_attachment_name_comes_from_url():
+    assert intake.attachment_links("[x.pdf](https://github.com/user-attachments/files/1/x.zip)") == [("x.zip", "https://github.com/user-attachments/files/1/x.zip")]
+    assert intake.attachment_links("[a](https://github.com/user-attachments/files/2/My%20File.pdf)") == [("My File.pdf", "https://github.com/user-attachments/files/2/My%20File.pdf")]
+
+
+def test_git_errors_carry_stderr():
+    try:
+        intake.Git(pathlib.Path(tempfile.mkdtemp())).head(); assert False
+    except RuntimeError as e:
+        assert "repository" in str(e).lower()
+
+
+class _FakeGH:
+    def __init__(self, body, labels=("upload",)):
+        self.body, self.labels, self.calls = body, list(labels), []
+    def issue(self, n): return {"body": self.body, "title": "t", "state": "open", "login": "alice", "id": 111, "labels": self.labels}
+    def comment(self, n, text): self.calls.append(("comment", text))
+    def comment_pr(self, n, text): self.calls.append(("comment_pr", text))
+    def label(self, n, add=(), remove=()): self.calls.append(("label", tuple(add), tuple(remove)))
+    def pr_for(self, branch): return None
+    def create_or_edit_pr(self, branch, title, body): self.calls.append(("pr", title, body)); return "https://example/pr/1"
+
+
+class _FakeGit:
+    def __init__(self): self.calls = []
+    def reset_branch(self, name): self.calls.append(("reset", name))
+    def head(self): return "0123456789abcdef"
+    def commit_all(self, message, author): self.calls.append(("commit", message, author))
+    def force_push(self, name): self.calls.append(("push", name))
+
+
+def test_run_issue_glue_with_fakes():
+    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "paper.pdf")
+    real = intake.download
+    intake.download = lambda links, work: ([("paper.pdf", w / "paper.pdf")], [("dead.pdf", "下载失败 | download failed: 404")])
+    try:
+        gh = _FakeGH(_body().replace("EEE\n", "AIT\n").replace("com107", "MPU3.1").replace(intake.CREDIT_NICK, intake.CREDIT_ANON)); git = _FakeGit()
+        intake.run_issue(5, tmp, gh, git, "https://run", w / "work")
+        assert git.calls[0] == ("reset", "upload/issue-5") and git.calls[-1] == ("push", "upload/issue-5")
+        assert git.calls[1][2] == intake.BOT_AUTHOR and "MPU3.1 2022-04 Past-Papers" in git.calls[1][1]
+        pr = next(c for c in gh.calls if c[0] == "pr")
+        assert "MPU3.1" in pr[1] and "Closes #5" in pr[2] and "EEE/MPU3.1_Introduction" in pr[2] and "CONTRIBUTORS.md" in pr[2]
+        first = next(c for c in gh.calls if c[0] == "comment")
+        assert "https://example/pr/1" in first[1] and "dead.pdf" in first[1]
+        assert ("label", ("pr-opened",), ()) in gh.calls and "comment_pr" not in [c[0] for c in gh.calls]
+        gh2 = _FakeGH(_body().replace("2022-04", "soon")); git2 = _FakeGit()                    # invalid form
+        intake.run_issue(6, tmp, gh2, git2, None, w / "work")
+        assert git2.calls == [] and [c[0] for c in gh2.calls] == ["comment", "label"] and "Session" in gh2.calls[0][1]
+        gh3 = _FakeGH(_body().replace("2022-04", "soon"), labels=("upload", "needs-info"))        # sweep: already told, stay quiet
+        intake.run_issue(6, tmp, gh3, _FakeGit(), None, w / "work", sweep=True)
+        assert gh3.calls == []
+    finally:
+        intake.download = real
 
 
 if __name__ == "__main__":

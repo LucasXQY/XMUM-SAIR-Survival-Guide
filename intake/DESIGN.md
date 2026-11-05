@@ -83,12 +83,12 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 - `issues: [opened, edited]`，仅当 Issue 带 `upload` 标签 → 重建该 Issue 的分支和 PR。
 - `push: branches: [main]` → 列出所有打开的、分支名以 `upload/issue-` 开头的 PR，逐个重建。
 - `workflow_dispatch`，输入 `issue` 编号 → 重建该 Issue（维护者手动兜底）。
-`concurrency: intake`（不取消，排队），避免两次重建互相覆盖。权限 `contents: write`、`pull-requests: write`、`issues: write`。步骤：checkout（取 main）→ setup-python → `pip install pymupdf markdown` → `python intake/intake.py --event "$GITHUB_EVENT_PATH"`（或 `--issue N` / `--all-open`）→ 把缩略图目录上传为 workflow artifact。
+`concurrency` 按 Issue 分组（`intake-<n>`；push 触发用 `intake-all`），同一 Issue 只保留最新一次排队。GitHub 每个组只留一个排队位，被挤掉的任务会被静默取消，所以 push 到 main 的那次重建还会扫一遍带 `upload` 标签、既没有 PR 也没有 `needs-info` 的 Issue，补上漏掉的。权限 `contents: write`、`pull-requests: write`、`issues: write`。步骤：checkout（取 main）→ setup-python → `pip install pymupdf markdown` → `python intake/intake.py --event "$GITHUB_EVENT_PATH"`（或 `--issue N` / `--all-open`）→ 把缩略图目录上传为 workflow artifact。
 
 脚本 `intake/intake.py` 对每个 Issue 按顺序：
 
 1. **解析表单**：从 Issue 正文取各字段；`Files` 段里用正则取出所有附件链接（`github.com/user-attachments/files/…`，以及旧格式 `github.com/<owner>/<repo>/files/…`、`user-images.githubusercontent.com/…`）。
-2. **校验**：课程代码 `^[A-Z]{1,4}\d{3,4}(\.\d)?$`（大写后匹配）；学期 `^\d{4}-\d{2}$`；类型在九种之内；至少一个附件（只认 `github.com/user-attachments/files/<id>/<name>` 和旧格式 `github.com/<owner>/<repo>/files/<id>/<name>`；图片格式的 `user-attachments/assets/<uuid>` 不认，表单里说明照片请合成 PDF）；署名方式选②时昵称不能为空；四项确认全勾。不通过 → 在 Issue 下用双语列出问题、打标签 `needs-info`、退出 0，不开 PR；若该 Issue 已有 PR，则同时在 PR 下评论并保留旧分支不动。校验通过且带 `needs-info` 标签 → 摘掉标签。
+2. **校验**：课程代码 `^[A-Z]{1,4}(\d{3,4}|\d\.\d)$`（大写后匹配；通识课 MPU3.1 这类也算）；学期 `^\d{4}-\d{2}$`；类型在九种之内；至少一个附件（只认 `github.com/user-attachments/files/<id>/<name>` 和旧格式 `github.com/<owner>/<repo>/files/<id>/<name>`；图片格式的 `user-attachments/assets/<uuid>` 不认，表单里说明照片请合成 PDF）；署名方式选②时昵称不能为空；四项确认全勾。不通过 → 在 Issue 下用双语列出问题、打标签 `needs-info`、退出 0，不开 PR；若该 Issue 已有 PR，则同时在 PR 下评论并保留旧分支不动。校验通过且带 `needs-info` 标签 → 摘掉标签。
 3. **重建而非拒绝**：分支 `upload/issue-<n>` 已存在也照常进行，最后强制推送覆盖；已有 PR 则更新其标题和正文，不新开。
 4. **下载**：每个附件下到临时目录，跟随 302，失败重试一次；记录大小。zip 解包：只取文件（忽略目录、`__MACOSX/`、以 `.` 开头的文件），只保留文件名部分（丢弃路径，拒绝含 `..` 的条目），解包后总大小超过 300 MB 或文件数超过 60 即中止并报告。允许的扩展名：pdf、docx、pptx、xlsx、doc、ppt、xls、txt、md、csv；其他文件（含图片）记入"未收录"清单，不放进仓库。
 5. **改名**：`<CODE>_<YYYYMM>_<Label>.<ext>`。
@@ -105,7 +105,7 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
    - 署名、备注等用户文本写进表格前把 `|` 换成 `\|`、去掉换行。
    - 运行 `python scripts/update_index.py <PROG>`。
 9. **检查**（结果写进 PR 正文，不阻断）：每份文件一行：大小、页数（PDF）、清理后的元数据是否为空、可疑文本命中（学号 `[A-Z]{3}\d{7,10}`、`Student ID`、非 `@xmu.edu.my` 邮箱、电话号码、enrolment key / passcode / password / zoom / meeting id / wechat / whatsapp）、答案关键词（marking scheme / answer scheme / model answer / suggested answer / solution / answer key / 答案 / 评分标准 / 参考解答）、低文字量（可能是扫描件，提醒肉眼看）。PDF 首页和第二页渲染成缩略图拼成一张图，作为 workflow artifact 上传，PR 正文给出本次运行的链接。最后运行 `python site/build.py --out /tmp/site`，把 `WARNING` 行和是否成功写进报告。
-10. **提交与开 PR**：从当前 main 新建（或重置）分支 `upload/issue-<n>`；一次提交，`--author "<login> <<id>+<login>@users.noreply.github.com>"`（Issue 作者的 login 与数字 id 通过 API 取得；匿名时作者为 `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>`），提交信息 `content: add <CODE> <session> <Type> from #<n>`；`git push --force`；没有 PR 则 `gh pr create`，有则 `gh pr edit` 更新标题正文。标题 `[上传 | Upload] <CODE> <session> <Type>（#<n>）`，正文含：文件清单（原名 → 新路径，每个新路径链到 PR 分支上的文件页，GitHub 可直接预览 PDF）、未收录清单及原因、登记了哪些 README/时间表/CONTRIBUTORS 行、检查报告、维护者勾选清单（看过缩略图 / 没有答案 / 没有个人信息）、重建时间与所基于的 main 提交、`Closes #<n>`。首次开 PR 时在 Issue 下评论 PR 链接并打 `pr-opened`；重建时只在 PR 下评论一句"已按最新 Issue / main 重建"。
+10. **提交与开 PR**：从当前 main 新建（或重置）分支 `upload/issue-<n>`；一次提交，`--author "<login> <<id>+<login>@users.noreply.github.com>"`（Issue 作者的 login 与数字 id 通过 API 取得；匿名时作者为 `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>`），提交信息 `content: add <CODE> <session> <Type> from #<n>`；`git push --force`；没有 PR 则 `gh pr create`，有则 `gh pr edit` 更新标题正文。标题 `[上传 | Upload] <CODE> <session> <Type>（#<n>）`，正文含：文件清单（原名 → 新路径，每个新路径链到 PR 分支上的文件页，GitHub 可直接预览 PDF）、未收录清单及原因、登记了哪些 README/时间表/CONTRIBUTORS 行、检查报告、维护者勾选清单（看过缩略图 / 没有答案 / 没有个人信息）、重建时间与所基于的 main 提交、`Closes #<n>`。首次开 PR 时在 Issue 下评论 PR 链接并打 `pr-opened`；重建时不另外评论，PR 正文脚注写明重建时间和所基于的 main 提交。
 11. **部分失败**：有文件收不了但至少一份成功 → 仍然开 PR，失败的在 PR 正文和 Issue 评论里列明；一份都没成功 → 只评论，不开 PR。脚本任何未预料的异常 → 在 Issue 下评论"机器人出错了，维护者会手动处理"并让工作流失败（红叉能让维护者注意到）。
 
 ## 6. 维护者做的 | What the maintainer does（已定）
@@ -152,6 +152,6 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 ## 11. 需要维护者操作的设置 | Settings the maintainer must confirm
 
 1. Settings → Actions → General → Workflow permissions：选 "Read and write permissions"，勾 "Allow GitHub Actions to create and approve pull requests"。
-2. Settings → General → Pull Requests：勾 "Automatically delete head branches"，关掉的上传 PR 分支才会自动清理。
+2. Settings → General → Pull Requests：勾 "Automatically delete head branches"（只对合并的 PR 生效）；未合并就关闭的上传 PR，由工作流的 `pull_request_target: closed` 任务删掉 `upload/issue-<n>` 分支，被拒的文件不会一直留在公开分支上。
 3. 标签 `upload` 必须在上线前手动建好（表单要打这个标签，工作流只认这个标签，脚本自己没机会创建它）；`needs-info`、`pr-opened` 脚本缺失时自动创建。
 4. 分支保护已开；本通道的代码将以 PR 方式提交。

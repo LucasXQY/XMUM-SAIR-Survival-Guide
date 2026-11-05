@@ -13,30 +13,34 @@ on:
         description: "Issue number to rebuild"
         required: true
         type: string
+  pull_request_target:
+    types: [closed]
 
 permissions:
   contents: write
   pull-requests: write
   issues: write
 
-# one rebuild at a time, queued, never cancelled: two runs must not race on the same branch
-concurrency:
-  group: intake
-  cancel-in-progress: false
-
 jobs:
   intake:
-    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'upload')
+    if: >-
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'upload'))
+      || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # one group per issue (and one for the push-triggered sweep): a newer run for the same issue replaces the queued one,
+    # runs for different issues touch different branches and may overlap. GitHub keeps a single queued run per group and
+    # cancels older ones, so the sweep on push also picks up upload issues that never got an answer.
+    concurrency:
+      group: intake-${{ github.event.issue.number || inputs.issue || 'all' }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pymupdf markdown
+      - run: pip install "pymupdf>=1.24,<2" "markdown>=3.4,<4"
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -58,3 +62,16 @@ jobs:
           name: thumbnails
           path: _intake/thumbs
           if-no-files-found: ignore
+
+  # a rejected upload must not stay on a public branch: delete the branch of an upload PR that was closed without merging
+  # ("Automatically delete head branches" only covers merged ones)
+  cleanup:
+    if: >-
+      github.event_name == 'pull_request_target' && github.event.pull_request.merged == false
+      && startsWith(github.event.pull_request.head.ref, 'upload/issue-')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"

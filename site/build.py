@@ -450,6 +450,19 @@ def stragglers(site: Site) -> list[str]:
     return [p for p in tracked if p not in seen and posixpath.basename(p) != "README.md"]
 
 
+def check_generator_sources() -> list[str]:
+    """Forbidden words in the generator's own files. Repo content is not scanned: people and papers may carry any name."""
+    hits = []
+    for p in sorted(HERE.rglob("*")):
+        if p.suffix not in (".py", ".html", ".css", ".js") or "__pycache__" in p.parts or p.name.startswith("test_"):
+            continue
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if "FORBIDDEN" in line:
+                continue
+            hits += [f"{p.relative_to(HERE).as_posix()}:{i}: {w}" for w in FORBIDDEN if w in line]
+    return hits
+
+
 def check(site: Site, out: Path) -> None:
     """Assert the generated site is consistent; content problems only warn."""
     out = Path(out)
@@ -459,10 +472,10 @@ def check(site: Site, out: Path) -> None:
     assert len(idx["files"]) == len(all_files(site.courses)), "search.json file count differs from the scan"
     for f in idx["files"]:
         assert (site.root / f["path"]).is_file(), f"search.json path missing: {f['path']}"
+    bad = check_generator_sources()
+    assert not bad, f"generator sources contain forbidden words: {bad}"
     for page_file in out.rglob("*.html"):
         text = page_file.read_text(encoding="utf-8")
-        for word in FORBIDDEN:
-            assert word not in text, f"{page_file.relative_to(out)}: contains {word!r}"
         for href in re.findall(r'href="([^"]*)"', text):
             href = html_mod.unescape(href)
             if not href.startswith(site.prefix):

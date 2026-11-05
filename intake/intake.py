@@ -15,11 +15,12 @@ import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 PROGS = ("EEE", "AIT", "ROBO")
 SUBS = ("Past-Papers", "Syllabus", "Assignments", "Labs", "Tutorials",
         "Handbooks", "Notes", "Exam-Review", "Tips")
-CODE_RE = re.compile(r"^[A-Z]{1,4}\d{3,4}(\.\d)?$")
+CODE_RE = re.compile(r"^[A-Z]{1,4}(?:\d{3,4}|\d\.\d)$")
 SESSION_RE = re.compile(r"^\d{4}-\d{2}$")
 
 # form field titles are the parse keys; .github/ISSUE_TEMPLATE/upload.yml must use them byte for byte
@@ -109,7 +110,7 @@ def attachment_links(text: str) -> list[tuple[str, str]]:
     for name, url in MD_LINK_RE.findall(text):
         if ATTACH_RE.match(url) and url not in seen:
             seen.add(url)
-            out.append((name.strip() or url.rsplit("/", 1)[-1], url))
+            out.append((unquote(url.rsplit("/", 1)[-1]), url))
     return out
 
 
@@ -189,8 +190,17 @@ def target_name(f: Form, original: str, n_files: int, taken: set[str]) -> str:
     return name
 
 
+def _parts(name: str) -> list[str]:
+    """Path components, however the archiver separated them."""
+    return re.split(r"[\\/]", name)
+
+
+def _basename(name: str) -> str:
+    return _parts(name)[-1]
+
+
 def _reject_reason(name: str, ext: str) -> str | None:
-    parts = re.split(r"[\/]", name)
+    parts = _parts(name)
     if ".." in parts or ".." in parts[-1]:
         return "文件名含 ..，不收 | name contains .., refused"
     if ext == "zip":
@@ -203,7 +213,7 @@ def _reject_reason(name: str, ext: str) -> str | None:
 
 def _skip(name: str) -> bool:
     """Entries nobody meant to upload: directories, macOS resource forks, dotfiles."""
-    parts = re.split(r"[\/]", name)
+    parts = _parts(name)
     return not parts[-1] or "__MACOSX" in parts or parts[-1].startswith(".")
 
 
@@ -223,7 +233,7 @@ def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[st
             raise IntakeLimit(f"解包后超过 {MAX_BYTES // 2**20} MB，请分几次提交 | more than {MAX_BYTES // 2**20} MB after unpacking, please split the submission")
 
     for i, (name, path) in enumerate(downloads):
-        base = re.split(r"[\/]", name)[-1]
+        base = _basename(name)
         stem, ext = _split_ext(base)
         if ext == "zip":
             out = work / "unzipped" / str(i)
@@ -237,7 +247,7 @@ def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[st
                 for info in zf.infolist():
                     if info.is_dir() or _skip(info.filename):
                         continue
-                    inner = re.split(r"[\/]", info.filename)[-1]
+                    inner = _basename(info.filename)
                     reason = _reject_reason(info.filename, _split_ext(inner)[1])
                     if reason:
                         bad.append((info.filename, reason))
@@ -249,8 +259,14 @@ def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[st
                     while dest.exists():  # same basename in two folders of the zip
                         k += 1
                         dest = out / f"{k}_{inner}"
-                    with zf.open(info) as src, open(dest, "wb") as dst:
-                        dst.write(src.read())
+                    try:
+                        with zf.open(info) as src, open(dest, "wb") as dst:
+                            dst.write(src.read())
+                    except Exception as e:  # encrypted, corrupt, unsupported compression: reported, not fatal
+                        dest.unlink(missing_ok=True)
+                        bad.append((info.filename, f"zip 里这一项读不出来，可能加密或损坏（{type(e).__name__}） "
+                                                   f"| this zip member could not be read, encrypted or corrupt ({type(e).__name__})"))
+                        continue
                     accept(inner, dest)
             continue
         if _skip(base):
@@ -409,8 +425,15 @@ PLACEHOLDER = "| [Name] |"
 
 
 def _cell(text: str) -> str:
-    """User text that goes into a table cell: no newlines, pipes escaped."""
-    return re.sub(r"\s*\n\s*", " ", text.strip()).replace("|", "\\|")
+    """User text that goes into a markdown table cell: one line, pipes escaped, no raw HTML."""
+    text = re.sub(r"\s*\n\s*", " ", text.strip()).replace("<", "&lt;").replace(">", "&gt;")
+    return text.replace("|", "\\|")
+
+
+def _code(text: str) -> str:
+    """User text shown in a PR body or comment: a code span, so it cannot ping, link, close issues or render HTML."""
+    text = re.sub(r"\s+", " ", text.strip()).replace("`", "'").replace("<", "\u2039").replace(">", "\u203a")
+    return f"`{text or ' '}`"
 
 
 def credit_name(f: Form, login: str) -> str:
@@ -431,11 +454,11 @@ def find_course_dir(root: Path, code: str) -> Path | None:
 
 
 def course_dir_name(code: str, name: str) -> str:
-    return f"{code}_{re.sub(r'[^A-Za-z0-9_-]', '', name.strip().replace(' ', '_')).strip('_')}"
+    return f"{code}_" + re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9_-]", "", name.strip().replace(" ", "_"))).strip("_")
 
 
 def new_course_readme(code: str, name: str) -> str:
-    return (f"# {code} {name}\n\n"
+    return (f"# {code} {_cell(name)}\n\n"
             "每个修读学期一行；有新学期的资料就加一行。One row per session; add a row when you contribute material from a new session.\n\n"
             f"{COURSE_TABLE_HEADER}\n|---|---|---|---|---|\n\n- 小贴士 / Tips：\n")
 
@@ -462,9 +485,15 @@ def _table(lines: list[str], header_idx: int) -> tuple[int, int]:
     return start, end
 
 
+def _plain(token: str) -> str:
+    """`[name](url)` and `name` are the same person."""
+    m = re.fullmatch(r"\[([^\]]+)\]\([^)]*\)", token.strip())
+    return (m.group(1) if m else token.strip()).lower()
+
+
 def _add_token(cell: str, token: str) -> str:
     parts = [t.strip() for t in cell.split(" · ") if t.strip()]
-    if token not in parts:
+    if _plain(token) not in {_plain(p) for p in parts}:
         parts.append(token)
     return " · ".join(parts)
 
@@ -485,9 +514,11 @@ def update_course_readme(text: str, f: Form, credit: str) -> str:
         if len(cells) < 5:
             cells += [""] * (5 - len(cells))
         m = re.search(r"\d{4}-\d{2}", cells[0])
-        placeholder = not m or cells[1] == "[Name]" or ("[" in cells[0] and "](" not in cells[0])
+        placeholder = cells[1] == "[Name]" or "YYYY" in cells[0] or ("[" in cells[0] and "](" not in cells[0])
         if placeholder:
             insert_at = min(insert_at, i)
+            continue
+        if not m:  # an `unknown` session row: neither a match nor a place to insert before
             continue
         if m.group(0) == f.session:
             cells[0] = f"[{f.session}]({f.session}/)"
@@ -533,9 +564,12 @@ def update_timeline(text: str, f: Form, credit: str, dir_name: str) -> str:
 
 
 def update_contributors(text: str, f: Form, credit: str, n: int) -> str:
-    if f.credit == CREDIT_ANON or credit in text:
+    if f.credit == CREDIT_ANON:
         return text
     lines, eol = _split_lines(text)
+    listed = {_plain(c[0]) for c in (_cells(l) for l in lines if l.startswith("|")) if c and c[0].strip("-: ")}
+    if _plain(credit) in listed:
+        return text
     if f.intake.isdigit():
         heading, intake_cell = f"## {f.intake} 入学", f"{f.intake} 入学（{int(f.intake) + 4} 届）"
     else:
@@ -560,13 +594,15 @@ class Placement:
     placed: list[tuple[str, str]]
     notes: list[str]
     meta: dict[str, str]
+    registered: list[str] = field(default_factory=list)
 
 
-def _edit(path: Path, fn) -> None:
+def _edit(path: Path, fn) -> bool:
     text = path.read_bytes().decode("utf-8")
     new = fn(text)
     if new != text:
         path.write_bytes(new.encode("utf-8"))
+    return new != text
 
 
 def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Placement:
@@ -605,17 +641,28 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
         rel = dest.relative_to(root).as_posix()
         meta[rel] = clear_metadata(dest)
         placed.append((original, rel))
-    _edit(course / "README.md", lambda t: update_course_readme(t, f, credit))
-    _edit(root / prog / "README.md", lambda t: update_timeline(t, f, credit, course.name))
-    _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, f, credit, len(files)))
+    registered: list[str] = []
+    if _edit(course / "README.md", lambda t: update_course_readme(t, f, credit)):
+        registered.append("课程 README 的学期表：已更新 | course README session table: updated")
+    else:
+        registered.append("课程 README 的学期表：无需改动 | course README session table: nothing to change")
+    if _edit(root / prog / "README.md", lambda t: update_timeline(t, f, credit, course.name)):
+        registered.append(f"`{prog}/README.md` 修课时间表：加了一行 | timeline: row added")
+    else:
+        registered.append(f"`{prog}/README.md` 修课时间表：已有相同行 | timeline: identical row already there")
+    if _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, f, credit, len(files))):
+        registered.append("`CONTRIBUTORS.md`：加了一行 | row added")
+    else:
+        registered.append("`CONTRIBUTORS.md`：匿名或署名已在表中，未改 | anonymous or already listed, unchanged")
     subprocess.run([sys.executable, str(root / "scripts" / "update_index.py"), prog],
                    check=True, cwd=root, capture_output=True, text=True)
-    return Placement(f"{prog}/{course.name}", created, placed, notes, meta)
+    registered.append(f"`{prog}/README.md` 课程索引已重跑 | course index regenerated")
+    return Placement(f"{prog}/{course.name}", created, placed, notes, meta, registered)
 
 
 # ---------------------------------------------------------------- orchestration: download → PR body → git/gh → CLI
 
-REPO = "LucasXQY/XMUM-SAIR-Survival-Guide"
+REPO = os.environ.get("GITHUB_REPOSITORY", "LucasXQY/XMUM-SAIR-Survival-Guide")
 BOT_AUTHOR = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 HERE = Path(__file__).resolve().parent
 LABEL_UPLOAD, LABEL_NEEDS_INFO, LABEL_PR = "upload", "needs-info", "pr-opened"
@@ -639,7 +686,7 @@ def download(links: list[tuple[str, str]], work: Path) -> tuple[list[tuple[str, 
     ok: list[tuple[str, Path]] = []
     bad: list[tuple[str, str]] = []
     for i, (name, url) in enumerate(links):
-        base = re.split(r"[\\/]", name)[-1] or url.rsplit("/", 1)[-1]
+        base = _basename(name) or url.rsplit("/", 1)[-1]
         dest = folder / f"{i}_{clean_label(base) or 'file'}"
         err: Exception | None = None
         for _attempt in range(2):
@@ -661,6 +708,13 @@ def human_size(n: int) -> str:
     return f"{n / 2**20:.1f} MB" if n >= 2**20 else f"{max(1, n // 1024)} KB"
 
 
+def rejected_lines(rejected: list[tuple[str, str]], limit: int = 30) -> str:
+    lines = [f"- {_code(n)}：{r}" for n, r in rejected[:limit]]
+    if len(rejected) > limit:
+        lines.append(f"- … 还有 {len(rejected) - limit} 个未列出 | and {len(rejected) - limit} more not listed")
+    return "\n".join(lines) or "- 无 | none"
+
+
 def problems_comment(problems: list[str]) -> str:
     items = "\n".join(f"- {p}" for p in problems)
     return ("表单还差一点，机器人暂时没法整理 | A few things to fix before the bot can file this:\n\n"
@@ -673,7 +727,6 @@ def pr_body(f: Form, pl: Placement, rejected: list[tuple[str, str]], inspections
             meta_notes: dict[str, str], build: tuple[bool, list[str]], base_sha: str, run_url: str | None,
             branch: str, issue: int) -> str:
     import datetime
-    from urllib.parse import quote
 
     def link(path: str) -> str:
         return f"[`{path}`](https://github.com/{REPO}/blob/{quote(branch, safe='/')}/{quote(path, safe='/')})"
@@ -681,21 +734,18 @@ def pr_body(f: Form, pl: Placement, rejected: list[tuple[str, str]], inspections
     files = ["| 原文件名 / Original | 新路径 / New path | 大小 / Size | 页数 / Pages |", "|---|---|---|---|"]
     for original, rel in pl.placed:
         ins = inspections.get(rel, {})
-        files.append(f"| {_cell(original)} | {link(rel)} | {human_size(ins.get('size', 0))} | {ins.get('pages') or '—'} |")
-    not_included = "\n".join(f"- `{_cell(n)}`：{r}" for n, r in rejected) or "- 无 | none"
-    registered = [f"- 课程目录 | Course folder: `{pl.course_dir}/`" + ("（新建 | created）" if pl.created_readme else ""),
-                  f"- 课程 README 的学期行、`{pl.course_dir.split('/')[0]}/README.md` 的修课时间表、`CONTRIBUTORS.md`"
-                  "（匿名则不加 CONTRIBUTORS）| course README row, programme timeline, CONTRIBUTORS (skipped for anonymous)",
-                  "- 课程索引已重跑 | course index regenerated"]
-    registered += [f"- {n}" for n in pl.notes]
+        files.append(f"| {_code(original)} | {link(rel)} | {human_size(ins.get('size', 0))} | {ins.get('pages') or '—'} |")
+    not_included = rejected_lines(rejected)
+    registered = [f"- 课程目录 | Course folder: `{pl.course_dir}/`" + ("（新建 | created）" if pl.created_readme else "")]
+    registered += [f"- {n}" for n in pl.registered + pl.notes]
     checks = ["| 文件 / File | 元数据已清空 / Metadata cleared | 可疑文本 / Suspicious text | 答案关键词 / Answer keywords | 文字量低 / Low text |",
               "|---|---|---|---|---|"]
     for _, rel in pl.placed:
         ins = inspections.get(rel, {})
         meta = meta_notes.get(rel, "")
         meta_txt = ("✅" if ins.get("meta_empty") else "⚠️") + ("" if meta in ("cleared", "n/a") else f" {meta}")
-        pii = ", ".join(f"`{_cell(m)}`" for m in ins.get("pii", [])) or "—"
-        ans = ", ".join(f"`{_cell(m)}`" for m in ins.get("answers", [])) or "—"
+        pii = ", ".join(_code(m) for m in ins.get("pii", [])) or "—"
+        ans = ", ".join(_code(m) for m in ins.get("answers", [])) or "—"
         low = "⚠️ 像扫描件，请肉眼看 | looks scanned, eyeball it" if ins.get("low_text") else "—"
         checks.append(f"| `{rel.rsplit('/', 1)[-1]}` | {meta_txt} | {pii} | {ans} | {low} |")
     ok, warnings = build
@@ -706,7 +756,7 @@ def pr_body(f: Form, pl: Placement, rejected: list[tuple[str, str]], inspections
               else "缩略图 | Thumbnails: 本地干跑，无 | dry run, none")
     when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     return "\n".join([
-        f"来自 | From #{issue} · {f.code} {f.session} {f.type}" + (f" · {_cell(f.name)}" if f.name else ""),
+        f"来自 | From #{issue} · {f.code} {f.session} {f.type}" + (f" · {_code(f.name)}" if f.name else ""),
         "", "## 文件 | Files", "", *files,
         "", "## 未收录 | Not included", "", not_included,
         "", "## 登记 | Registered", "", *registered,
@@ -722,7 +772,7 @@ def pr_body(f: Form, pl: Placement, rejected: list[tuple[str, str]], inspections
 
 
 def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list[Path] | None = None,
-            base_sha: str = "dry-run", run_url: str | None = None, branch: str = "") -> tuple[Placement, str]:
+            base_sha: str = "dry-run", run_url: str | None = None, branch: str = "") -> tuple[Placement, str, list[tuple[str, str]]]:
     """Download (unless files are given), unpack, place, inspect, build; returns the placement and the PR body."""
     work.mkdir(parents=True, exist_ok=True)
     if files is None:
@@ -742,7 +792,15 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
     warnings = list(dict.fromkeys(l.strip() for l in (r.stderr + r.stdout).splitlines() if "WARNING" in l or "ERROR" in l))
     body = pr_body(f, pl, rejected, inspections, pl.meta, (r.returncode == 0, warnings), base_sha, run_url,
                    branch or f"upload/issue-{issue}", issue)
-    return pl, body
+    return pl, body, rejected
+
+
+def _run(cmd: list[str], **kw) -> str:
+    """Run with output captured; a failure raises with stderr included, so the Actions log says why."""
+    r = subprocess.run(cmd, text=True, capture_output=True, encoding="utf-8", **kw)
+    if r.returncode != 0:
+        raise RuntimeError(f"{' '.join(cmd[:3])} failed ({r.returncode}): {(r.stderr or r.stdout).strip()[-2000:]}")
+    return r.stdout.strip()
 
 
 class GH:
@@ -752,8 +810,7 @@ class GH:
         self.repo = repo
 
     def _run(self, *args: str, input: str | None = None) -> str:
-        return subprocess.run(["gh", *args], check=True, text=True, capture_output=True, encoding="utf-8",
-                              input=input).stdout.strip()
+        return _run(["gh", *args], input=input)
 
     def issue(self, n: int) -> dict:
         import json
@@ -786,6 +843,13 @@ class GH:
                 out.append(int(m.group(1)))
         return sorted(out)
 
+    def open_upload_issues(self) -> list[int]:
+        """Open `upload` issues the bot has not answered (no PR, no needs-info): a cancelled queued run may have dropped them."""
+        import json
+        issues = json.loads(self._run("issue", "list", "--repo", self.repo, "--label", LABEL_UPLOAD, "--state", "open",
+                                      "--limit", "200", "--json", "number,labels"))
+        return sorted(i["number"] for i in issues if not {l["name"] for l in i["labels"]} & {LABEL_NEEDS_INFO, LABEL_PR})
+
     def pr_for(self, branch: str) -> int | None:
         import json
         prs = json.loads(self._run("pr", "list", "--repo", self.repo, "--head", branch, "--state", "open", "--json", "number"))
@@ -805,8 +869,7 @@ class Git:
         self.repo = repo
 
     def _run(self, *args: str) -> str:
-        return subprocess.run(["git", *args], cwd=self.repo, check=True, text=True, capture_output=True,
-                              encoding="utf-8").stdout.strip()
+        return _run(["git", *args], cwd=self.repo)
 
     def reset_branch(self, name: str) -> None:
         """A clean tree at origin/main on branch `name`, whatever happened before."""
@@ -826,7 +889,7 @@ class Git:
         self._run("push", "-q", "--force", "-u", "origin", name)
 
 
-def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: Path | None = None) -> None:
+def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: Path | None = None, sweep: bool = False) -> None:
     """One issue → comment with problems, or a rebuilt branch and PR. Unexpected errors are reported and re-raised."""
     work = work or repo / "_intake"
     try:
@@ -838,6 +901,9 @@ def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: P
         branch = f"upload/issue-{n}"
         problems = validate(f)
         if problems:
+            if sweep and LABEL_NEEDS_INFO in iss["labels"]:
+                print(f"#{n}: still invalid, already told")
+                return
             gh.comment(n, problems_comment(problems))
             gh.label(n, add=(LABEL_NEEDS_INFO,))
             pr = gh.pr_for(branch)
@@ -850,10 +916,10 @@ def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: P
         git.reset_branch(branch)
         base = git.head()
         try:
-            pl, body = process(f, n, iss["login"], repo, work / f"issue-{n}", base_sha=base, run_url=run_url, branch=branch)
+            pl, body, rejected = process(f, n, iss["login"], repo, work / f"issue-{n}", base_sha=base, run_url=run_url, branch=branch)
         except (IntakeLimit, NothingAccepted) as e:
             rejected = getattr(e, "rejected", [])
-            detail = "\n".join(f"- `{_cell(name)}`：{reason}" for name, reason in rejected)
+            detail = rejected_lines(rejected)
             gh.comment(n, f"{e}\n\n{detail}\n\n改好后编辑这个 Issue 即可重跑 | Edit this issue to run the bot again.".strip())
             gh.label(n, add=(LABEL_NEEDS_INFO,))
             print(f"#{n}: nothing accepted, commented")
@@ -865,11 +931,10 @@ def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: P
         title = f"[上传 | Upload] {f.code} {f.session} {f.type}（#{n}）"
         existed = gh.pr_for(branch)
         url = gh.create_or_edit_pr(branch, title, body)
-        if existed:
-            gh.comment_pr(existed, "已按最新的 Issue 和 main 重建 | Rebuilt from the latest issue and main.")
-        else:
+        if not existed:  # rebuilds stay quiet: the PR body footer says when and from which main it was rebuilt
+            skipped = f"\n\n未收录 | Not included:\n{rejected_lines(rejected)}" if rejected else ""
             gh.comment(n, f"已整理成 PR，等维护者审核：{url}\n要改内容就编辑这个 Issue，PR 会自动更新。"
-                          f"\n\nFiled as a pull request for review: {url}\nTo change anything, edit this issue and the PR updates itself.")
+                          f"\n\nFiled as a pull request for review: {url}\nTo change anything, edit this issue and the PR updates itself.{skipped}")
             gh.label(n, add=(LABEL_PR,))
         print(f"#{n}: {len(pl.placed)} file(s) → {url}")
     except Exception:
@@ -910,7 +975,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         issue = args.issue or 0
         try:
-            pl, body = process(f, issue, args.login, repo, work / f"issue-{issue}", files=[Path(p) for p in args.files])
+            pl, body, _ = process(f, issue, args.login, repo, work / f"issue-{issue}", files=[Path(p) for p in args.files])
         except (IntakeLimit, NothingAccepted) as e:
             (work / "PROBLEMS.md").write_text(str(e), encoding="utf-8")
             print(f"nothing accepted -> {work / 'PROBLEMS.md'}")
@@ -921,14 +986,14 @@ def main(argv: list[str] | None = None) -> int:
 
     gh, git = GH(), Git(repo)
     gh.ensure_labels()
-    issues = [args.issue] if args.issue else gh.open_upload_prs() if args.all_open else []
+    issues = [args.issue] if args.issue else sorted(set(gh.open_upload_prs()) | set(gh.open_upload_issues())) if args.all_open else []
     if not issues:
         print("no open upload PRs" if args.all_open else "nothing to do: pass --issue N or --all-open")
         return 0
     failed = 0
     for n in issues:
         try:
-            run_issue(n, repo, gh, git, run_url, work)
+            run_issue(n, repo, gh, git, run_url, work, sweep=args.all_open)
         except Exception:
             traceback.print_exc()
             failed += 1
