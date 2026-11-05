@@ -85,7 +85,7 @@ site/
 | `/EEE/COM107_Circuits_and_Devices/` | 课程页：课程 README、按学期/类型的文件列表、问答区 | 课程 `README.md` + 文件夹扫描 + giscus |
 | `/qa/` | 综合问答：不属于某门课的问题（新生、选课、科研、实习） | 模板 + giscus |
 | `/research/` | 研究机会 | `Research-Opportunities.md` |
-| `/lecturers/` | 教师档案 | `Lecturers.md` |
+| `/lecturers/` | 教师名录（无评价）| `Lecturers.md` |
 | `/contributors/` | 贡献者 | `CONTRIBUTORS.md` |
 | `/contributing/` | 如何贡献 | `CONTRIBUTING.md` |
 | `/disclaimer/` | 免责声明 | `DISCLAIMER.md` |
@@ -200,7 +200,7 @@ site/
 维护者 2026-11-05 的决定与我的实现选择：
 
 - **页头**：一排块（图标 + 中文/英文两行），按重要性排序：三个专业、问答、上传、如何贡献、教师、研究机会、贡献者、关于、GitHub。悬停上浮、当前页高亮、加载淡入；`prefers-reduced-motion` 时全关。右上角一个深浅色切换按钮，选择存 `localStorage`（`theme` = `light` / `dark`），`<head>` 里一段内联脚本在首次绘制前把 `data-theme` 写到 `<html>` 上避免闪烁；不选则跟随系统。切换时同步通知页面里的 giscus iframe（`postMessage setConfig.theme`）。
-- **教师页**：`/lecturers/` 先渲染 Lecturers.md（写作规则 + 模板），再列出从各课程 README 学期表里读到的全部老师（逗号分隔的多位老师拆开）。每位老师一页 `/lecturers/<slug>/`：教过的课程与学期（链到课程页锚点），下面是一个 giscus 讨论串（General 分类，term `教师 | Lecturer: <姓名>`），登录即写、立刻可见，由审核机器人按关键词事后折叠（见 moderation/DESIGN.md）。课程页学期标题里的老师名链到老师页。以后课程评价的分数也放这一页。
+- **教师页**（本段为 2026-11-05 上午的设计，同日被下面的「老师页只是名录」条目取代）：`/lecturers/` 先渲染 Lecturers.md（写作规则 + 模板），再列出从各课程 README 学期表里读到的全部老师（逗号分隔的多位老师拆开）。每位老师一页 `/lecturers/<slug>/`：教过的课程与学期（链到课程页锚点），下面是一个 giscus 讨论串（General 分类，term `教师 | Lecturer: <姓名>`），登录即写、立刻可见，由审核机器人按关键词事后折叠（见 moderation/DESIGN.md）。课程页学期标题里的老师名链到老师页。以后课程评价的分数也放这一页。
 - **最近上传与订阅**：从 `git log --diff-filter=A` 取每个文件首次入库的日期（pages.yml 用 `fetch-depth: 0`），按（日期、课程、学期、类型）归组。首页显示最近 8 组，`/recent/` 显示最近 100 组，`feed.xml` 是 Atom 订阅；没有 git 历史的树（干跑、临时副本）只给一个告警、列表为空。"来自"取课程 README 该学期的"资料来自"列。
 - **征集榜** `/wanted/`：按专业列出还没有任何资料的课程，首页给入口。
 - **站点地图**：`sitemap.xml`、`robots.txt`，每页 `<link rel="canonical">`，站点地址常量 `SITE_URL`（迁到组织后改一处）。

@@ -8,11 +8,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        每人对同一门课、同一位老师只算一票，再提交一次就是改分。只有分数，不收文字；想描述老师请去网站的老师页留言。
+        每人对同一门课、同一位老师只算一票，再提交一次就是改分。只填分数，网站只显示平均分，不收文字评价。
 
         **匿名说明**：原始投票只存在维护者的私有仓库里（记录的是你账号的加盐哈希，不是用户名），网站上只显示平均分和人数，少于 3 人不显示平均分。机器人登记后会关闭并锁定这个 Issue，维护者会定期删除；在删除之前，这个 Issue 和你的分数在 GitHub 上是公开的，这一点请知悉。
 
-        One vote per person per course and lecturer; submitting again changes it. Scores only, no text: to describe a lecturer, comment on their page on the site.
+        One vote per person per course and lecturer; submitting again changes it. Scores only: the site shows averages and takes no written reviews.
 
         **Anonymity**: raw votes live only in the maintainer's private repository (keyed by a salted hash of your account, not your username), and the site shows averages and counts only, with no average below 3 voters. After recording, the bot closes and locks this issue and the maintainer deletes these periodically; until then this issue and your scores are public on GitHub.
 
