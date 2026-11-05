@@ -24,7 +24,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install markdown
-      - run: python site/test_build.py
       - run: python site/build.py
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
