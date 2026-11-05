@@ -78,6 +78,66 @@ def test_contributing_toc_anchors_resolve():
         assert frag in ids, frag
 
 
+import json
+import re
+import tempfile
+
+
+def _build(prefix=P):
+    out = pathlib.Path(tempfile.mkdtemp()) / "_site"
+    return build.build(ROOT, out, prefix), out
+
+
+def test_build_writes_every_page():
+    site, out = _build()
+    for p in ["index.html", "404.html", "about/index.html", "disclaimer/index.html", "qa/index.html",
+              "contributing/index.html", "contributors/index.html", "lecturers/index.html", "research/index.html",
+              "EEE/index.html", "AIT/index.html", "ROBO/index.html", "EEE/COM107_Circuits_and_Devices/index.html",
+              "search.json", "static/style.css", "static/search.js"]:
+        assert (out / p).is_file(), p
+    assert len(site.courses) == len(list(out.glob("*/*_*/index.html"))) == 58
+
+
+def test_course_page_contents():
+    _, out = _build()
+    html = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
+    assert 'data-strict="1"' in html and 'data-term="COM107 Circuits and Devices"' in html
+    assert 'data-category-id="DIC_kwDOQ_iF5s4DKajf"' in html and 'data-repo-id="R_kgDOQ_iF5g"' in html
+    assert 'id="2022-04"' in html and "Chua Ming Yam" in html
+    assert build.GH + "/blob/main/EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/" in html
+    assert build.RAW + "/EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/" in html
+    assert "请勿张贴答案" in html and "Student-run, not affiliated with XMUM" in html and "Ciallo～ (∠・ < )⌒☆" in html
+
+
+def test_prog_and_qa_pages():
+    _, out = _build()
+    eee = (out / "EEE/index.html").read_text(encoding="utf-8")
+    assert "<!-- COURSE-INDEX -->" not in eee
+    assert len(set(re.findall(r'href="/XMUM-SAIR-Survival-Guide/EEE/[^"/]+_[^"/]+/"', eee))) == 58
+    assert "暂无课程" in (out / "AIT/index.html").read_text(encoding="utf-8")
+    qa = (out / "qa/index.html").read_text(encoding="utf-8")
+    assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa
+
+
+def test_search_index():
+    _, out = _build()
+    idx = json.loads((out / "search.json").read_text(encoding="utf-8"))
+    assert len(idx["courses"]) == 58 and len(idx["files"]) == 482
+    f = next(f for f in idx["files"] if f["code"] == "COM107" and f["type"] == "Tutorials")
+    assert f["preview"].startswith(build.GH + "/blob/main/") and f["download"].startswith(build.RAW + "/")
+    assert (ROOT / f["path"]).is_file()
+    assert any(f["preview"] is None for f in idx["files"] if f["name"].endswith(".docx"))
+    c = next(c for c in idx["courses"] if c["code"] == "COM107")
+    assert c["lecturers"] == ["Chua Ming Yam"] and c["url"] == P + "EEE/COM107_Circuits_and_Devices/"
+
+
+def test_root_prefix_preview():
+    _, out = _build("/")
+    html = (out / "EEE/index.html").read_text(encoding="utf-8")
+    assert 'href="/EEE/COM107_Circuits_and_Devices/"' in html and 'data-base="/"' in html
+    assert "/XMUM-SAIR-Survival-Guide/" not in html
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
