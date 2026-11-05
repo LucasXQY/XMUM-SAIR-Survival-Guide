@@ -93,6 +93,37 @@
     }
    }
   },
+  "EEE322": {
+   "all": {
+    "counts": {
+     "access": 1,
+     "communication": 1,
+     "course": 1,
+     "difficulty": 1,
+     "instructor": 1,
+     "learned": 1,
+     "recommend": 1,
+     "work": 1
+    },
+    "n": 1
+   },
+   "lecturers": {
+    "kang-chia-chao": {
+     "counts": {
+      "access": 1,
+      "communication": 1,
+      "course": 1,
+      "difficulty": 1,
+      "instructor": 1,
+      "learned": 1,
+      "recommend": 1,
+      "work": 1
+     },
+     "n": 1,
+     "name": "Kang Chia Chao"
+    }
+   }
+  },
   "EEE406": {
    "all": {
     "counts": {
@@ -197,7 +228,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T10:21:56Z",
+ "generated": "2026-11-05T10:24:52Z",
  "main": [
   "course",
   "instructor",
