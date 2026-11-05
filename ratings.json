@@ -1,0 +1,21 @@
+{
+ "courses": {},
+ "dims": [
+  "course",
+  "instructor",
+  "difficulty",
+  "work",
+  "learned",
+  "communication",
+  "access",
+  "recommend"
+ ],
+ "generated": "2026-11-05T08:09:29Z",
+ "main": [
+  "course",
+  "instructor",
+  "difficulty",
+  "work"
+ ],
+ "min_n": 3
+}
