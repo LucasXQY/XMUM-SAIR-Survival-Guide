@@ -1,0 +1,34 @@
+name: moderation
+
+# 评论审核：网站问答与老师页的评论（Discussions）、Issue 及其评论，按关键词表折叠辱骂、歧视和政治敏感内容并记日志。见 moderation/DESIGN.md
+# Comment moderation: Discussions (the site's Q&A and lecturer threads), issues and their comments are checked against the
+# word lists; abusive, discriminatory or politically sensitive content is folded and logged. See moderation/DESIGN.md
+on:
+  discussion:
+    types: [created, edited]
+  discussion_comment:
+    types: [created, edited]
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  discussions: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  scan:
+    if: github.actor != 'github-actions[bot]' && github.actor != 'giscus[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: moderation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python moderation/moderation.py --event "$GITHUB_EVENT_PATH"

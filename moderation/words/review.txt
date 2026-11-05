@@ -1,0 +1,31 @@
+# 需要维护者看一眼、但不自动折叠的词：投诉、指控、法律。可能是正当反映，所以只记日志。
+# Words that deserve a maintainer's look but are not hidden: complaints, accusations, legal matters. They may be legitimate.
+性骚扰
+骚扰
+猥亵
+潜规则
+歧视
+霸凌
+欺负
+威胁
+抄袭
+作弊
+举报
+投诉
+起诉
+律师
+sexual harassment
+harass
+harassment
+discriminate
+discrimination
+bully
+bullying
+plagiarism
+plagiarise
+plagiarize
+threaten
+threatened
+lawsuit
+sue you
+report you

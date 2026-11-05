@@ -1,0 +1,6 @@
+# 先从文本里去掉再匹配的无辜短语（误杀名单）。
+# Innocent phrases removed from the text before matching (the false-positive list).
+去死记硬背
+cheat sheet
+shiitake
+scunthorpe
