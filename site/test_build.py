@@ -251,6 +251,23 @@ def test_upload_button_everywhere():
     assert "上传表单" in (out / "contributing/index.html").read_text(encoding="utf-8")
 
 
+def test_nav_is_blocks_with_icons():
+    """The header is a row of blocks (icon + bilingual label), not a line of bare links; hover motion respects reduced-motion."""
+    _, out = _build()
+    html = (out / "index.html").read_text(encoding="utf-8")
+    nav = re.search(r'<nav class="nav-blocks"[^>]*>(.*?)</nav>', html, flags=re.S)
+    assert nav, "nav.nav-blocks missing"
+    blocks = re.findall(r'<a class="nb[^"]*"[^>]*>', nav.group(1))
+    assert len(blocks) == len(build.NAV) + 2, blocks                     # every NAV entry + GitHub + Upload
+    assert nav.group(1).count('class="nb-ic"') == len(blocks) and nav.group(1).count('class="nb-t"') == len(blocks)
+    assert 'aria-label="上传 | Upload"' in nav.group(1) and 'href="' + UPLOAD_URL + '"' in nav.group(1)
+    assert "<small>Q&amp;A</small>" in nav.group(1) and "问答" in nav.group(1)       # bilingual label split into two lines
+    css = (out / "static/style.css").read_text(encoding="utf-8")
+    assert ".nb:hover" in css and "transition" in css and "prefers-reduced-motion" in css
+    js = (out / "static/search.js").read_text(encoding="utf-8")
+    assert "aria-current" in js                                            # the current page's block is marked at load
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
