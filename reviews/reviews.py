@@ -3,15 +3,16 @@ Course-review bot: records the scores from a "course review" issue form anonymou
 repository and publishes aggregates only.
 
 流程 | Flow: 解析表单 → 校验 → 投票写入私有仓库（投票人 = 加盐哈希）→ 汇总（少于 MIN_N 人只给人数）→ 推到公开仓库的 data 分支
-（ratings.json，网站读取）→ 给作者留一句 → 删除 Issue。设计见 site/DESIGN.md §15。
+（ratings.json，网站读取）→ 给作者留一句 → 关闭并锁定 Issue（维护者定期手动删除）。设计见 site/DESIGN.md §15。
 Parse → validate → upsert the vote in the private data repo (voter = salted hash) → aggregate (count only below MIN_N) →
-push ratings.json to the public repo's `data` branch (read by the site) → one reply → delete the issue. Design: site/DESIGN.md §15.
+push ratings.json to the public repo's `data` branch (read by the site) → one reply → close and lock the issue
+(the maintainer deletes them by hand from time to time). Design: site/DESIGN.md §15.
 
 用法 | Usage:
   python reviews/reviews.py --issue N                 # one issue (the workflow)
   python reviews/reviews.py --rebuild                 # sweep open review issues, rebuild and publish ratings.json
   python reviews/reviews.py --dry-run --form FILE --data DIR --voter X --out ratings.json   # no network (tests)
-环境 | Env: GH_TOKEN (public repo), REVIEWS_TOKEN (private repo + issue deletion), REVIEWS_SALT, REVIEWS_DATA_REPO (owner/name)
+环境 | Env: GH_TOKEN (public repo), REVIEWS_TOKEN (read/write on the private data repo only), REVIEWS_SALT, REVIEWS_DATA_REPO (owner/name)
 """
 from __future__ import annotations
 
@@ -208,19 +209,10 @@ def publish(agg: dict, work: Path, repo: str, token: str) -> None:
     commit_and_push(pub, "ratings: rebuild", "data")
 
 
-def delete_issue(node_id: str, number: int, repo: str, token: str | None) -> bool:
-    if token:
-        try:
-            gh("api", "graphql", "-f", "query=mutation($id: ID!) { deleteIssue(input: {issueId: $id}) { clientMutationId } }",
-               "-f", f"id={node_id}", token=token)
-            return True
-        except RuntimeError as e:
-            print(f"delete failed: {e}", file=sys.stderr)
-    gh("issue", "close", str(number), "--repo", repo, "--comment",
-       "机器人没有删除权限（缺 REVIEWS_TOKEN），已先关闭；维护者请手动删除这个 Issue 以保护匿名。"
-       "| The bot lacks deletion rights (REVIEWS_TOKEN missing); closed for now. Maintainer: please delete this issue to keep the vote anonymous.")
+def finish_issue(number: int, repo: str) -> None:
+    """Close and lock: the scores stay visible until the maintainer deletes the issue by hand (their choice, 2026-11-05)."""
+    gh("issue", "close", str(number), "--repo", repo)
     gh("issue", "lock", str(number), "--repo", repo)
-    return False
 
 
 def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | None, salt: str, publish_after: bool = True) -> None:
@@ -234,8 +226,8 @@ def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | No
     if problems:
         gh("issue", "comment", str(n), "--repo", repo, "--body-file", "-", input=(
             "表单还差一点，这次没有登记 | Not recorded yet, a few things to fix:\n\n" + "\n".join(f"- {p}" for p in problems)
-            + "\n\n为了匿名，这个 Issue 马上会被删除；改好后请重新提交一份。| This issue is deleted right away to keep votes anonymous; please submit a new one."))
-        delete_issue(iss["node_id"], n, repo, token)
+            + "\n\n这个 Issue 会被关闭，改好后请重新提交一份。| This issue is closed; please submit a new one."))
+        finish_issue(n, repo)
         print(f"#{n}: {len(problems)} problem(s)")
         return
     if not token:
@@ -247,10 +239,10 @@ def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | No
         publish(aggregate(data), work, repo, os.environ.get("GH_TOKEN", ""))
     gh("issue", "comment", str(n), "--repo", repo, "--body-file", "-", input=(
         f"已登记（匿名）：{r.code} · {display_name(r.lecturer)}。同一门课同一位老师每人只算一票，想改分数就再提交一次。"
-        f"这个 Issue 马上会被删除，网站上的平均分在至少 {MIN_N} 人评价后显示。\n\n"
+        f"这个 Issue 现在关闭锁定，维护者会定期删除；网站上的平均分在至少 {MIN_N} 人评价后显示。\n\n"
         f"Recorded anonymously: {r.code} · {display_name(r.lecturer)}. One vote per person per course and lecturer; submit again to change it. "
-        f"This issue is deleted right away; averages appear on the site once at least {MIN_N} people have rated."))
-    delete_issue(iss["node_id"], n, repo, token)
+        f"This issue is now closed and locked and the maintainer deletes these periodically; averages appear once at least {MIN_N} people have rated."))
+    finish_issue(n, repo)
     print(f"#{n}: recorded {r.code} {lecturer_key(r.lecturer)}")
 
 
@@ -268,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data", help="dry run: directory standing in for the private data repository")
     ap.add_argument("--voter", default="tester", help="dry run: voter id")
     ap.add_argument("--out", help="dry run: where to write ratings.json")
-    ap.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "LucasXQY/XMUM-SAIR-Survival-Guide"))
+    ap.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "xmum-sair/xmum-sair.github.io"))
     ap.add_argument("--data-repo", default=os.environ.get("REVIEWS_DATA_REPO", ""))
     ap.add_argument("--work", default="_reviews")
     args = ap.parse_args(argv)

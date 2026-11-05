@@ -1,6 +1,6 @@
 # 网站设计 | Website design
 
-2026-11-04 · 适用于 https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide
+2026-11-04 · 适用于 https://github.com/xmum-sair/xmum-sair.github.io
 
 本文是网站的设计说明，给实现网站的人读。仓库内容本身的规则见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
@@ -42,7 +42,7 @@ This document describes the website for whoever builds it. Rules for the repo's 
 
 - 仓库 377 MB、385 份 PDF、79 docx、15 pptx、3 xlsx，会继续增长。GitHub 的 raw 链接以 `application/octet-stream` + `nosniff` 返回，浏览器只会下载不会内嵌显示，所以 PDF 预览直接用 GitHub 自己的文件页面（`/blob/`）。
 - 访客不在中国大陆，GitHub Pages 和 giscus 都可直接访问。
-- 已完成的仓库设置：Discussions 已开；Pages 已创建，来源为 GitHub Actions（`build_type: workflow`），地址 `https://lucasxqy.github.io/XMUM-SAIR-Survival-Guide/`；giscus App 已安装到本仓库。
+- 已完成的仓库设置：Discussions 已开；Pages 已创建，来源为 GitHub Actions（`build_type: workflow`），地址 `https://xmum-sair.github.io/`；giscus App 已安装到本仓库。
 - giscus 需要的 ID（分区以后在 GitHub 上改名不影响，ID 不变）：
   - `data-repo-id`: `R_kgDOQ_iF5g`
   - 课程页用分区 `Q&A`：`DIC_kwDOQ_iF5s4DKajf`
@@ -110,8 +110,8 @@ site/
 - 每份文件记录：专业、课程代码、课名、学期、类型、文件名、大小、GitHub 预览链接、下载链接。
 
 链接规则：
-- 预览（仅 PDF）：`https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/<path>`
-- 下载（所有文件）：`https://raw.githubusercontent.com/LucasXQY/XMUM-SAIR-Survival-Guide/main/<path>`
+- 预览（仅 PDF）：`https://github.com/xmum-sair/xmum-sair.github.io/blob/main/<path>`
+- 下载（所有文件）：`https://raw.githubusercontent.com/xmum-sair/xmum-sair.github.io/main/<path>`
 - docx / pptx / xlsx 只有"下载"按钮。
 - 每个课程页有"在 GitHub 上查看文件夹 | View folder on GitHub"链接（`/tree/main/<path>`）。
 - 路径中的空格、`#`、`&` 等按 URL 规则转义（仓库里有 `MPU1.1_…` 这类带点的目录和含 `&` 的课名）。
@@ -146,7 +146,7 @@ site/
 
 ## 9. 问答 | Q&A with giscus（已定）
 
-- 课程页底部和 `/qa/` 页各嵌一个 giscus `<script>`，属性：`data-repo="LucasXQY/XMUM-SAIR-Survival-Guide"`、`data-repo-id="R_kgDOQ_iF5g"`、`data-mapping="specific"`、`data-strict="1"`、`data-reactions-enabled="1"`、`data-emit-metadata="0"`、`data-input-position="top"`、`data-theme="preferred_color_scheme"`、`data-lang="zh-CN"`、`crossorigin="anonymous"`、`async`。
+- 课程页底部和 `/qa/` 页各嵌一个 giscus `<script>`，属性：`data-repo="xmum-sair/xmum-sair.github.io"`、`data-repo-id="R_kgDOQ_iF5g"`、`data-mapping="specific"`、`data-strict="1"`、`data-reactions-enabled="1"`、`data-emit-metadata="0"`、`data-input-position="top"`、`data-theme="preferred_color_scheme"`、`data-lang="zh-CN"`、`crossorigin="anonymous"`、`async`。
 - 课程页：`data-category="Q&A"`、`data-category-id="DIC_kwDOQ_iF5s4DKajf"`、`data-term="<CODE> <Course Name>"`（例：`COM107 Circuits and Devices`）。首次有人评论时 giscus 自动在 Discussions 里建同名讨论。仓库里有多门课同名或只差一个罗马数字（COM108 / COM110 都叫 Engineering Mathematics I，COM204 / EEE220 都叫 Engineering Graphics），所以必须 `data-strict="1"`：giscus 按 term 的哈希精确匹配，不会把评论挂到相近课名的讨论下。代价是课程文件夹改名后旧讨论接不回来，页面会另起新讨论，旧的仍留在 Discussions 列表里；课程代码变更本来就是新建文件夹，不受影响。
 - `/qa/` 页：`data-category="General"`、`data-category-id="DIC_kwDOQ_iF5s4DKaje"`、`data-term="综合问答 | General Q&A"`。
 - 分区目前沿用 GitHub 默认名（Q&A、General、Announcements…）。维护者随时可在仓库 Settings → Discussions 里改成中文名，嵌入用的是 ID，不受影响。
@@ -207,4 +207,4 @@ site/
 - **按学期打包下载**：工作流 `downloads.yml` 在 main 的资料变动后，把每个 `<课程>/<学期>/` 打成 `<CODE>_<学期>.zip`，上传到名为 `downloads` 的 Release（同名覆盖）；课程页每个学期标题旁一个"打包下载"按钮指向 `releases/download/downloads/<CODE>_<学期>.zip`。
 - **不做**：离线 PWA（收益小、缓存失效容易出错）；访问统计需要维护者自己注册 GoatCounter 之类的账号后再加一行脚本。
 - **仓库迁移**（等维护者建好组织 `xmum-sair`）：转移仓库并改名 `xmum-sair.github.io`，网址变为根路径 `https://xmum-sair.github.io/`；需要改 `REPO`、`SITE_URL`、默认 `--prefix`、giscus 的 `data-repo`、README / CONTRIBUTING / 表单里的链接；仓库 id 与 Discussions 分类 id 不变。旧的 Pages 地址不会自动跳转，旧的仓库地址会。
-- **课程评价**（路线 A，待做）：Issue 表单打分（Course / Instructor / Difficulty / Work 四个主维度 + 学到多少 / 沟通 / 找得到老师 / 是否推荐四个细分，各 1–5，不收文字）。机器人读取后把原始投票写进维护者的**私有仓库**（只有维护者可见），按"用户 + 课程 + 老师"去重（后提交覆盖先提交），随后删除该 Issue（需要维护者的管理员 token 作为 secret），把汇总（人数、各维度平均；少于 3 人只显示人数）推到公开仓库的 `data` 分支，网站客户端读取 `ratings.json` 渲染在课程页、老师页和 `/reviews/` 总表。Issue 在被删除前的一两分钟内是公开的，watch 仓库的人会收到含表单内容的邮件通知，这是路线 A 的已知边界。
+- **课程评价**（路线 A，待做）：Issue 表单打分（Course / Instructor / Difficulty / Work 四个主维度 + 学到多少 / 沟通 / 找得到老师 / 是否推荐四个细分，各 1–5，不收文字）。机器人读取后把原始投票写进维护者的**私有仓库**（只有维护者可见），按"用户 + 课程 + 老师"去重（后提交覆盖先提交），随后关闭并锁定该 Issue（维护者 2026-11-05 决定不让机器人删除，自己定期手动删；token 只需对私有数据仓库有读写），把汇总（人数、各维度平均；少于 3 人只显示人数）推到公开仓库的 `data` 分支，网站客户端读取 `ratings.json` 渲染在课程页、老师页和 `/reviews/` 总表。Issue 在被维护者删除前是公开的，这是路线 A 的已知边界。

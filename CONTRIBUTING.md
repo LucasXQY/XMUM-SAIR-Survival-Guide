@@ -227,11 +227,11 @@ Dropping files in is step one. So that others can find them, also update the fil
 
 ## 如何提交 | How to submit
 
-- 最简单：用[上传表单](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml)（需要 GitHub 账号）。选课程、学期、类型，把文件拖进去，机器人会改名、归位、清元数据、登记到 README 和 CONTRIBUTORS，并以你的名义开一个 PR，维护者审核后合并。
+- 最简单：用[上传表单](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml)（需要 GitHub 账号）。选课程、学期、类型，把文件拖进去，机器人会改名、归位、清元数据、登记到 README 和 CONTRIBUTORS，并以你的名义开一个 PR，维护者审核后合并。
 - 会用 git：fork 本仓库，添加文件，然后提 Pull Request。PR 标题写清楚课程和内容，例如 `EEE: COM107 2022-04 past papers`。
 - 不熟悉 git：直接把文件发到 `xieqiyi@ieee.org`，附上课程代码、学期、你的届，我们帮你上传，并按你的意愿署名。
 
-- Easiest: the [upload form](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml) (needs a GitHub account). Pick the course, session and type, drag the files in; the bot renames, files and de-identifies them, registers them in the READMEs and CONTRIBUTORS, and opens a PR in your name for a maintainer to review and merge.
+- Easiest: the [upload form](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml) (needs a GitHub account). Pick the course, session and type, drag the files in; the bot renames, files and de-identifies them, registers them in the READMEs and CONTRIBUTORS, and opens a PR in your name for a maintainer to review and merge.
 - Comfortable with git: fork the repo, add your files, open a pull request. Name the PR after the course and content, e.g. `EEE: COM107 2022-04 past papers`.
 - Not familiar with git: email the files to `xieqiyi@ieee.org` with the course code, session and your cohort. We'll upload them for you and credit you the way you prefer.
 

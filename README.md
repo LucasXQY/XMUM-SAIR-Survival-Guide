@@ -2,7 +2,7 @@
 
 Ciallo～ (∠・ < )⌒☆
 
-网页版（搜索、预览、问答）| Website (search, preview, Q&A): https://lucasxqy.github.io/XMUM-SAIR-Survival-Guide/
+网页版（搜索、预览、问答）| Website (search, preview, Q&A): https://xmum-sair.github.io/
 
 欢迎来到厦马 SAIR 生存指南！本仓库面向厦门大学马来西亚分校人工智能与机器人学院（School of Artificial Intelligence and Robotics, SAIR）的三个本科专业：电子信息工程（EEE）、人工智能（AIT）、机器人与自动化工程（ROBO）。这些专业课程强度较大、考试较为频繁、学习资源相对有限，本仓库旨在为大家建立一个开放的学习资料共享平台。通过汇集同学们的学习笔记、实验经验、考试复习资料与重点总结，并整理教师教学风格与学习建议，实现资源互助与经验传承，帮助更多同学高效学习、顺利备考，取得好成绩，并为未来申请实习与心仪 offer 打下坚实基础。
 
@@ -81,12 +81,12 @@ The course folder itself may hold a `README.md` (optional): one row per session 
 
 ## 如何贡献 | How to contribute
 
-- 最简单的上传方式：[上传表单](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml)（需要 GitHub 账号），机器人帮你改名、归位、登记并开 PR。
+- 最简单的上传方式：[上传表单](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml)（需要 GitHub 账号），机器人帮你改名、归位、登记并开 PR。
 - 欢迎上传空白试卷、教学大纲、笔记、实验经验、老师风格和考核比例等。
 - 文件命名、存放位置、上传前检查清单，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - 不会用 git 也没关系，发邮件给我们，我们帮你上传并署名。
 
-- Easiest way to upload: the [upload form](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml) (needs a GitHub account); the bot renames, files and registers everything and opens a PR for you.
+- Easiest way to upload: the [upload form](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml) (needs a GitHub account); the bot renames, files and registers everything and opens a PR for you.
 - Blank past papers, syllabi, notes, lab tips, lecturer styles, assessment weightings: all welcome.
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for file naming, folder placement and the pre-upload checklist.
 - Not comfortable with git? Email us and we'll upload it for you, with credit.

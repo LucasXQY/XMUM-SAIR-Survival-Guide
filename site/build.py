@@ -27,10 +27,10 @@ from urllib.parse import quote, unquote
 
 import markdown
 
-REPO = "LucasXQY/XMUM-SAIR-Survival-Guide"
+REPO = "xmum-sair/xmum-sair.github.io"
 GH = f"https://github.com/{REPO}"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main"
-SITE_URL = "https://lucasxqy.github.io/XMUM-SAIR-Survival-Guide/"   # canonical address; changes with REPO after the org move
+SITE_URL = "https://xmum-sair.github.io/"   # canonical address; changes with REPO after the org move
 DOWNLOADS = f"{GH}/releases/download/downloads"                      # per-session zips kept by .github/workflows/downloads.yml
 RATINGS_URL = f"https://raw.githubusercontent.com/{REPO}/data/ratings.json"   # written by .github/workflows/reviews.yml
 REVIEW_FORM = f"{GH}/issues/new?template=review.yml"
@@ -767,7 +767,7 @@ def check(site: Site, out: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="_site")
-    ap.add_argument("--prefix", default="/XMUM-SAIR-Survival-Guide/", help="URL path the site is served under")
+    ap.add_argument("--prefix", default="/", help="URL path the site is served under")
     ap.add_argument("--root", default=str(HERE.parent), help="repository tree to build from")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()

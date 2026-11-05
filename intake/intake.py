@@ -662,7 +662,7 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
 
 # ---------------------------------------------------------------- orchestration: download → PR body → git/gh → CLI
 
-REPO = os.environ.get("GITHUB_REPOSITORY", "LucasXQY/XMUM-SAIR-Survival-Guide")
+REPO = os.environ.get("GITHUB_REPOSITORY", "xmum-sair/xmum-sair.github.io")
 BOT_AUTHOR = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 HERE = Path(__file__).resolve().parent
 LABEL_UPLOAD, LABEL_NEEDS_INFO, LABEL_PR = "upload", "needs-info", "pr-opened"
