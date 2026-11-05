@@ -1,5 +1,24 @@
 {
- "courses": {},
+ "courses": {
+  "EEE305": {
+   "lecturers": {
+    "tan-jian-ding": {
+     "counts": {
+      "access": 1,
+      "communication": 1,
+      "course": 1,
+      "difficulty": 1,
+      "instructor": 1,
+      "learned": 0,
+      "recommend": 1,
+      "work": 1
+     },
+     "n": 1,
+     "name": "Tan Jian Ding"
+    }
+   }
+  }
+ },
  "dims": [
   "course",
   "instructor",
@@ -10,7 +29,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T08:09:29Z",
+ "generated": "2026-11-05T09:06:36Z",
  "main": [
   "course",
   "instructor",
