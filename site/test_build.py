@@ -5,6 +5,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 import build
 
+# expectations derived from the repo itself, so the suite survives new uploads
+N_COURSES = sum(1 for prog in build.PROGS for d in (ROOT / prog).glob("*_*") if d.is_dir())
+N_FILES = sum(1 for prog in build.PROGS for f in (ROOT / prog).glob("*_*/*/*/*")
+              if f.is_file() and not f.name.startswith(".") and f.parent.name in build.SUBS
+              and (build.SESSION_RE.fullmatch(f.parent.parent.name) or f.parent.parent.name == "unknown"))
+
 
 def test_parse_taken():
     t = build.parse_taken("| 2022-04 | [COM107](COM107_Circuits_and_Devices/) | x |\n"
@@ -23,7 +29,7 @@ def test_parse_lecturers_link_and_plain():
 
 def test_scan_real_repo():
     courses = build.scan(ROOT)
-    assert len(courses) == 58 and {c.prog for c in courses} == {"EEE"}
+    assert len(courses) == N_COURSES >= 58 and {c.prog for c in courses} >= {"EEE"}
     c = next(c for c in courses if c.code == "COM107")
     assert c.name == "Circuits and Devices" and c.path == "EEE/COM107_Circuits_and_Devices"
     assert list(c.sessions) == ["2022-04"]
@@ -31,7 +37,7 @@ def test_scan_real_repo():
     assert len(c.sessions["2022-04"]["Tutorials"]) == 5
     assert c.taken_in == ["2022-04"] and c.lecturers["2022-04"] == "Chua Ming Yam"
     files = build.all_files(courses)
-    assert len(files) == 482 and all((ROOT / f.path).is_file() for f in files)
+    assert len(files) == N_FILES >= 482 and all((ROOT / f.path).is_file() for f in files)
     com110 = next(c for c in courses if c.code == "COM110")
     assert list(com110.sessions) == ["2026-09", "2025-04"]
 
@@ -97,7 +103,7 @@ def test_build_writes_every_page():
               "EEE/index.html", "AIT/index.html", "ROBO/index.html", "EEE/COM107_Circuits_and_Devices/index.html",
               "search.json", "static/style.css", "static/search.js"]:
         assert (out / p).is_file(), p
-    assert len(site.courses) == len(list(out.glob("*/*_*/index.html"))) == 58
+    assert len(site.courses) == len(list(out.glob("*/*_*/index.html"))) == N_COURSES
 
 
 def test_course_page_contents():
@@ -115,7 +121,8 @@ def test_prog_and_qa_pages():
     _, out = _build()
     eee = (out / "EEE/index.html").read_text(encoding="utf-8")
     assert "<!-- COURSE-INDEX -->" not in eee
-    assert len(set(re.findall(r'href="/XMUM-SAIR-Survival-Guide/EEE/[^"/]+_[^"/]+/"', eee))) == 58
+    n_eee = sum(1 for d in (ROOT / "EEE").glob("*_*") if d.is_dir())
+    assert len(set(re.findall(r'href="/XMUM-SAIR-Survival-Guide/EEE/[^"/]+_[^"/]+/"', eee))) == n_eee
     assert "暂无课程" in (out / "AIT/index.html").read_text(encoding="utf-8")
     qa = (out / "qa/index.html").read_text(encoding="utf-8")
     assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa
@@ -124,7 +131,7 @@ def test_prog_and_qa_pages():
 def test_search_index():
     _, out = _build()
     idx = json.loads((out / "search.json").read_text(encoding="utf-8"))
-    assert len(idx["courses"]) == 58 and len(idx["files"]) == 482
+    assert len(idx["courses"]) == N_COURSES and len(idx["files"]) == N_FILES
     f = next(f for f in idx["files"] if f["code"] == "COM107" and f["type"] == "Tutorials")
     assert f["preview"].startswith(build.GH + "/blob/main/") and f["download"].startswith(build.RAW + "/")
     assert (ROOT / f["path"]).is_file()
@@ -137,7 +144,7 @@ def test_root_prefix_preview():
     _, out = _build("/")
     html = (out / "EEE/index.html").read_text(encoding="utf-8")
     assert 'href="/EEE/COM107_Circuits_and_Devices/"' in html and 'data-base="/"' in html
-    assert "/XMUM-SAIR-Survival-Guide/" not in html
+    assert 'href="/XMUM-SAIR-Survival-Guide/' not in html
 
 
 def test_check_passes_on_real_repo():
@@ -157,12 +164,51 @@ def test_stragglers_reports_misplaced_file():
     (tmp / "EEE/COM107_Circuits_and_Devices/2024-9/Notes").mkdir(parents=True)
     (tmp / "EEE/COM107_Circuits_and_Devices/2024-9/Notes/x.pdf").write_bytes(b"%PDF")
     (tmp / "EEE/COM107_Circuits_and_Devices/stray.pdf").write_bytes(b"%PDF")
+    (tmp / "EEE/EEE999_No_Readme/2024-09/Notes").mkdir(parents=True)
+    (tmp / "EEE/EEE999_No_Readme/2024-09/Notes/ok.pdf").write_bytes(b"%PDF")
     subprocess.run(["git", "init", "-q"], cwd=tmp, check=True, capture_output=True)
     subprocess.run(["git", "add", "-A"], cwd=tmp, check=True, capture_output=True)
-    site = build.Site(tmp, "/")
-    assert build.all_files(site.courses) == []
+    import contextlib, io
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        site = build.Site(tmp, "/")
+    assert "WARNING: EEE/EEE999_No_Readme: README.md missing" in err.getvalue()
+    assert [f.path for f in build.all_files(site.courses)] == ["EEE/EEE999_No_Readme/2024-09/Notes/ok.pdf"]
     assert sorted(build.stragglers(site)) == ["EEE/COM107_Circuits_and_Devices/2024-9/Notes/x.pdf",
                                              "EEE/COM107_Circuits_and_Devices/stray.pdf"]
+
+
+def test_rewrite_link_loose_file_and_unindexed_session():
+    import contextlib, io
+    s = _site()
+    readme = "EEE/COM105_Engineering_Physics_I/README.md"
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        # a file sitting directly in a session folder is not a type folder: link to it on GitHub
+        assert build.rewrite_link(s, "2023-04/COM105 Week 9 lecture.pdf", readme) == \
+            build.GH + "/blob/main/EEE/COM105_Engineering_Physics_I/2023-04/COM105%20Week%209%20lecture.pdf"
+        # percent-encoded hrefs resolve to the same file, encoded once
+        assert build.rewrite_link(s, "2023-04/COM105%20Week%209%20lecture.pdf", readme) == \
+            build.GH + "/blob/main/EEE/COM105_Engineering_Physics_I/2023-04/COM105%20Week%209%20lecture.pdf"
+    assert err.getvalue() == ""
+    # a session folder with no indexed material has no anchor on the course page: send readers to GitHub
+    with contextlib.redirect_stderr(err):
+        assert build.rewrite_link(s, "2023-04/", readme) == build.GH + "/tree/main/EEE/COM105_Engineering_Physics_I/2023-04"
+    assert "WARNING" in err.getvalue()
+    # the normal case still anchors
+    assert build.rewrite_link(s, "2022-04/Tutorials/", readme) == P + "EEE/COM105_Engineering_Physics_I/#2022-04"
+
+
+def test_build_refuses_to_delete_a_foreign_directory():
+    out = pathlib.Path(tempfile.mkdtemp()) / "not-a-site"
+    out.mkdir()
+    (out / "keep.txt").write_text("x")
+    try:
+        build.build(ROOT, out, "/")
+        assert False, "build() must refuse to wipe a directory it did not create"
+    except SystemExit:
+        pass
+    assert (out / "keep.txt").is_file()
 
 
 if __name__ == "__main__":

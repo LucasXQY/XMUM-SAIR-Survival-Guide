@@ -23,7 +23,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Template
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import markdown
 
@@ -127,6 +127,8 @@ def scan(root: Path) -> list[Course]:
             code, name = d.split("_", 1)
             rpath = cdir / "README.md"
             readme = rpath.read_text(encoding="utf-8") if rpath.is_file() else None
+            if readme is None:
+                warn(f"{prog}/{d}: README.md missing")
             course = Course(prog, d, code, name.replace("_", " "), f"{prog}/{d}", readme,
                             taken_in=taken.get(code, []),
                             lecturers=parse_lecturers(readme) if readme else {})
@@ -191,7 +193,7 @@ def rewrite_link(site: Site, href: str, src_md: str) -> str:
         return href
     path, _, frag = href.partition("#")
     frag = f"#{frag}" if frag else ""
-    p = posixpath.normpath(posixpath.join(posixpath.dirname(src_md), path)).strip("/")
+    p = posixpath.normpath(posixpath.join(posixpath.dirname(src_md), unquote(path))).strip("/")
     if p in ROOT_PAGES:
         return site.prefix + ROOT_PAGES[p] + frag
     parts = p.split("/")
@@ -202,8 +204,12 @@ def rewrite_link(site: Site, href: str, src_md: str) -> str:
         rest = parts[2:]
         if not rest or rest == ["README.md"]:
             return f"{site.prefix}{course.path}/{frag}"
-        if len(rest) <= 2 and (SESSION_RE.fullmatch(rest[0]) or rest[0] == "unknown"):
-            return f"{site.prefix}{course.path}/#{rest[0]}"
+        # a session folder, or a type folder inside one, is a section of the course page
+        if len(rest) == 1 or (len(rest) == 2 and rest[1] in SUBS):
+            if rest[0] in course.sessions:
+                return f"{site.prefix}{course.path}/#{rest[0]}"
+            if SESSION_RE.fullmatch(rest[0]) or rest[0] == "unknown":
+                warn(f"{src_md}: {p} has no indexed material, linking to GitHub instead")
     full = site.root / p
     if full.is_dir():
         return f"{GH}/tree/main/{url_path(p)}"
@@ -395,6 +401,8 @@ def build(root: Path, out: Path, prefix: str) -> Site:
     site = Site(root, prefix)
     out = Path(out)
     if out.exists():
+        if not (out / "search.json").is_file():   # only wipe a directory a previous build wrote
+            raise SystemExit(f"refusing to delete {out}: not a previous build output")
         shutil.rmtree(out)
 
     def write(rel: str, text: str) -> None:
