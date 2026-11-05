@@ -31,7 +31,7 @@ README.md
 DISCLAIMER.md
 CONTRIBUTING.md
 CONTRIBUTORS.md
-Lecturers.md               (教师档案 | lecturer profiles)
+Lecturers.md               (教师名录 | lecturer directory)
 Research-Opportunities.md  (研究机会 | research openings)
 scripts/update_index.py    (重新生成课程索引 | regenerates the course index)
 EEE/
@@ -93,10 +93,10 @@ The course folder itself may hold a `README.md` (optional): one row per session 
 
 ## 老师与研究机会 | Lecturers & research
 
-- [Lecturers.md](Lecturers.md) — 老师的授课风格、沟通方式、性格特点，只描述不打分。
+- [Lecturers.md](Lecturers.md) — 老师名录：每位老师教过哪些课；评分只在课程页，不收文字评价。
 - [Research-Opportunities.md](Research-Opportunities.md) — 哪些老师正在招本科生进组，带更新日期。
 
-- [Lecturers.md](Lecturers.md) — lecturers' teaching style, communication and personality; descriptions only, no scores.
+- [Lecturers.md](Lecturers.md) — lecturer directory: which courses each lecturer taught; scores live on course pages, no written reviews.
 - [Research-Opportunities.md](Research-Opportunities.md) — which lecturers are currently taking undergraduates, with update dates.
 
 ## 联系与获取访问 | Contact & access

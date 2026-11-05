@@ -23,7 +23,6 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 - 作业题目（assignment brief）、实验手册、习题（tutorial sheet）、评分表（rubric）、报告模板
 - 自己的笔记、复习总结
 - 实验经验、踩坑记录
-- 老师的教学风格、出题习惯（写到 [Lecturers.md](Lecturers.md)）
 - 哪些老师在招本科生进组（写到 [Research-Opportunities.md](Research-Opportunities.md)）
 - 课程考核比例（作业、实验、期中、期末各占多少）
 
@@ -32,7 +31,6 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 - Assignment briefs, lab manuals, tutorial sheets, rubrics, report templates
 - Your own notes and revision summaries
 - Lab tips and lessons learned
-- Lecturers' teaching styles and exam habits (go in [Lecturers.md](Lecturers.md))
 - Which lecturers are taking undergraduates (go in [Research-Opportunities.md](Research-Opportunities.md))
 - Assessment weightings (assignments, labs, midterm, final)
 
@@ -190,7 +188,6 @@ Dropping files in is step one. So that others can find them, also update the fil
 | 还没有你的时间表 / You have no timeline yet | `<专业>/README.md` 的"修课时间表" | 照 LucasXQY 那张表的格式新加一节 `### <你的昵称>`，按修读学期列出你的课；只想加几门就写进"其他同学" / Add a `### <your nickname>` section in the same format as the LucasXQY table, listing your courses by session; for just a few courses, use "Other contributors" |
 | AIT / ROBO 的第一份资料 / First files for AIT or ROBO | `AIT/README.md` 或 `ROBO/README.md` | 照 `EEE/README.md` 的格式加课程索引（带 `<!-- COURSE-INDEX -->` 标记）和修课时间表，然后 `python scripts/update_index.py AIT` / Add a course index (with the `<!-- COURSE-INDEX -->` markers) and a course timeline in the style of `EEE/README.md`, then run `python scripts/update_index.py AIT` |
 | 课程换了代码 / A course got a new code | 新旧两个课程文件夹的 `README.md` | 各写一句"2021 入学时为 COM204 / 2025 入学起为 EEE220"互相链接，例子见 `EEE/EEE220_Engineering_Graphics/README.md` / One line in each README cross-linking the other; see `EEE/EEE220_Engineering_Graphics/README.md` |
-| 想写老师授课风格 / Lecturer teaching style | [Lecturers.md](Lecturers.md) | 找到老师的小节填空；没有就按模板新增。只描述不打分 / Fill in the lecturer's section, or add one from the template. Descriptions only, no scores |
 | 老师在招人 / A lecturer is recruiting | [Research-Opportunities.md](Research-Opportunities.md) | 在"当前招人"表加一行，带年月；不再招人时把状态改成"已关闭"并移到"历史记录" / Add a row to "Currently recruiting" with the date; when closed, mark it and move it to "Past entries" |
 | 课程的老师、考核比例、小贴士 / Course lecturer, assessment weighting, tips | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就按下面的模板新建；**每个修读学期一行**，不同学期老师和考核可能不同，不要覆盖别人的行 / Create one from the template below if missing; **one row per session**, since lecturer and assessment can change between sessions; never overwrite someone else's row |
 | 想署名 / Want to be credited | [CONTRIBUTORS.md](CONTRIBUTORS.md) | 在你那一届的表里加一行，昵称 / 真名 / 匿名都行，联系方式可留空 / Add a row under your cohort; nickname, name or anonymous, contact optional |
