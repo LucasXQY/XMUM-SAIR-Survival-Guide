@@ -219,7 +219,9 @@ def render_md(site: Site, text: str, src_md: str) -> str:
         href = rewrite_link(site, html_mod.unescape(m.group(1)), src_md)
         return f'href="{html_mod.escape(href, quote=True)}"'
 
-    return re.sub(r'href="([^"]*)"', fix, out)
+    out = re.sub(r'href="([^"]*)"', fix, out)
+    # wide bilingual tables scroll sideways on phones instead of breaking the layout
+    return out.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
 
 
 # ---------------------------------------------------------------- pages

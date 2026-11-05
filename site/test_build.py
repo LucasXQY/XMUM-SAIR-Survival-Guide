@@ -67,6 +67,8 @@ def test_render_md_rewrites_hrefs_and_ids():
     html = build.render_md(s, "## 欢迎上传 | What to upload\n\nSee [rules](../CONTRIBUTING.md) and [x](../EEE/README.md).\n", "AIT/README.md")
     assert 'id="欢迎上传--what-to-upload"' in html
     assert 'href="/XMUM-SAIR-Survival-Guide/contributing/"' in html and 'href="/XMUM-SAIR-Survival-Guide/EEE/"' in html
+    table = build.render_md(s, "| a | b |\n|---|---|\n| 1 | 2 |\n", "README.md")
+    assert '<div class="table-wrap"><table>' in table and "</table></div>" in table
 
 
 def test_contributing_toc_anchors_resolve():
