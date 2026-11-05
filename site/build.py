@@ -30,6 +30,8 @@ import markdown
 REPO = "LucasXQY/XMUM-SAIR-Survival-Guide"
 GH = f"https://github.com/{REPO}"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main"
+SITE_URL = "https://lucasxqy.github.io/XMUM-SAIR-Survival-Guide/"   # canonical address; changes with REPO after the org move
+DOWNLOADS = f"{GH}/releases/download/downloads"                      # per-session zips kept by .github/workflows/downloads.yml
 PROGS = {
     "EEE": "电子信息工程 | Electrical & Electronic Engineering",
     "AIT": "人工智能 | Artificial Intelligence",
@@ -66,6 +68,7 @@ class Course:
     sessions: dict[str, dict[str, list[File]]] = field(default_factory=dict)
     taken_in: list[str] = field(default_factory=list)
     lecturers: dict[str, str] = field(default_factory=dict)
+    contributors: dict[str, str] = field(default_factory=dict)   # session → the README's 资料来自 cell
 
 
 def warn(msg: str) -> None:
@@ -90,6 +93,15 @@ def _cells(line: str) -> list[str]:
 
 def parse_lecturers(readme_text: str) -> dict[str, str]:
     """Session → lecturer from the first table (session cell may be a link)."""
+    return parse_column(readme_text, 1)
+
+
+def parse_contributors(readme_text: str) -> dict[str, str]:
+    """Session → the 资料来自 / Contributed by cell of the first table."""
+    return parse_column(readme_text, 3)
+
+
+def parse_column(readme_text: str, col: int) -> dict[str, str]:
     rows = []
     for line in readme_text.splitlines():
         if line.lstrip().startswith("|"):
@@ -99,11 +111,11 @@ def parse_lecturers(readme_text: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for line in rows[2:]:   # skip header and separator
         cells = _cells(line)
-        if len(cells) < 2:
+        if len(cells) <= col:
             continue
         session = LINK_RE.sub(r"\1", cells[0]).strip()
-        if (SESSION_RE.fullmatch(session) or session == "unknown") and cells[1]:
-            out[session] = cells[1]
+        if (SESSION_RE.fullmatch(session) or session == "unknown") and cells[col]:
+            out[session] = cells[col]
     return out
 
 
@@ -131,7 +143,8 @@ def scan(root: Path) -> list[Course]:
                 warn(f"{prog}/{d}: README.md missing")
             course = Course(prog, d, code, name.replace("_", " "), f"{prog}/{d}", readme,
                             taken_in=taken.get(code, []),
-                            lecturers=parse_lecturers(readme) if readme else {})
+                            lecturers=parse_lecturers(readme) if readme else {},
+                            contributors=parse_contributors(readme) if readme else {})
             sessions = [s for s in os.listdir(cdir) if (cdir / s).is_dir()
                         and (SESSION_RE.fullmatch(s) or s == "unknown")]
             for sess in sorted(sessions, key=_session_key, reverse=True):
@@ -185,6 +198,195 @@ def slugify(text: str, sep: str) -> str:
     """GitHub-style heading id: lowercase, drop punctuation, spaces → sep (repeats kept)."""
     text = re.sub(r"[^\w\s-]", "", text.lower())
     return text.strip().replace(" ", sep)
+
+
+# ---------------------------------------------------------------- lecturers, recent uploads, wanted list, sitemap
+
+def lecturer_slug(name: str) -> str:
+    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", name.lower())).strip("-")
+
+
+def split_lecturers(cell: str) -> list[str]:
+    """A README cell may name several people: 'A, B' / 'A、B' / 'A & B'."""
+    return [n.strip() for n in re.split(r"[,;、&/]| and ", cell) if n.strip() and not n.strip().startswith("[")]
+
+
+def lecturers(site: Site) -> dict[str, list[tuple[str, str]]]:
+    """Lecturer → [(course code, session)], from every course README's session table."""
+    out: dict[str, list[tuple[str, str]]] = {}
+    for c in site.courses:
+        for sess, cell in c.lecturers.items():
+            for name in split_lecturers(cell):
+                out.setdefault(name, []).append((c.code, sess))
+    return dict(sorted(out.items(), key=lambda kv: kv[0].lower()))
+
+
+def lecturer_links_html(site: Site, cell: str) -> str:
+    names = split_lecturers(cell)
+    if not names:
+        return esc(cell)
+    return "、".join(f'<a href="{site.prefix}lecturers/{lecturer_slug(n)}/">{esc(n)}</a>' for n in names)
+
+
+LECTURER_TEMPLATE = ("- 课程 / Courses：\n- 授课风格 / Teaching style：\n- 考核风格 / Assessment style：\n"
+                     "- 沟通 / Communication：\n- 性格 / Personality：\n- 适合找 TA 做 / Good to approach for：\n- 同学建议 / Tips：")
+
+
+def lecturer_index_html(site: Site) -> str:
+    cards = []
+    for name, taught in lecturers(site).items():
+        codes = sorted({code for code, _ in taught})
+        sessions = sorted({s for _, s in taught})
+        cards.append(f'<a class="card" href="{site.prefix}lecturers/{lecturer_slug(name)}/"><h3>{esc(name)}</h3>'
+                     f'<p>{esc("、".join(codes))}</p><p>{esc("、".join(sessions))}</p></a>')
+    return ('<h2 id="profiles">档案 | Profiles</h2>'
+            "<p>名单来自各课程文件夹 README 的学期表；点进去看教过的课，并在页面底部留下你的描述（登录 GitHub 即可，立刻可见；"
+            "机器人会按关键词自动折叠辱骂和敏感内容，维护者可以删除）。</p>"
+            "<p>Names come from the session tables in the course READMEs. Open one to see the courses taught and leave your "
+            "description at the bottom (sign in with GitHub; visible at once; a bot folds abusive or sensitive comments by keyword, "
+            "maintainers may delete).</p>"
+            f'<div class="lect-grid">{"".join(cards)}</div>')
+
+
+def lecturer_page(site: Site, name: str, taught: list[tuple[str, str]]) -> str:
+    rows = []
+    for code, sess in sorted(taught, key=lambda t: (t[0], t[1])):
+        c = next((c for c in site.courses if c.code == code), None)
+        if c is None:
+            continue
+        rows.append(f'<tr><td>{esc(code)}</td><td><a href="{site.prefix}{c.path}/">{esc(c.name)}</a></td>'
+                    f'<td><a href="{site.prefix}{c.path}/#{sess}">{esc(sess)}</a></td></tr>')
+    table = ('<div class="table-wrap"><table><thead><tr><th>代码 / Code</th><th>课程 / Course</th><th>学期 / Session</th></tr></thead>'
+             f'<tbody>{"".join(rows)}</tbody></table></div>')
+    rules = (f'<p class="notice">写具体、可观察的事实，只描述不打分；不写外貌、私生活、政治或宗教立场，不写私人联系方式。'
+             f'规则见<a href="{site.prefix}lecturers/">教师档案页</a>。老师本人如需修改或移除，邮件 xieqiyi@ieee.org。<br>'
+             f'Concrete, observable facts; descriptions, no scores; nothing about appearance, private life, politics or religion, '
+             f'no private contacts. Rules on the <a href="{site.prefix}lecturers/">lecturers page</a>. '
+             f'Lecturers who want anything changed: xieqiyi@ieee.org.</p>'
+             f"<details><summary>可以照这个模板写 | A template you can follow</summary><pre>{esc(LECTURER_TEMPLATE)}</pre></details>")
+    content = (f"<h1>{esc(name)}</h1><h2>教过的课 | Courses taught</h2>{table}"
+               f'<h2 id="profile">同学描述 | What students say</h2>{rules}'
+               + giscus_html(*GISCUS_GENERAL, f"教师 | Lecturer: {name}"))
+    return page(site, name, content, f"{name}：教过的课程与同学描述 | courses taught and student descriptions")
+
+
+def added_dates(root: Path) -> dict[str, str]:
+    """Repo path → date (YYYY-MM-DD) the file first appeared at that path, from git history; {} when there is none."""
+    try:
+        raw = subprocess.run(["git", "-c", "core.quotepath=off", "log", "--format=%cs", "--diff-filter=A", "--no-renames",
+                              "--name-only", "--", *PROGS], cwd=root, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        warn("git history unavailable, the recent-uploads list is empty")
+        return {}
+    dates: dict[str, str] = {}
+    date = ""
+    for line in raw.decode("utf-8", "replace").splitlines():
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", line):
+            date = line
+        elif line.strip():
+            dates[line] = date   # newest commit first, so the last assignment wins: the earliest add
+    return dates
+
+
+def recent_entries(site: Site, limit: int = 100) -> list[dict]:
+    """Uploads grouped by (date, course, session, type), newest first."""
+    dates = added_dates(site.root)
+    if not dates:
+        return []
+    groups: dict[tuple, dict] = {}
+    for c in site.courses:
+        for sess, types in c.sessions.items():
+            for t, files in types.items():
+                for f in files:
+                    d = dates.get(f.path)
+                    if not d:
+                        continue
+                    g = groups.setdefault((d, c.code, sess, t), {
+                        "date": d, "code": c.code, "name": c.name, "session": sess, "type": t, "n": 0,
+                        "url": f"{site.prefix}{c.path}/#{sess}", "by": LINK_RE.sub(r"\1", c.contributors.get(sess, ""))})
+                    g["n"] += 1
+    return sorted(groups.values(), key=lambda g: (g["date"], g["code"], g["session"], g["type"]), reverse=True)[:limit]
+
+
+def recent_html(entries: list[dict]) -> str:
+    if not entries:
+        return "<p>暂时无法读取上传记录 | Upload history is not available right now.</p>"
+    items = []
+    for e in entries:
+        by = f" · 来自 | by {esc(e['by'])}" if e["by"] else ""
+        items.append(f'<li><time datetime="{e["date"]}">{e["date"]}</time> <a href="{e["url"]}">{esc(e["code"])} {esc(e["name"])}</a> '
+                     f'<small>{esc(e["session"])} · {esc(e["type"])} · {e["n"]} 份 | files{by}</small></li>')
+    return f'<ul class="recent">{"".join(items)}</ul>'
+
+
+def recent_page(site: Site) -> str:
+    content = ("<h1>最近上传 | Recent uploads</h1>"
+               f'<p>按文件进入仓库的日期排列，最新在前。订阅：<a href="{site.prefix}feed.xml">RSS / Atom</a>。'
+               f'<br>By the date each file entered the repository, newest first. Subscribe: <a href="{site.prefix}feed.xml">RSS / Atom</a>.</p>'
+               + recent_html(getattr(site, "recent", [])))
+    return page(site, "最近上传 | Recent uploads", content)
+
+
+def feed_xml(site: Site, entries: list[dict]) -> str:
+    def x(s: str) -> str:
+        return html_mod.escape(s, quote=True)
+    updated = (entries[0]["date"] if entries else "2026-01-01") + "T00:00:00Z"
+    items = []
+    for e in entries[:50]:
+        url = SITE_URL + e["url"][len(site.prefix):]
+        title = f"{e['code']} {e['session']} · {e['type']}（{e['n']} 份 | files）"
+        summary = f"{e['code']} {e['name']} {e['session']} {e['type']}: {e['n']} 份文件 | files" + (f"，来自 | by {e['by']}" if e["by"] else "")
+        items.append(f"<entry><title>{x(title)}</title><link href=\"{x(url)}\"/>"
+                     f"<id>{x(SITE_URL)}recent/#{x(e['date'])}-{x(e['code'])}-{x(e['session'])}-{x(e['type'])}</id>"
+                     f"<updated>{e['date']}T00:00:00Z</updated><summary>{x(summary)}</summary></entry>")
+    return ('<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">'
+            f'<title>XMUM SAIR 生存指南 · 最近上传 | Recent uploads</title><link href="{x(SITE_URL)}"/>'
+            f'<link rel="self" href="{x(SITE_URL)}feed.xml"/><id>{x(SITE_URL)}</id><updated>{updated}</updated>'
+            + "".join(items) + "</feed>\n")
+
+
+def wanted_page(site: Site) -> str:
+    parts = ["<h1>征集榜 | Wanted</h1>",
+             f'<p>下面这些课还没有任何资料。修过的同学如果手上有空白试卷、大纲、作业题或笔记，<a href="{UPLOAD_URL}">用上传表单</a>发给我们。'
+             f'<br>These courses have no material yet. If you took one and still have blank papers, a syllabus, assignment briefs or notes, '
+             f'<a href="{UPLOAD_URL}">use the upload form</a>.</p>']
+    def item(c: Course, extra: str = "") -> str:
+        return f'<li><a href="{site.prefix}{c.path}/">{esc(c.code)} {esc(c.name)}</a>{extra}</li>'
+
+    def section(title: str, items: list[str]) -> str:
+        return f"<h3>{title}（{len(items)}）</h3>" + (f"<ul>{''.join(items)}</ul>" if items else "<p>无 | none</p>")
+
+    for prog, pname in PROGS.items():
+        cs = [c for c in site.courses if c.prog == prog]
+        if not cs:
+            continue
+        empty = [item(c, f' <small>修课学期 | taken in {esc("、".join(c.taken_in))}</small>' if c.taken_in else "")
+                 for c in cs if not c.sessions]
+        no_papers = [item(c) for c in cs if c.sessions and not any("Past-Papers" in types for types in c.sessions.values())]
+        gaps = [item(c, f" <small>· {esc(s)}</small>") for c in cs for s in c.taken_in if s not in c.sessions]
+        parts.append(f"<h2>{prog} · {esc(pname)}</h2>"
+                     + section("还没有任何资料 | No material at all", empty)
+                     + section("缺空白试卷 | No past papers yet", no_papers)
+                     + section("有人修过、但那个学期还没资料 | Sessions someone took that are not covered", gaps))
+    parts.append("<p>⬜ 征集中 / wanted 也会标在各专业页的课程索引里。The programme pages mark courses without material as ⬜ 征集中 / wanted too.</p>")
+    return page(site, "征集榜 | Wanted", "".join(parts))
+
+
+def site_pages(site: Site) -> list[str]:
+    """Every page's path relative to the site root, for the sitemap."""
+    pages = ["", "qa/", "recent/", "wanted/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
+             *(f"{c.path}/" for c in site.courses), *(f"lecturers/{lecturer_slug(n)}/" for n in lecturers(site))]
+    return list(dict.fromkeys(pages))
+
+
+def sitemap_xml(site: Site) -> str:
+    urls = "".join(f"<url><loc>{html_mod.escape(SITE_URL + p, quote=True)}</loc></url>" for p in site_pages(site))
+    return ('<?xml version="1.0" encoding="utf-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + urls + "</urlset>\n")
+
+
+def robots_txt() -> str:
+    return f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n"
 
 
 def rewrite_link(site: Site, href: str, src_md: str) -> str:
@@ -245,10 +447,12 @@ GISCUS_NOTICE = ("发言需登录 GitHub，用户名公开。请勿张贴答案�
                  "Sign in with GitHub to post; your username is public. Do not post answers, marking schemes, "
                  "other people's personal data or lecturers' private contact details. Comments live in this repo's "
                  "GitHub Discussions and may be removed by the maintainers.")
+# header order = importance: the three programmes, Q&A, (Upload is inserted here), how to contribute, then the rest
 NAV = [("EEE", "EEE/", "⚡"), ("AIT", "AIT/", "🧠"), ("ROBO", "ROBO/", "🤖"), ("问答 | Q&A", "qa/", "💬"),
-       ("研究机会 | Research", "research/", "🔬"), ("教师 | Lecturers", "lecturers/", "🎓"),
-       ("贡献者 | Contributors", "contributors/", "👥"), ("如何贡献 | Contribute", "contributing/", "🤝"),
+       ("如何贡献 | Contribute", "contributing/", "🤝"), ("教师 | Lecturers", "lecturers/", "🎓"),
+       ("研究机会 | Research", "research/", "🔬"), ("贡献者 | Contributors", "contributors/", "👥"),
        ("关于 | About", "about/", "ℹ️")]
+UPLOAD_AFTER = 4  # the Upload block sits right after Q&A
 UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md)
 GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 '
                '6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
@@ -277,12 +481,14 @@ def nav_html(site: Site) -> str:
         else:
             main, sub = title.split(" | ")
         blocks.append(nav_block(i, f"{site.prefix}{path}", icon, main, sub))
-    blocks.append(nav_block(len(NAV), GH, GITHUB_MARK, "GitHub", "仓库 Repository"))
-    blocks.append(nav_block(len(NAV) + 1, UPLOAD_URL, "📤", "上传", "Upload", cls="upload", label="上传 | Upload"))
+    blocks.insert(UPLOAD_AFTER, nav_block(UPLOAD_AFTER, UPLOAD_URL, "📤", "上传", "Upload", cls="upload", label="上传 | Upload"))
+    blocks.append(nav_block(len(blocks), GH, GITHUB_MARK, "GitHub", "仓库 Repository"))
     form = (f'<form class="mini-search" action="{site.prefix}" method="get" role="search">'
             '<label class="sr-only" for="nav-q">搜索 | Search</label>'
             '<input id="nav-q" name="q" type="search" placeholder="搜索 | Search"></form>')
-    return f'{form}<nav class="nav-blocks" aria-label="主导航 | Main navigation">{"".join(blocks)}</nav>'
+    tools = (f'<div class="tools">{form}'
+             '<button class="theme-toggle" type="button" aria-label="切换深浅色 | Toggle theme">🌙</button></div>')
+    return f'{tools}<nav class="nav-blocks" aria-label="主导航 | Main navigation">{"".join(blocks)}</nav>'
 
 
 def page(site: Site, title: str, content: str, description: str = "") -> str:
@@ -343,8 +549,10 @@ def course_page(site: Site, c: Course) -> str:
         parts.append("<p>⬜ 征集中 / wanted</p>")
     for s, types in c.sessions.items():
         label = "未知学期 | unknown" if s == "unknown" else s
-        lect = f" · 老师 | Lecturer: {esc(c.lecturers[s])}" if s in c.lecturers else ""
-        parts.append(f'<h3 id="{s}">{label}{lect}</h3>')
+        lect = f" · 老师 | Lecturer: {lecturer_links_html(site, c.lecturers[s])}" if s in c.lecturers else ""
+        zipb = (f' <a class="btn" href="{DOWNLOADS}/{url_path(c.code)}_{s}.zip" '
+                f'title="这个学期的全部文件打成一个 zip | Every file of this session in one zip">打包下载 | Download all</a>')
+        parts.append(f'<h3 id="{s}">{label}{lect}{zipb}</h3>')
         for t, fs in types.items():
             parts.append(f'<h4>{t} ({len(fs)})</h4><ul class="files">{"".join(file_item(f) for f in fs)}</ul>')
     qa = '<h2 id="qa">问答 | Q&A</h2>' + giscus_html(*GISCUS_COURSE, title)
@@ -367,6 +575,8 @@ def root_page(site: Site, md: str) -> str:
     if md == "CONTRIBUTING.md":
         body = (f'<p class="notice">最简单的方式：填<a href="{UPLOAD_URL}">上传表单</a>，机器人会整理文件并开一个 PR 等维护者审核。<br>'
                 f'Easiest way: fill in the <a href="{UPLOAD_URL}">upload form</a>; the bot files everything and opens a PR for review.</p>') + body
+    if md == "Lecturers.md":
+        body += lecturer_index_html(site)
     return page(site, m.group(1).strip() if m else md, body)
 
 
@@ -378,7 +588,8 @@ def home_page(site: Site) -> str:
         cards.append(f'<a class="card" href="{site.prefix}{prog}/"><h3>{prog}</h3><p>{esc(name)}</p>'
                      f'<p class="stats">{n_mat} / {len(cs)} 门课有资料 · {n_files} 份文件<br>'
                      f'{n_mat} of {len(cs)} courses with material · {n_files} files</p></a>')
-    links = [("上传资料 | Upload material", UPLOAD_URL),
+    links = [("上传资料 | Upload material", UPLOAD_URL), ("征集榜 | Wanted", f"{site.prefix}wanted/"),
+             ("最近上传 | Recent uploads", f"{site.prefix}recent/"),
              ("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
              ("教师档案 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
              ("如何贡献 | How to contribute", f"{site.prefix}contributing/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
@@ -393,6 +604,9 @@ def home_page(site: Site) -> str:
         '<input id="q" name="q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107"></form>'
         '<div id="results" aria-live="polite"></div>'
         f'<h2>专业 | Programmes</h2><div class="cards">{"".join(cards)}</div>'
+        f'<h2>最近上传 | Recent uploads</h2>{recent_html(getattr(site, "recent", [])[:8])}'
+        f'<p><a href="{site.prefix}recent/">全部 | All</a> · <a href="{site.prefix}feed.xml">RSS</a> · '
+        f'<a href="{site.prefix}wanted/">还缺资料的课 | Courses still wanted</a></p>'
         '<h2>更多 | More</h2><ul class="links">' + "".join(f'<li><a href="{u}">{esc(t)}</a></li>' for t, u in links) + "</ul>")
     return page(site, "首页 | Home", content)
 
@@ -434,11 +648,19 @@ def build(root: Path, out: Path, prefix: str) -> Site:
     def write(rel: str, text: str) -> None:
         p = out / rel
         p.parent.mkdir(parents=True, exist_ok=True)
+        if rel.endswith(".html"):   # the template's canonical placeholder becomes this page's public address
+            text = text.replace("__CANONICAL__", SITE_URL + (rel[:-len("index.html")] if rel.endswith("index.html") else rel))
         p.write_text(text, encoding="utf-8")
+
+    site.recent = recent_entries(site)
 
     write("index.html", home_page(site))
     write("404.html", not_found_page(site))
     write("qa/index.html", qa_page(site))
+    write("recent/index.html", recent_page(site))
+    write("wanted/index.html", wanted_page(site))
+    for name, taught in lecturers(site).items():
+        write(f"lecturers/{lecturer_slug(name)}/index.html", lecturer_page(site, name, taught))
     for md, rel in ROOT_PAGES.items():
         if (site.root / md).is_file():
             write(rel + "index.html", root_page(site, md))
@@ -449,6 +671,9 @@ def build(root: Path, out: Path, prefix: str) -> Site:
     for c in site.courses:
         write(f"{c.path}/index.html", course_page(site, c))
     write("search.json", json.dumps(search_index(site), ensure_ascii=False))
+    write("feed.xml", feed_xml(site, site.recent))
+    write("sitemap.xml", sitemap_xml(site))
+    write("robots.txt", robots_txt())
     shutil.copytree(HERE / "static", out / "static")
     return site
 

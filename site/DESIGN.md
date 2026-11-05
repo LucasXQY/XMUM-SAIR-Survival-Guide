@@ -194,3 +194,17 @@ site/
 ## 14. 第二阶段（本次不做）| Phase 2, not in this build
 
 上传通道的设想，供以后另写设计：用 GitHub Issue 表单做"我要上传资料"。表单必填昵称/入学年、课程代码、学期、老师、资料类型，勾选确认（无答案、无姓名学号、已清元数据、同意免责声明），文件直接拖进 Issue。维护者定期查看，确认后由脚本把文件按命名规则放入仓库、更新课程 README / 时间表 / CONTRIBUTORS、以贡献者的 GitHub 账号作为提交作者开 PR，维护者审核后 merge。全程不需要服务器。网站的"如何贡献"页到时加一个入口即可。
+
+## 15. 第三阶段（2026-11-05 定）| Phase 3
+
+维护者 2026-11-05 的决定与我的实现选择：
+
+- **页头**：一排块（图标 + 中文/英文两行），按重要性排序：三个专业、问答、上传、如何贡献、教师、研究机会、贡献者、关于、GitHub。悬停上浮、当前页高亮、加载淡入；`prefers-reduced-motion` 时全关。右上角一个深浅色切换按钮，选择存 `localStorage`（`theme` = `light` / `dark`），`<head>` 里一段内联脚本在首次绘制前把 `data-theme` 写到 `<html>` 上避免闪烁；不选则跟随系统。切换时同步通知页面里的 giscus iframe（`postMessage setConfig.theme`）。
+- **教师页**：`/lecturers/` 先渲染 Lecturers.md（写作规则 + 模板），再列出从各课程 README 学期表里读到的全部老师（逗号分隔的多位老师拆开）。每位老师一页 `/lecturers/<slug>/`：教过的课程与学期（链到课程页锚点），下面是一个 giscus 讨论串（General 分类，term `教师 | Lecturer: <姓名>`），登录即写、立刻可见，由审核机器人按关键词事后折叠（见 moderation/DESIGN.md）。课程页学期标题里的老师名链到老师页。以后课程评价的分数也放这一页。
+- **最近上传与订阅**：从 `git log --diff-filter=A` 取每个文件首次入库的日期（pages.yml 用 `fetch-depth: 0`），按（日期、课程、学期、类型）归组。首页显示最近 8 组，`/recent/` 显示最近 100 组，`feed.xml` 是 Atom 订阅；没有 git 历史的树（干跑、临时副本）只给一个告警、列表为空。"来自"取课程 README 该学期的"资料来自"列。
+- **征集榜** `/wanted/`：按专业列出还没有任何资料的课程，首页给入口。
+- **站点地图**：`sitemap.xml`、`robots.txt`，每页 `<link rel="canonical">`，站点地址常量 `SITE_URL`（迁到组织后改一处）。
+- **按学期打包下载**：工作流 `downloads.yml` 在 main 的资料变动后，把每个 `<课程>/<学期>/` 打成 `<CODE>_<学期>.zip`，上传到名为 `downloads` 的 Release（同名覆盖）；课程页每个学期标题旁一个"打包下载"按钮指向 `releases/download/downloads/<CODE>_<学期>.zip`。
+- **不做**：离线 PWA（收益小、缓存失效容易出错）；访问统计需要维护者自己注册 GoatCounter 之类的账号后再加一行脚本。
+- **仓库迁移**（等维护者建好组织 `xmum-sair`）：转移仓库并改名 `xmum-sair.github.io`，网址变为根路径 `https://xmum-sair.github.io/`；需要改 `REPO`、`SITE_URL`、默认 `--prefix`、giscus 的 `data-repo`、README / CONTRIBUTING / 表单里的链接；仓库 id 与 Discussions 分类 id 不变。旧的 Pages 地址不会自动跳转，旧的仓库地址会。
+- **课程评价**（路线 A，待做）：Issue 表单打分（Course / Instructor / Difficulty / Work 四个主维度 + 学到多少 / 沟通 / 找得到老师 / 是否推荐四个细分，各 1–5，不收文字）。机器人读取后把原始投票写进维护者的**私有仓库**（只有维护者可见），按"用户 + 课程 + 老师"去重（后提交覆盖先提交），随后删除该 Issue（需要维护者的管理员 token 作为 secret），把汇总（人数、各维度平均；少于 3 人只显示人数）推到公开仓库的 `data` 分支，网站客户端读取 `ratings.json` 渲染在课程页、老师页和 `/reviews/` 总表。Issue 在被删除前的一两分钟内是公开的，watch 仓库的人会收到含表单内容的邮件通知，这是路线 A 的已知边界。

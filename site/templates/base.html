@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>$title · XMUM SAIR 生存指南</title>
 <meta name="description" content="$description">
+<link rel="canonical" href="__CANONICAL__">
+<link rel="alternate" type="application/atom+xml" title="最近上传 | Recent uploads" href="${base}feed.xml">
 <link rel="stylesheet" href="${base}static/style.css">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 </head>
 <body data-base="$base">
 <header class="site-header">
@@ -17,9 +20,10 @@ $content
 </main>
 <footer class="site-footer">
   <p class="disclaimer">本站由厦马学生自发维护，与 XMUM 无官方关联；试卷与课程材料版权归 XMUM 及授课老师，仅作非商业学习用途；如需删除请邮件 <a href="mailto:xieqiyi@ieee.org">xieqiyi@ieee.org</a>。<br>Student-run, not affiliated with XMUM. Copyright in papers and course material belongs to XMUM and the lecturers; shared for non-commercial study only. Takedown: <a href="mailto:xieqiyi@ieee.org">xieqiyi@ieee.org</a>.</p>
-  <p class="footer-links"><a href="${base}disclaimer/">免责声明 | Disclaimer</a> · <a href="https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide">GitHub</a> · <a href="mailto:xieqiyi@ieee.org">联系 | Contact</a></p>
+  <p class="footer-links"><a href="${base}disclaimer/">免责声明 | Disclaimer</a> · <a href="${base}recent/">最近上传 | Recent</a> · <a href="${base}feed.xml">RSS</a> · <a href="https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide">GitHub</a> · <a href="mailto:xieqiyi@ieee.org">联系 | Contact</a></p>
   <p class="ciallo">Ciallo～ (∠・ < )⌒☆</p>
 </footer>
+<script src="${base}static/site.js" defer></script>
 <script src="${base}static/search.js" defer></script>
 </body>
 </html>
