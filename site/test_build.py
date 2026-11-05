@@ -383,6 +383,14 @@ def test_lecturers_page_lists_reviewed_only_and_rate_page():
     assert ".lect-find label" in css and "margin" in css.split(".lect-find label")[1][:80]
 
 
+def test_goatcounter_snippet_on_every_page():
+    _, out = _build()
+    for p in ["index.html", "EEE/COM107_Circuits_and_Devices/index.html", "404.html"]:
+        html = (out / p).read_text(encoding="utf-8")
+        assert 'data-goatcounter="https://xmum-sair.goatcounter.com/count"' in html and "gc.zgo.at/count.js" in html, p
+    assert "GoatCounter" in (out / "index.html").read_text(encoding="utf-8")   # the footer says so
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
