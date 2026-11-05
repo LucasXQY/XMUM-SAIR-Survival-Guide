@@ -20,25 +20,6 @@ This page describes SAIR lecturers' teaching style, way of communicating and per
 
 ## 档案 | Profiles
 
-每位老师一个小节，由同学们按模板补充；"课程"一栏可以照课程文件夹 README 里的记录填。现在还是空的，欢迎第一位来写。
+每位老师一个页面：教过的课、课程评分、同学描述。描述写在页面底部的评论区，登录 GitHub 即可，立刻可见，机器人按关键词事后折叠不合规的内容。名单来自各课程文件夹 README 的学期表，上传资料时填上老师，名单就会多出来。网页上在下面的框里输入老师名或课程代码，回车直达那位老师的评论区；在 GitHub 上看这个文件的话，请到 https://xmum-sair.github.io/lecturers/ 。
 
-One section per lecturer, filled in by students from the template; the "courses" line can be copied from the course READMEs. Empty for now; be the first to add one.
-
-### 模板 | Template
-
-```
-### [姓名 / Name]
-- 课程 / Courses：[代码 课程名（年月）]
-- 授课风格 / Teaching style：[板书 / PPT / 例题多不多 / 节奏快慢]
-- 考核风格 / Assessment style：[考试偏计算还是概念、平时作业量、给分习惯]
-- 沟通 / Communication：[邮件回复速度、Office hour 情况、课堂是否欢迎提问]
-- 性格 / Personality：[中性描述]
-- 适合找 TA 做 / Good to approach for：[FYP、科研、推荐信等]
-- 同学建议 / Tips：[怎么学这门课、注意什么]
-```
-
----
-
-### [更多老师 / More lecturers]
-- 按上面的模板新增即可，姓名按学校官网写法。
-- Add new sections using the template above; spell names as on the university website.
+One page per lecturer: courses taught, course ratings, and what students say. Descriptions go in the comment thread at the bottom of the page (sign in with GitHub; visible at once; a bot folds disallowed content by keyword afterwards). Names come from the session tables in the course READMEs, so naming the lecturer when you upload material adds them here. On the website, type a name or course code in the box below and press Enter to land on that lecturer's comment area; if you are reading this file on GitHub, go to https://xmum-sair.github.io/lecturers/ .

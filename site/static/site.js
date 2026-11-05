@@ -48,6 +48,32 @@
     });
   }
   paint();
+
+  // 3. lecturer finder: cards filter as you type; Enter opens the first match's comment area
+  var q = document.getElementById('lect-q');
+  if (q) {
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.card.lect'));
+    var none = document.getElementById('lect-none');
+    var filter = function () {
+      var s = q.value.trim().toLowerCase(), shown = 0;
+      cards.forEach(function (c) {
+        var hit = !s || c.dataset.name.indexOf(s) >= 0 || c.dataset.codes.indexOf(s) >= 0;
+        c.hidden = !hit;
+        if (hit) shown++;
+      });
+      if (none) none.hidden = !(s && shown === 0);
+    };
+    q.addEventListener('input', filter);
+    if (q.form) {
+      q.form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var first = cards.filter(function (c) { return !c.hidden; })[0];
+        if (first) location.href = first.href;   // …/lecturers/<slug>/#profile lands on the comment area
+      });
+    }
+    var want = new URLSearchParams(location.search).get('q');
+    if (want) { q.value = want; filter(); }
+  }
   // giscus arrives after this script: once its iframe exists, tell it the chosen theme
   if (stored() && !document.querySelector('iframe.giscus-frame') && window.MutationObserver) {
     var mo = new MutationObserver(function () {

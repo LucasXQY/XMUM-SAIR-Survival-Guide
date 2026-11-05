@@ -150,3 +150,9 @@ ul.links { columns: 2 14em; padding-left: 1.2em; }
 .score .bar { display: inline-block; width: 56px; height: 6px; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
 .score .bar::after { content: ""; position: absolute; inset: 0; width: calc(var(--v, 0) * 100%); background: var(--accent); border-radius: 3px; }
 .ratings .n { color: var(--muted); font-size: .85rem; }
+
+/* lecturer finder */
+.lect-find { margin: 12px 0 16px; }
+.lect-find label { display: block; font-weight: 600; margin-bottom: 4px; }
+.lect-find input { width: 100%; max-width: 34em; }
+.card.lect[hidden] { display: none; }
