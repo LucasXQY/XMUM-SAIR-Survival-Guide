@@ -28,7 +28,7 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 
 | 昵称/Name | 入学/Intake | 贡献/Contribution | 联系方式/Contact (optional) |
 | --- | --- | --- | --- |
-| [hongdou20031220-bit](https://github.com/hongdou20031220-bit) | 2022 入学（2026 届）| COM105 2023-04 带手写批注的课件 14 份、复习题手写解答、公式表 / 14 annotated COM105 2023-04 lecture decks, worked revision questions, equation list | |
+| [hongdou20031220-bit](https://github.com/hongdou20031220-bit) | 2022 入学（2026 届）| COM105 2023-04 带手写批注的课件 13 份、复习题手写解答、公式表 / 13 annotated COM105 2023-04 lecture decks, worked revision questions, equation list | |
 | [Name] | 2022 入学（2026 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 2023 入学（2027 届）| 2023 intake (Class of 2027)
