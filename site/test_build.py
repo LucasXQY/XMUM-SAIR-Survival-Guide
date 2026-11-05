@@ -264,8 +264,75 @@ def test_nav_is_blocks_with_icons():
     assert "<small>Q&amp;A</small>" in nav.group(1) and "问答" in nav.group(1)       # bilingual label split into two lines
     css = (out / "static/style.css").read_text(encoding="utf-8")
     assert ".nb:hover" in css and "transition" in css and "prefers-reduced-motion" in css
-    js = (out / "static/search.js").read_text(encoding="utf-8")
+    js = (out / "static/site.js").read_text(encoding="utf-8")
     assert "aria-current" in js                                            # the current page's block is marked at load
+
+
+# ---- phase 3
+
+def test_theme_toggle_and_data_theme_css():
+    _, out = _build()
+    html = (out / "index.html").read_text(encoding="utf-8")
+    assert 'class="theme-toggle"' in html and "localStorage.getItem('theme')" in html   # no-flash inline script
+    css = (out / "static/style.css").read_text(encoding="utf-8")
+    assert ':root[data-theme="dark"]' in css and ':root:not([data-theme="light"])' in css
+    js = (out / "static/site.js").read_text(encoding="utf-8")
+    assert "giscus" in js and "setConfig" in js and "localStorage.setItem('theme'" in js
+
+
+def test_lecturer_pages():
+    site, out = _build()
+    assert build.lecturer_slug("Lohgheswary A/P Nagarethinam") == "lohgheswary-a-p-nagarethinam"
+    lects = build.lecturers(site)
+    assert "Nurul Hafeeza Jumaah" in lects and "Maryani Ahmad" in lects          # a comma-separated cell is two people
+    assert ("COM111", "2025-09") in lects["Ng Zi Neng"]
+    idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
+    assert "只描述，不打分" in idx and f'href="{P}lecturers/ng-zi-neng/"' in idx
+    pg = (out / "lecturers/ng-zi-neng/index.html").read_text(encoding="utf-8")
+    assert "<h1>Ng Zi Neng</h1>" in pg and f'href="{P}EEE/COM111_Electrical_Engineering/#2025-09"' in pg
+    assert 'data-term="教师 | Lecturer: Ng Zi Neng"' in pg and 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in pg
+    course = (out / "EEE/COM111_Electrical_Engineering/index.html").read_text(encoding="utf-8")
+    assert f'href="{P}lecturers/ng-zi-neng/"' in course                       # the session heading links to the lecturer
+
+
+def test_recent_uploads_and_feed():
+    site, out = _build()
+    entries = build.recent_entries(site)
+    assert entries and entries == sorted(entries, key=lambda e: e["date"], reverse=True)
+    e = entries[0]
+    assert set(e) >= {"date", "code", "name", "session", "type", "n", "url", "by"} and re.fullmatch(r"\d{4}-\d{2}-\d{2}", e["date"])
+    home = (out / "index.html").read_text(encoding="utf-8")
+    assert "最近上传 | Recent uploads" in home and e["code"] in home and 'type="application/atom+xml"' in home
+    feed = (out / "feed.xml").read_text(encoding="utf-8")
+    assert feed.startswith("<?xml") and "<feed" in feed and "<entry>" in feed and build.SITE_URL in feed
+    assert (out / "recent/index.html").is_file()
+    import contextlib, io, shutil                                           # a tree without git history: no entries, no crash
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "repo"
+    for p in ["README.md", "EEE/README.md", "AIT/README.md", "ROBO/README.md"]:
+        (tmp / p).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / p, tmp / p)
+    with contextlib.redirect_stderr(io.StringIO()):
+        assert build.recent_entries(build.Site(tmp, P)) == []
+
+
+def test_wanted_page_sitemap_and_canonical():
+    site, out = _build()
+    wanted = (out / "wanted/index.html").read_text(encoding="utf-8")
+    assert "征集榜" in wanted and all(c.code in wanted for c in site.courses if not c.sessions)
+    no_papers = [c for c in site.courses if c.sessions and not any("Past-Papers" in t for t in c.sessions.values())]
+    assert "缺空白试卷" in wanted and no_papers and all(c.code in wanted for c in no_papers)
+    gaps = [(c.code, s) for c in site.courses for s in c.taken_in if s not in c.sessions]
+    assert gaps and all(f"{code} " in wanted and f"· {s}" in wanted for code, s in gaps[:5])
+    sm = (out / "sitemap.xml").read_text(encoding="utf-8")
+    assert sm.count("<loc>") >= len(site.courses) + 8 and f"<loc>{build.SITE_URL}EEE/COM107_Circuits_and_Devices/</loc>" in sm
+    assert "Sitemap:" in (out / "robots.txt").read_text(encoding="utf-8")
+    assert f'<link rel="canonical" href="{build.SITE_URL}EEE/">' in (out / "EEE/index.html").read_text(encoding="utf-8")
+
+
+def test_session_zip_download_links():
+    _, out = _build()
+    html = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
+    assert build.GH + "/releases/download/downloads/COM107_2022-04.zip" in html and "打包下载" in html
 
 
 if __name__ == "__main__":

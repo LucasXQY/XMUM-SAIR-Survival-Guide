@@ -4,11 +4,16 @@
   --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d0d7de;
   --accent: #0969da; --accent-bg: #ddf4ff; --card: #f6f8fa;
 }
+/* dark: the system preference unless the visitor picked a theme (data-theme on <html>, set by site.js) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d;
     --accent: #4493f8; --accent-bg: #121d2f; --card: #161b22;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d;
+  --accent: #4493f8; --accent-bg: #121d2f; --card: #161b22;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -26,6 +31,13 @@ main, .site-header, .site-footer { max-width: 960px; margin: 0 auto; padding: 0 
 .brand { font-weight: 700; font-size: 1.1rem; color: var(--fg); text-decoration: none; }
 .brand span { color: var(--muted); font-weight: 400; }
 .mini-search input { width: 12em; border-radius: 10px; }
+.tools { display: flex; gap: 8px; align-items: center; justify-self: end; }
+.theme-toggle {
+  font: inherit; font-size: 1.05rem; line-height: 1; padding: 6px 9px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg);
+  transition: transform .18s ease, background .18s ease;
+}
+.theme-toggle:hover { transform: translateY(-1px) rotate(-12deg); background: var(--accent-bg); }
 
 /* header navigation: one block per destination, icon + Chinese over English */
 .nav-blocks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
@@ -113,7 +125,18 @@ ul.links { columns: 2 14em; padding-left: 1.2em; }
 
 @media (max-width: 600px) {
   .site-header { grid-template-columns: 1fr; }
+  .tools { width: 100%; justify-self: stretch; }
+  .tools .mini-search { flex: 1; }
   .mini-search input { width: 100%; }
   .nav-blocks { display: grid; grid-template-columns: repeat(2, 1fr); }
   ul.links { columns: 1; }
 }
+
+/* recent uploads, lecturer cards */
+.recent { list-style: none; padding: 0; margin: 0; }
+.recent li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.recent time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 6.5em; }
+.recent small { color: var(--muted); }
+.lect-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.lect-grid .card p { margin: 0; color: var(--muted); font-size: .88rem; }
+.lect-grid .card h3 { font-size: 1rem; }
