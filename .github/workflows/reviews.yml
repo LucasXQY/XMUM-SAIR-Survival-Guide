@@ -19,8 +19,9 @@ permissions:
 
 jobs:
   record:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'review')
+    if: vars.BOTS_PAUSED != '1' && (github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'review'))
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency:
       group: reviews-${{ github.event.issue.number || 'all' }}
       cancel-in-progress: false

@@ -20,8 +20,9 @@ permissions:
 
 jobs:
   scan:
-    if: github.actor != 'github-actions[bot]' && github.actor != 'giscus[bot]'
+    if: vars.BOTS_PAUSED != '1' && github.actor != 'github-actions[bot]' && github.actor != 'giscus[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
