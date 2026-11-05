@@ -259,6 +259,8 @@ def test_nav_is_blocks_with_icons():
     assert nav, "nav.nav-blocks missing"
     blocks = re.findall(r'<a class="nb[^"]*"[^>]*>', nav.group(1))
     assert len(blocks) == len(build.NAV) + 2, blocks                     # every NAV entry + GitHub + Upload
+    order = [re.search(r'href="([^"]*)"', b).group(1) for b in blocks]   # importance: programmes, Q&A, Upload, ...; GitHub last
+    assert [o.rsplit("/", 2)[-2] for o in order[:4]] == ["EEE", "AIT", "ROBO", "qa"] and order[4] == UPLOAD_URL and order[-1] == build.GH
     assert nav.group(1).count('class="nb-ic"') == len(blocks) and nav.group(1).count('class="nb-t"') == len(blocks)
     assert 'aria-label="上传 | Upload"' in nav.group(1) and 'href="' + UPLOAD_URL + '"' in nav.group(1)
     assert "<small>Q&amp;A</small>" in nav.group(1) and "问答" in nav.group(1)       # bilingual label split into two lines
