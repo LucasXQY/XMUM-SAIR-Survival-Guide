@@ -22,16 +22,16 @@
    "lecturers": {
     "wong-shen-yuong": {
      "counts": {
-      "access": 1,
-      "communication": 1,
-      "course": 1,
-      "difficulty": 1,
-      "instructor": 1,
-      "learned": 1,
-      "recommend": 1,
-      "work": 1
+      "access": 2,
+      "communication": 2,
+      "course": 2,
+      "difficulty": 2,
+      "instructor": 2,
+      "learned": 2,
+      "recommend": 2,
+      "work": 2
      },
-     "n": 1,
+     "n": 2,
      "name": "Wong Shen Yuong"
     }
    }
@@ -65,7 +65,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T09:13:05Z",
+ "generated": "2026-11-05T09:27:06Z",
  "main": [
   "course",
   "instructor",
