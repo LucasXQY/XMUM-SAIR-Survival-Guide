@@ -1,0 +1,164 @@
+# 课程评价表单。字段标题是 reviews/reviews.py 的解析键（FIELDS / DIMS / CONFIRM / SKIP），改标题要同时改脚本。
+# The course-review form. Field labels are the parse keys of reviews/reviews.py; change both or neither.
+name: 课程评价 | Course review
+description: 给一门课和老师打分（只打分，不写字）。匿名登记，这个 Issue 会被机器人自动删除 | Rate a course and its lecturer (scores only). Recorded anonymously; the bot deletes this issue afterwards
+title: "[评价 | Review] "
+labels: [review]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        每人对同一门课、同一位老师只算一票，再提交一次就是改分。只有分数，不收文字；想描述老师请去网站的老师页留言。
+
+        **匿名说明**：机器人读到分数后会立刻删除这个 Issue，原始投票只存在维护者的私有仓库里（记录的是你账号的加盐哈希，不是用户名），网站上只显示平均分和人数，少于 3 人不显示平均分。但在删除前的一两分钟内这个 Issue 是公开的，watch 本仓库的人会收到含表单内容的邮件通知，这一点请知悉。
+
+        One vote per person per course and lecturer; submitting again changes it. Scores only, no text: to describe a lecturer, comment on their page on the site.
+
+        **Anonymity**: the bot deletes this issue as soon as it has read the scores; raw votes live only in the maintainer's private repository (keyed by a salted hash of your account, not your username), and the site shows averages and counts only, with no average below 3 voters. Be aware that for the minute or two before deletion this issue is public and people watching the repository get an email with its contents.
+
+  - type: input
+    id: code
+    attributes:
+      label: "课程代码 | Course code"
+      placeholder: "COM107"
+    validations:
+      required: true
+
+  - type: input
+    id: lecturer
+    attributes:
+      label: "老师 | Lecturer"
+      description: "照课程页上的写法 | Spell it as the course page does"
+      placeholder: "Chua Ming Yam"
+    validations:
+      required: true
+
+  - type: input
+    id: session
+    attributes:
+      label: "你修这门课的学期 | Session you took it"
+      placeholder: "2022-04"
+
+  - type: dropdown
+    id: course
+    attributes:
+      label: "课程质量 | Course quality"
+      description: "1 很差 … 5 很好 | 1 poor … 5 excellent"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: instructor
+    attributes:
+      label: "老师质量 | Instructor quality"
+      description: "1 很差 … 5 很好 | 1 poor … 5 excellent"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: difficulty
+    attributes:
+      label: "难度 | Difficulty"
+      description: "1 很容易 … 5 很难 | 1 very easy … 5 very hard"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: work
+    attributes:
+      label: "作业量 | Work required"
+      description: "1 很少 … 5 很多 | 1 very little … 5 very heavy"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: learned
+    attributes:
+      label: "学到多少 | Amount learned"
+      description: "1 很少 … 5 很多 | 1 little … 5 a lot"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+      default: 5
+
+  - type: dropdown
+    id: communication
+    attributes:
+      label: "沟通 | Communication"
+      description: "讲解清不清楚、问题有没有回应 | Clarity of explanations, whether questions get answered"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+      default: 5
+
+  - type: dropdown
+    id: access
+    attributes:
+      label: "找得到老师 | Instructor access"
+      description: "Office hour、邮件回复 | Office hours, email replies"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+      default: 5
+
+  - type: dropdown
+    id: recommend
+    attributes:
+      label: "是否推荐 | Would recommend"
+      description: "1 不推荐 … 5 强烈推荐 | 1 no … 5 strongly"
+      options:
+        - "5"
+        - "4"
+        - "3"
+        - "2"
+        - "1"
+        - "不评 | Skip"
+      default: 5
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: "确认 | Confirm"
+      options:
+        - label: "我修过这门课，这些分数是我自己的评价 | I took this course; these scores are my own judgement"
+          required: true

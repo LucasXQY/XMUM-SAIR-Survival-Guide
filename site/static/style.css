@@ -140,3 +140,13 @@ ul.links { columns: 2 14em; padding-left: 1.2em; }
 .lect-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
 .lect-grid .card p { margin: 0; color: var(--muted); font-size: .88rem; }
 .lect-grid .card h3 { font-size: 1rem; }
+
+/* course ratings (filled by ratings.js) */
+.ratings table { font-size: .92rem; }
+.ratings th[data-sort] { cursor: pointer; user-select: none; }
+.ratings th[data-sort]:hover { color: var(--accent); }
+.ratings .muted, .rate small { color: var(--muted); }
+.score { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.score .bar { display: inline-block; width: 56px; height: 6px; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
+.score .bar::after { content: ""; position: absolute; inset: 0; width: calc(var(--v, 0) * 100%); background: var(--accent); border-radius: 3px; }
+.ratings .n { color: var(--muted); font-size: .85rem; }

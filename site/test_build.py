@@ -337,6 +337,19 @@ def test_session_zip_download_links():
     assert build.GH + "/releases/download/downloads/COM107_2022-04.zip" in html and "打包下载" in html
 
 
+def test_ratings_hooks_and_reviews_page():
+    _, out = _build()
+    assert build.lecturer_slug("Dr. Chua Ming Yam") == build.lecturer_slug("chua  ming yam") == "chua-ming-yam"
+    course = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
+    assert 'class="ratings" data-code="COM107"' in course and "评价这门课" in course
+    assert build.REVIEW_FORM + "&code=COM107&lecturer=Chua%20Ming%20Yam" in course   # one known lecturer: prefilled
+    lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
+    assert 'class="ratings" data-lecturer="chua-ming-yam"' in lect
+    table = (out / "reviews/index.html").read_text(encoding="utf-8")
+    assert 'class="ratings" data-all' in table and "Click a header to sort" in table
+    assert "ratings.json" in (out / "static/ratings.js").read_text(encoding="utf-8") and f"{build.SITE_URL}reviews/" in (out / "sitemap.xml").read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
