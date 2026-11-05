@@ -1,0 +1,46 @@
+# English and Malay profanity, one per line; matched as whole words, case-insensitive. A hit hides the comment.
+# 英文和马来文脏话，整词匹配、不分大小写。命中即折叠。
+fuck
+fucking
+fucked
+fucker
+fuckers
+motherfucker
+shit
+bullshit
+bitch
+bitches
+asshole
+assholes
+bastard
+cunt
+dick
+dickhead
+prick
+pussy
+slut
+whore
+wanker
+twat
+douche
+douchebag
+retard
+retarded
+moron
+idiot
+idiots
+dumbass
+jackass
+stfu
+kys
+kill yourself
+go die
+go to hell
+piss off
+pukimak
+puki
+kimak
+lancau
+sial
+celaka
+bodoh
