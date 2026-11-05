@@ -248,20 +248,73 @@ LECTURER_TEMPLATE = ("- 课程 / Courses：\n- 授课风格 / Teaching style：\
                      "- 沟通 / Communication：\n- 性格 / Personality：\n- 适合找 TA 做 / Good to approach for：\n- 同学建议 / Tips：")
 
 
+def lecturer_comment_counts(site: Site) -> dict[str, int]:
+    """Lecturer slug → comments in that lecturer's thread. Queried only in CI (GITHUB_ACTIONS) through gh with the job token;
+    anywhere else it is {} so builds and tests stay offline. New comments show up at the next deploy."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return {}
+    owner, name = REPO.split("/")
+    query = ("query($owner: String!, $name: String!, $cat: ID!) { repository(owner: $owner, name: $name) { "
+             "discussions(first: 100, categoryId: $cat, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { title comments { totalCount } } } } }")
+    try:
+        raw = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}", "-f", f"owner={owner}", "-f", f"name={name}",
+                              "-f", f"cat={GISCUS_GENERAL[1]}"], capture_output=True, text=True, encoding="utf-8", check=True).stdout
+        nodes = json.loads(raw)["data"]["repository"]["discussions"]["nodes"]
+    except Exception as e:  # no gh, no token, API hiccup: the page still builds, just without comment counts
+        warn(f"lecturer comment counts unavailable: {type(e).__name__}")
+        return {}
+    counts: dict[str, int] = {}
+    for n in nodes:
+        title = n.get("title") or ""
+        if title.startswith("教师 | Lecturer: "):
+            counts[lecturer_slug(title.split(": ", 1)[1])] = n["comments"]["totalCount"]
+    return counts
+
+
+def rate_cta(site: Site) -> str:
+    return (f'<p class="rate-cta"><a class="btn big" href="{site.prefix}rate/">➕ 添加评价 | Add a review</a> '
+            '<small>两分钟，需要 GitHub 账号 | two minutes, needs a GitHub account</small></p>')
+
+
 def lecturer_index_html(site: Site) -> str:
+    counts = lecturer_comment_counts(site)
     cards = []
     for name, taught in lecturers(site).items():
+        slug = lecturer_slug(name)
         codes = sorted({code for code, _ in taught})
-        sessions = sorted({s for _, s in taught})
-        cards.append(f'<a class="card lect" href="{site.prefix}lecturers/{lecturer_slug(name)}/#profile" '
-                     f'data-name="{esc(name.lower())}" data-codes="{esc(" ".join(codes).lower())}">'
-                     f'<h3>{esc(name)}</h3><p>{esc("、".join(codes))}</p><p>{esc("、".join(sessions))}</p></a>')
-    return ('<form class="lect-find" role="search"><label for="lect-q">找老师 | Find a lecturer</label>'
+        n = counts.get(slug, 0)
+        stats = f"{n} 条描述 | {n} comments" if n else ""
+        cards.append(f'<a class="card lect" href="{site.prefix}lecturers/{slug}/#profile" data-slug="{slug}" '
+                     f'data-name="{esc(name.lower())}" data-codes="{esc(" ".join(codes).lower())}" data-comments="{n}"{"" if n else " hidden"}>'
+                     f'<h3>{esc(name)}</h3><p>{esc("、".join(codes))}</p><p class="lect-stats">{stats}</p></a>')
+    any_reviewed = any(counts.values())
+    return (rate_cta(site)
+            + '<form class="lect-find" role="search"><label for="lect-q">找老师 | Find a lecturer</label>'
             '<input id="lect-q" type="search" autocomplete="off" '
             'placeholder="输入老师名或课程代码，回车直达评论区 | Type a name or course code; Enter opens the page">'
             '<p class="muted" id="lect-none" hidden>还没有这位老师的记录。名单来自课程 README：上传这门课的资料时填上老师，名单就会多出来。'
             '| No record of this lecturer yet. Names come from the course READMEs: name the lecturer when you upload material and they appear here.</p></form>'
-            f'<div class="lect-grid">{"".join(cards)}</div>')
+            '<h3 id="reviewed">有评价的老师 | Lecturers with reviews</h3>'
+            f'<p class="muted" id="lect-empty"{" hidden" if any_reviewed else ""}>暂无评价。做第一个：点上面的「添加评价」。'
+            '| No reviews yet. Be the first: "Add a review" above.</p>'
+            f'<div class="lect-grid" data-ratings-src="{RATINGS_URL}">{"".join(cards)}</div>')
+
+
+def rate_page(site: Site) -> str:
+    content = ("<h1>添加评价 | Add a review</h1>"
+               '<ol class="rate-steps">'
+               "<li><strong>找到课程或老师</strong>：在下面的框里输入课程代码、课名或老师名。"
+               "<br><small>Find the course or lecturer: type a course code, course name or lecturer name below.</small></li>"
+               "<li><strong>选一种方式</strong>：「打分」是匿名的 1–5 分表单，只有分数；「写描述」是老师页面底部的评论区，会显示你的 GitHub 名。"
+               "<br><small>Pick one: Rate is an anonymous 1–5 form, scores only; Describe is the comment thread on the lecturer's page, under your GitHub name.</small></li>"
+               '<li><strong>登录 GitHub 提交</strong>：没有账号的话注册只要一分钟（<a href="https://github.com/signup">github.com/signup</a>）。'
+               "<br><small>Sign in to GitHub and submit; signing up takes a minute.</small></li></ol>"
+               '<form class="lect-find" role="search"><label for="rate-q">课程或老师 | Course or lecturer</label>'
+               '<input id="rate-q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107, Circuits, Chua"></form>'
+               f'<div id="rate-results" data-form="{REVIEW_FORM}" aria-live="polite"><p class="muted">输入后这里会列出匹配的课程和老师。| Matches appear here as you type.</p></div>'
+               f'<p class="muted">要评的课没列出老师？直接<a href="{REVIEW_FORM}">打开打分表单</a>，老师名自己填。'
+               f'| Lecturer missing for your course? <a href="{REVIEW_FORM}">Open the form</a> and type the name yourself.</p>')
+    return page(site, "添加评价 | Add a review", content, "两步给一门课和老师打分或写描述 | rate or describe a course and lecturer in two steps")
 
 
 def lecturer_page(site: Site, name: str, taught: list[tuple[str, str]]) -> str:
@@ -390,7 +443,7 @@ def wanted_page(site: Site) -> str:
 
 
 def reviews_page(site: Site) -> str:
-    content = ("<h1>课程评价 | Course review</h1>"
+    content = ("<h1>课程评价 | Course review</h1>" + rate_cta(site) +
                "<p>四个主维度：课程质量、老师质量、难度、作业量；另有学到多少、沟通、找得到老师、是否推荐。全部 1–5 分，只打分、不写字，"
                "匿名登记，每人对同一门课同一位老师一票，满 3 人才显示平均分。点表头可以排序。</p>"
                "<p>Four main dimensions: course quality, instructor quality, difficulty, work required; plus amount learned, communication, "
@@ -402,7 +455,7 @@ def reviews_page(site: Site) -> str:
 
 def site_pages(site: Site) -> list[str]:
     """Every page's path relative to the site root, for the sitemap."""
-    pages = ["", "qa/", "recent/", "wanted/", "reviews/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
+    pages = ["", "qa/", "recent/", "wanted/", "reviews/", "rate/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
              *(f"{c.path}/" for c in site.courses), *(f"lecturers/{lecturer_slug(n)}/" for n in lecturers(site))]
     return list(dict.fromkeys(pages))
 
@@ -620,7 +673,7 @@ def home_page(site: Site) -> str:
                      f'<p class="stats">{n_mat} / {len(cs)} 门课有资料 · {n_files} 份文件<br>'
                      f'{n_mat} of {len(cs)} courses with material · {n_files} files</p></a>')
     links = [("上传资料 | Upload material", UPLOAD_URL), ("征集榜 | Wanted", f"{site.prefix}wanted/"),
-             ("最近上传 | Recent uploads", f"{site.prefix}recent/"), ("课程评价 | Course review", f"{site.prefix}reviews/"),
+             ("最近上传 | Recent uploads", f"{site.prefix}recent/"), ("课程评价 | Course review", f"{site.prefix}reviews/"), ("添加评价 | Add a review", f"{site.prefix}rate/"),
              ("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
              ("教师档案 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
              ("如何贡献 | How to contribute", f"{site.prefix}contributing/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
@@ -690,6 +743,7 @@ def build(root: Path, out: Path, prefix: str) -> Site:
     write("qa/index.html", qa_page(site))
     write("recent/index.html", recent_page(site))
     write("reviews/index.html", reviews_page(site))
+    write("rate/index.html", rate_page(site))
     write("wanted/index.html", wanted_page(site))
     for name, taught in lecturers(site).items():
         write(f"lecturers/{lecturer_slug(name)}/index.html", lecturer_page(site, name, taught))

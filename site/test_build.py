@@ -364,6 +364,33 @@ def test_lecturer_finder_is_interactive():
     assert "lect-q" in js and "#profile" in js
 
 
+def test_lecturers_page_lists_reviewed_only_and_rate_page():
+    """Only lecturers with reviews show by default (comment counts from the build, rating counts from ratings.js);
+    the finder still searches everyone; /rate/ is the dead-simple way in."""
+    site, out = _build()
+    assert build.lecturer_comment_counts(site) == {}                      # outside CI: no network, no counts
+    idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
+    card = re.search(r'<a class="card lect"[^>]*>', idx).group(0)
+    assert 'data-comments="0"' in card and " hidden" in card              # nothing reviewed yet → card starts hidden
+    assert 'id="lect-empty"' in idx and "暂无评价" in idx and "No reviews yet" in idx
+    assert f'href="{P}rate/"' in idx and "添加评价" in idx
+    rate = (out / "rate/index.html").read_text(encoding="utf-8")
+    assert 'id="rate-q"' in rate and "添加评价 | Add a review" in rate and build.REVIEW_FORM in rate
+    assert f"{build.SITE_URL}rate/" in (out / "sitemap.xml").read_text(encoding="utf-8")
+    js = (out / "static/site.js").read_text(encoding="utf-8")
+    assert "rate-q" in js and "ratings-loaded" in js and "ratings-loaded" in (out / "static/ratings.js").read_text(encoding="utf-8")
+    css = (out / "static/style.css").read_text(encoding="utf-8")
+    assert ".lect-find label" in css and "margin" in css.split(".lect-find label")[1][:80]
+
+
+def test_goatcounter_snippet_on_every_page():
+    _, out = _build()
+    for p in ["index.html", "EEE/COM107_Circuits_and_Devices/index.html", "404.html"]:
+        html = (out / p).read_text(encoding="utf-8")
+        assert 'data-goatcounter="https://xmum-sair.goatcounter.com/count"' in html and "gc.zgo.at/count.js" in html, p
+    assert "GoatCounter" in (out / "index.html").read_text(encoding="utf-8")   # the footer says so
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

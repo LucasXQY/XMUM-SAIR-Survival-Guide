@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  discussions: read   # lecturer pages show how many comments each thread has
   pages: write
   id-token: write
 
@@ -29,6 +30,8 @@ jobs:
           python-version: "3.12"
       - run: pip install markdown
       - run: python site/build.py
+        env:
+          GH_TOKEN: ${{ github.token }}
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

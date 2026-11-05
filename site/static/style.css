@@ -151,8 +151,18 @@ ul.links { columns: 2 14em; padding-left: 1.2em; }
 .score .bar::after { content: ""; position: absolute; inset: 0; width: calc(var(--v, 0) * 100%); background: var(--accent); border-radius: 3px; }
 .ratings .n { color: var(--muted); font-size: .85rem; }
 
-/* lecturer finder */
-.lect-find { margin: 12px 0 16px; }
-.lect-find label { display: block; font-weight: 600; margin-bottom: 4px; }
-.lect-find input { width: 100%; max-width: 34em; }
+/* lecturer finder and the add-a-review page */
+.lect-find { margin: 22px 0 26px; }
+.lect-find label { display: block; font-weight: 600; margin: 0 0 8px; }
+.lect-find input { width: 100%; max-width: 34em; padding: 9px 12px; }
 .card.lect[hidden] { display: none; }
+.lect-stats { color: var(--accent) !important; font-size: .85rem; min-height: 1.2em; }
+.rate-cta { margin: 14px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.btn.big { font-size: 1rem; padding: 8px 16px; background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.big:hover { opacity: .9; }
+.rate-steps li { margin: 10px 0; }
+.rate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.rate-course { font-weight: 600; }
+.rate-lect { color: var(--muted); }
+.rate-row .btn:first-of-type { margin-left: auto; }
+@media (max-width: 600px) { .rate-row .btn:first-of-type { margin-left: 0; } }
