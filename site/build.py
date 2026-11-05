@@ -350,16 +350,25 @@ def wanted_page(site: Site) -> str:
              f'<p>下面这些课还没有任何资料。修过的同学如果手上有空白试卷、大纲、作业题或笔记，<a href="{UPLOAD_URL}">用上传表单</a>发给我们。'
              f'<br>These courses have no material yet. If you took one and still have blank papers, a syllabus, assignment briefs or notes, '
              f'<a href="{UPLOAD_URL}">use the upload form</a>.</p>']
+    def item(c: Course, extra: str = "") -> str:
+        return f'<li><a href="{site.prefix}{c.path}/">{esc(c.code)} {esc(c.name)}</a>{extra}</li>'
+
+    def section(title: str, items: list[str]) -> str:
+        return f"<h3>{title}（{len(items)}）</h3>" + (f"<ul>{''.join(items)}</ul>" if items else "<p>无 | none</p>")
+
     for prog, pname in PROGS.items():
-        empty = [c for c in site.courses if c.prog == prog and not c.sessions]
-        parts.append(f"<h2>{prog} · {esc(pname)}（{len(empty)}）</h2>")
-        if empty:
-            parts.append("<ul>" + "".join(f'<li><a href="{site.prefix}{c.path}/">{esc(c.code)} {esc(c.name)}</a>'
-                                           + (f' <small>修课学期 | taken in {esc("、".join(c.taken_in))}</small>' if c.taken_in else "")
-                                           + "</li>" for c in empty) + "</ul>")
-        else:
-            parts.append("<p>这个专业的课程都已经有资料了，或者还没建课程文件夹 | Every listed course has material, or no course folders exist yet.</p>")
-    parts.append("<p>⬜ 征集中 / wanted 也会标在各专业页的课程索引里。The programme pages mark these courses as ⬜ 征集中 / wanted too.</p>")
+        cs = [c for c in site.courses if c.prog == prog]
+        if not cs:
+            continue
+        empty = [item(c, f' <small>修课学期 | taken in {esc("、".join(c.taken_in))}</small>' if c.taken_in else "")
+                 for c in cs if not c.sessions]
+        no_papers = [item(c) for c in cs if c.sessions and not any("Past-Papers" in types for types in c.sessions.values())]
+        gaps = [item(c, f" <small>· {esc(s)}</small>") for c in cs for s in c.taken_in if s not in c.sessions]
+        parts.append(f"<h2>{prog} · {esc(pname)}</h2>"
+                     + section("还没有任何资料 | No material at all", empty)
+                     + section("缺空白试卷 | No past papers yet", no_papers)
+                     + section("有人修过、但那个学期还没资料 | Sessions someone took that are not covered", gaps))
+    parts.append("<p>⬜ 征集中 / wanted 也会标在各专业页的课程索引里。The programme pages mark courses without material as ⬜ 征集中 / wanted too.</p>")
     return page(site, "征集榜 | Wanted", "".join(parts))
 
 
