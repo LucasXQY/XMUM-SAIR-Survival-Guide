@@ -121,6 +121,44 @@ def test_no_files_message_mentions_images():
     assert any("PDF" in p for p in intake.validate(f))
 
 
+def test_clean_label():
+    assert intake.clean_label("COM105 Week 4 Lecture 4 Newton’s Laws of Motion") == "COM105_Week_4_Lecture_4_Newton_s_Laws_of_Motion"
+    assert intake.clean_label(" (期末) Final—Set A ") == "Final_Set_A"
+
+
+def test_target_name_rules():
+    f = intake.parse_form(_body()); taken = set()
+    assert intake.target_name(f, "final.pdf", 1, taken) == "COM107_202204_Final_Question.pdf"
+    f2 = intake.parse_form(_body()); taken = set()
+    assert intake.target_name(f2, "set a.PDF", 2, taken) == "COM107_202204_Final_set_a_Question.pdf"
+    assert intake.target_name(f2, "set a.pdf", 2, taken) == "COM107_202204_Final_set_a_Question_2.pdf"
+    g = intake.parse_form(_body().replace("Past-Papers", "Notes").replace("Final", "_No response_"))
+    assert intake.target_name(g, "COM107_202204_Week 1 notes.pdf", 1, set()) == "COM107_202204_Week_1_notes.pdf"
+
+
+def test_unpack_zip_rules():
+    import zipfile
+    work = pathlib.Path(tempfile.mkdtemp())
+    z = work / "bundle.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("a/b.pdf", b"%PDF"); zf.writestr("notes.PDF", b"%PDF"); zf.writestr("../evil.pdf", b"%PDF")
+        zf.writestr("__MACOSX/._x.pdf", b"x"); zf.writestr("sub/", b""); zf.writestr("pic.jpg", b"\xff\xd8"); zf.writestr(".hidden.pdf", b"%PDF")
+    (work / "final.pdf").write_bytes(b"%PDF")
+    ok, bad = intake.unpack([("final.pdf", work / "final.pdf"), ("bundle.zip", z)], work)
+    assert [n for n, _ in ok] == ["final.pdf", "b.pdf", "notes.PDF"] and all(p.is_file() for _, p in ok)
+    assert {n for n, _ in bad} == {"../evil.pdf", "pic.jpg"} and all(" | " in r for _, r in bad)
+
+
+def test_unpack_limits():
+    work = pathlib.Path(tempfile.mkdtemp()); files = []
+    for i in range(intake.MAX_FILES + 1):
+        p = work / f"f{i}.pdf"; p.write_bytes(b"%PDF"); files.append((p.name, p))
+    try:
+        intake.unpack(files, work); assert False
+    except intake.IntakeLimit as e:
+        assert "60" in str(e)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

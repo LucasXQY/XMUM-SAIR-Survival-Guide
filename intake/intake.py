@@ -7,7 +7,9 @@ Design in intake/DESIGN.md; tests: python intake/test_intake.py.
 from __future__ import annotations
 
 import re
+import zipfile
 from dataclasses import dataclass, field
+from pathlib import Path
 
 PROGS = ("EEE", "AIT", "ROBO")
 SUBS = ("Past-Papers", "Syllabus", "Assignments", "Labs", "Tutorials",
@@ -139,3 +141,118 @@ def validate(f: Form) -> list[str]:
         if not ok:
             p.append(f"未勾选 | Unticked: {sentence}")
     return p
+
+
+# ---------------------------------------------------------------- files: names, unpacking, limits
+
+ALLOWED = {"pdf", "docx", "pptx", "xlsx", "doc", "ppt", "xls", "txt", "md", "csv"}
+MAX_FILES = 60
+MAX_BYTES = 300 * 2**20
+
+
+class IntakeLimit(Exception):
+    """Too many files or too many bytes after unpacking; the whole submission is refused."""
+
+
+def clean_label(stem: str) -> str:
+    """Keep [A-Za-z0-9._-]; everything else becomes `_`; runs collapsed; `_` and `.` trimmed at both ends."""
+    return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9._-]", "_", stem)).strip("_.")
+
+
+def _split_ext(name: str) -> tuple[str, str]:
+    stem, dot, ext = name.rpartition(".")
+    return (stem, ext.lower()) if dot and stem else (name, "")
+
+
+def target_name(f: Form, original: str, n_files: int, taken: set[str]) -> str:
+    """<CODE>_<YYYYMM>_<Label>.<ext> per CONTRIBUTING; Past-Papers with an assessment get `_Question`."""
+    stem, ext = _split_ext(original)
+    prefix = f"{f.code}_{f.session.replace('-', '')}_"
+    label = clean_label(stem)
+    if label.startswith(prefix):
+        label = label[len(prefix):]
+    if f.type == "Past-Papers" and f.assessment:
+        assessment = clean_label(f.assessment.replace(" ", ""))  # "Test 1" -> "Test1"
+        label = f"{assessment}_Question" if n_files == 1 else f"{assessment}_{label}_Question"
+    label = label or "file"
+    base = prefix + label
+    name, n = f"{base}.{ext}", 1
+    while name in taken:
+        n += 1
+        name = f"{base}_{n}.{ext}"
+    taken.add(name)
+    return name
+
+
+def _reject_reason(name: str, ext: str) -> str | None:
+    parts = re.split(r"[\/]", name)
+    if ".." in parts or ".." in parts[-1]:
+        return "文件名含 ..，不收 | name contains .., refused"
+    if ext == "zip":
+        return "zip 里的 zip 不解包，请把文件直接放进一个 zip | nested zip not unpacked, put the files in one zip"
+    if ext not in ALLOWED:
+        return (f"不收 .{ext or '?'} 文件，只收 {' '.join(sorted(ALLOWED))}；照片请合成一个 PDF "
+                f"| .{ext or '?'} files are not accepted, only {' '.join(sorted(ALLOWED))}; combine photos into one PDF")
+    return None
+
+
+def _skip(name: str) -> bool:
+    """Entries nobody meant to upload: directories, macOS resource forks, dotfiles."""
+    parts = re.split(r"[\/]", name)
+    return not parts[-1] or "__MACOSX" in parts or parts[-1].startswith(".")
+
+
+def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[str, Path]], list[tuple[str, str]]]:
+    """Expand zips, apply the whitelist and the limits. Returns (accepted (name, path), rejected (name, reason))."""
+    ok: list[tuple[str, Path]] = []
+    bad: list[tuple[str, str]] = []
+    total = 0
+
+    def accept(name: str, path: Path) -> None:
+        nonlocal total
+        total += path.stat().st_size
+        ok.append((name, path))
+        if len(ok) > MAX_FILES:
+            raise IntakeLimit(f"文件超过 {MAX_FILES} 份，请分几次提交 | more than {MAX_FILES} files, please split the submission")
+        if total > MAX_BYTES:
+            raise IntakeLimit(f"解包后超过 {MAX_BYTES // 2**20} MB，请分几次提交 | more than {MAX_BYTES // 2**20} MB after unpacking, please split the submission")
+
+    for i, (name, path) in enumerate(downloads):
+        base = re.split(r"[\/]", name)[-1]
+        stem, ext = _split_ext(base)
+        if ext == "zip":
+            out = work / "unzipped" / str(i)
+            out.mkdir(parents=True, exist_ok=True)
+            try:
+                zf = zipfile.ZipFile(path)
+            except zipfile.BadZipFile:
+                bad.append((name, "不是有效的 zip | not a valid zip file"))
+                continue
+            with zf:
+                for info in zf.infolist():
+                    if info.is_dir() or _skip(info.filename):
+                        continue
+                    inner = re.split(r"[\/]", info.filename)[-1]
+                    reason = _reject_reason(info.filename, _split_ext(inner)[1])
+                    if reason:
+                        bad.append((info.filename, reason))
+                        continue
+                    if info.file_size > MAX_BYTES:
+                        raise IntakeLimit(f"zip 里有单个文件超过 {MAX_BYTES // 2**20} MB | a file inside the zip exceeds {MAX_BYTES // 2**20} MB")
+                    dest = out / inner
+                    k = 1
+                    while dest.exists():  # same basename in two folders of the zip
+                        k += 1
+                        dest = out / f"{k}_{inner}"
+                    with zf.open(info) as src, open(dest, "wb") as dst:
+                        dst.write(src.read())
+                    accept(inner, dest)
+            continue
+        if _skip(base):
+            continue
+        reason = _reject_reason(name, ext)
+        if reason:
+            bad.append((name, reason))
+        else:
+            accept(base, path)
+    return ok, bad
