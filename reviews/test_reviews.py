@@ -12,9 +12,17 @@ com107
 
 Dr. Chua Ming Yam
 
-### 你修这门课的学期 | Session you took it
+### 年份 | Year
 
-2022-04
+2022
+
+### 学期 | Term
+
+04
+
+### 其他学期 | Other session (YYYY-MM)
+
+_No response_
 
 ### 课程质量 | Course quality
 
@@ -74,6 +82,19 @@ def test_parse_and_validate():
     assert any("至少" in p for p in rv.validate(none))
 
 
+def test_session_from_year_and_term_dropdowns():
+    assert rv.parse_review(_body()).session == "2022-04"
+    other = rv.parse_review(_body().replace("\n04\n", "\n" + rv.TERM_OTHER + "\n")
+                            .replace("Other session (YYYY-MM)\n\n_No response_", "Other session (YYYY-MM)\n\n2021-11"))
+    assert other.session == "2021-11" and rv.validate(other) == []
+    bad = rv.parse_review(_body().replace("\n04\n", "\n" + rv.TERM_OTHER + "\n")
+                          .replace("Other session (YYYY-MM)\n\n_No response_", "Other session (YYYY-MM)\n\nNov 2021"))
+    assert any("Other session" in p for p in rv.validate(bad))
+    none = rv.parse_review(_body().replace("\n2022\n", "\n_No response_\n").replace("\n04\n", "\n_No response_\n"))
+    assert none.session == "" and rv.validate(none) == []                                   # the session is optional
+    assert rv.TERMS == ("02", "04", "09") and rv.FIELDS["year"] == "年份 | Year" and rv.FIELDS["term"] == "学期 | Term"
+
+
 def test_lecturer_key_merges_spellings():
     assert rv.lecturer_key("Dr. Chua Ming Yam") == rv.lecturer_key("chua  ming yam") == "chua-ming-yam"
     assert rv.lecturer_key("Puan Maryani Ahmad") == "maryani-ahmad" and rv.lecturer_key("Prof. Ng Zi Neng") == "ng-zi-neng"
@@ -123,8 +144,9 @@ def test_issue_form_matches_parser():
     for title in list(rv.FIELDS.values()) + [t for _, t in rv.DIMS]:
         assert f'label: "{title}"\n' in yml, title
     assert f'- label: "{rv.CONFIRM}"\n' in yml and f'- "{rv.SKIP}"\n' in yml and "labels: [review]" in yml
-    for key, _ in rv.DIMS:
+    for key in [k for k, _ in rv.DIMS] + ["year", "term", "session_other"]:
         assert f"id: {key}\n" in yml, key
+    assert '- "' + rv.TERM_OTHER + '"\n' in yml and '- "2022"\n' in yml
 
 
 if __name__ == "__main__":

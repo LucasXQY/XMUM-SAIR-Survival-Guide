@@ -30,7 +30,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 FIELDS = {"code": "课程代码 | Course code", "lecturer": "老师 | Lecturer",
-          "session": "你修这门课的学期 | Session you took it", "confirm": "确认 | Confirm"}
+          "year": "年份 | Year", "term": "学期 | Term", "session_other": "其他学期 | Other session (YYYY-MM)",
+          "confirm": "确认 | Confirm"}
+YEARS = tuple(str(y) for y in range(2019, 2028))
+TERMS = ("02", "04", "09")                   # the three intakes of a year: February, April, September
+TERM_OTHER = "其他 | Other"
 DIMS = [("course", "课程质量 | Course quality"), ("instructor", "老师质量 | Instructor quality"),
         ("difficulty", "难度 | Difficulty"), ("work", "作业量 | Work required"),
         ("learned", "学到多少 | Amount learned"), ("communication", "沟通 | Communication"),
@@ -77,8 +81,14 @@ def parse_review(body: str) -> Review:
         if v and v != SKIP:
             scores[key] = int(v) if v.isdigit() else -1
     confirmed = bool(re.search(r"^\s*- \[[xX]\] " + re.escape(CONFIRM) + r"\s*$", sec.get(FIELDS["confirm"], ""), re.M))
-    return Review(_clean(sec.get(FIELDS["code"], "")).upper(), _clean(sec.get(FIELDS["lecturer"], "")),
-                  _clean(sec.get(FIELDS["session"], "")), scores, confirmed)
+    year, term = _clean(sec.get(FIELDS["year"], "")), _clean(sec.get(FIELDS["term"], ""))
+    if term == TERM_OTHER:
+        session = _clean(sec.get(FIELDS["session_other"], ""))
+    elif year and term:
+        session = f"{year}-{term}"
+    else:
+        session = ""
+    return Review(_clean(sec.get(FIELDS["code"], "")).upper(), _clean(sec.get(FIELDS["lecturer"], "")), session, scores, confirmed)
 
 
 def validate(r: Review) -> list[str]:
@@ -88,7 +98,7 @@ def validate(r: Review) -> list[str]:
     if not r.lecturer:
         p.append(f"{FIELDS['lecturer']}：请填老师名字，照课程页上的写法 | the lecturer's name is required, as spelled on the course page")
     if r.session and not SESSION_RE.match(r.session):
-        p.append(f"{FIELDS['session']}：格式是 YYYY-MM，如 2022-04 | must be YYYY-MM, e.g. 2022-04")
+        p.append(f"{FIELDS['session_other']}：格式是 YYYY-MM，如 2021-11 | must be YYYY-MM, e.g. 2021-11")
     titles = dict(DIMS)
     bad = [titles[k] for k, v in r.scores.items() if not 1 <= v <= 5]
     if bad:
