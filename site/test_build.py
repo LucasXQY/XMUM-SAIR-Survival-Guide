@@ -287,6 +287,8 @@ def test_lecturer_pages():
     assert build.lecturer_slug("Lohgheswary A/P Nagarethinam") == "lohgheswary-a-p-nagarethinam"
     lects = build.lecturers(site)
     assert "Nurul Hafeeza Jumaah" in lects and "Maryani Ahmad" in lects          # a comma-separated cell is two people
+    assert "Lohgheswary A/P Nagarethinam" in lects and "P Nagarethinam" not in lects   # a slash inside a Malaysian name is not a separator
+    assert build.split_lecturers("A, B & C") == ["A", "B", "C"] and build.split_lecturers("Lohgheswary A/P Nagarethinam") == ["Lohgheswary A/P Nagarethinam"]
     assert ("COM111", "2025-09") in lects["Ng Zi Neng"]
     idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
     assert "只描述，不打分" in idx and f'href="{P}lecturers/ng-zi-neng/#profile"' in idx   # cards land on the comment area

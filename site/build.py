@@ -223,8 +223,8 @@ def ratings_html(attrs: str, rate_url: str | None = None) -> str:
 
 
 def split_lecturers(cell: str) -> list[str]:
-    """A README cell may name several people: 'A, B' / 'A、B' / 'A & B'."""
-    return [n.strip() for n in re.split(r"[,;、&/]| and ", cell) if n.strip() and not n.strip().startswith("[")]
+    """A README cell may name several people: 'A, B', 'A、B', 'A & B'. A slash stays: 'Lohgheswary A/P Nagarethinam' is one person."""
+    return [n.strip() for n in re.split(r"[,;、&]| and ", cell) if n.strip() and not n.strip().startswith("[")]
 
 
 def lecturers(site: Site) -> dict[str, list[tuple[str, str]]]:
