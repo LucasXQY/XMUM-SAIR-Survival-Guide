@@ -247,6 +247,37 @@
      "name": "Abdul Khalip Rasheed"
     }
    }
+  },
+  "G0241": {
+   "all": {
+    "counts": {
+     "access": 1,
+     "communication": 1,
+     "course": 1,
+     "difficulty": 1,
+     "instructor": 1,
+     "learned": 1,
+     "recommend": 1,
+     "work": 1
+    },
+    "n": 1
+   },
+   "lecturers": {
+    "tee-chee-lip": {
+     "counts": {
+      "access": 1,
+      "communication": 1,
+      "course": 1,
+      "difficulty": 1,
+      "instructor": 1,
+      "learned": 1,
+      "recommend": 1,
+      "work": 1
+     },
+     "n": 1,
+     "name": "Tee Chee Lip"
+    }
+   }
   }
  },
  "dims": [
@@ -259,7 +290,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T10:29:13Z",
+ "generated": "2026-11-05T10:31:07Z",
  "main": [
   "course",
   "instructor",
