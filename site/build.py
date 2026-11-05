@@ -253,14 +253,14 @@ def lecturer_index_html(site: Site) -> str:
     for name, taught in lecturers(site).items():
         codes = sorted({code for code, _ in taught})
         sessions = sorted({s for _, s in taught})
-        cards.append(f'<a class="card" href="{site.prefix}lecturers/{lecturer_slug(name)}/"><h3>{esc(name)}</h3>'
-                     f'<p>{esc("、".join(codes))}</p><p>{esc("、".join(sessions))}</p></a>')
-    return ('<h2 id="profiles">档案 | Profiles</h2>'
-            "<p>名单来自各课程文件夹 README 的学期表；点进去看教过的课，并在页面底部留下你的描述（登录 GitHub 即可，立刻可见；"
-            "机器人会按关键词自动折叠辱骂和敏感内容，维护者可以删除）。</p>"
-            "<p>Names come from the session tables in the course READMEs. Open one to see the courses taught and leave your "
-            "description at the bottom (sign in with GitHub; visible at once; a bot folds abusive or sensitive comments by keyword, "
-            "maintainers may delete).</p>"
+        cards.append(f'<a class="card lect" href="{site.prefix}lecturers/{lecturer_slug(name)}/#profile" '
+                     f'data-name="{esc(name.lower())}" data-codes="{esc(" ".join(codes).lower())}">'
+                     f'<h3>{esc(name)}</h3><p>{esc("、".join(codes))}</p><p>{esc("、".join(sessions))}</p></a>')
+    return ('<form class="lect-find" role="search"><label for="lect-q">找老师 | Find a lecturer</label>'
+            '<input id="lect-q" type="search" autocomplete="off" '
+            'placeholder="输入老师名或课程代码，回车直达评论区 | Type a name or course code; Enter opens the page">'
+            '<p class="muted" id="lect-none" hidden>还没有这位老师的记录。名单来自课程 README：上传这门课的资料时填上老师，名单就会多出来。'
+            '| No record of this lecturer yet. Names come from the course READMEs: name the lecturer when you upload material and they appear here.</p></form>'
             f'<div class="lect-grid">{"".join(cards)}</div>')
 
 

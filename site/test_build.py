@@ -289,7 +289,7 @@ def test_lecturer_pages():
     assert "Nurul Hafeeza Jumaah" in lects and "Maryani Ahmad" in lects          # a comma-separated cell is two people
     assert ("COM111", "2025-09") in lects["Ng Zi Neng"]
     idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
-    assert "只描述，不打分" in idx and f'href="{P}lecturers/ng-zi-neng/"' in idx
+    assert "只描述，不打分" in idx and f'href="{P}lecturers/ng-zi-neng/#profile"' in idx   # cards land on the comment area
     pg = (out / "lecturers/ng-zi-neng/index.html").read_text(encoding="utf-8")
     assert "<h1>Ng Zi Neng</h1>" in pg and f'href="{P}EEE/COM111_Electrical_Engineering/#2025-09"' in pg
     assert 'data-term="教师 | Lecturer: Ng Zi Neng"' in pg and 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in pg
@@ -348,6 +348,18 @@ def test_ratings_hooks_and_reviews_page():
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
     assert 'class="ratings" data-all' in table and "Click a header to sort" in table
     assert "ratings.json" in (out / "static/ratings.js").read_text(encoding="utf-8") and f"{build.SITE_URL}reviews/" in (out / "sitemap.xml").read_text(encoding="utf-8")
+
+
+def test_lecturer_finder_is_interactive():
+    """The lecturers page is a live finder, not a hand-edited template: type a name or code, cards filter, Enter opens the page."""
+    _, out = _build()
+    idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
+    assert 'id="lect-q"' in idx and idx.count("<h2") >= 1 and idx.count("档案 | Profiles") == 1
+    assert "### 模板" not in idx and "更多老师" not in idx
+    card = re.search(r'<a class="card lect"[^>]*>', idx).group(0)
+    assert 'data-name="' in card and 'data-codes="' in card and card.count("#profile") == 1
+    js = (out / "static/site.js").read_text(encoding="utf-8")
+    assert "lect-q" in js and "#profile" in js
 
 
 if __name__ == "__main__":
