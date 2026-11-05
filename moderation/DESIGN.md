@@ -1,6 +1,6 @@
 # 评论审核机器人设计 | Comment moderation bot design
 
-2026-11-05 · 适用于本仓库的 Discussions（网站问答与老师页评论）和 Issues（上传表单等）。
+2026-11-05 · 适用于本仓库的 Discussions（网站问答）和 Issues（上传表单等）。老师页没有评论串。
 
 For this repository's Discussions (the website's Q&A and lecturer threads) and Issues (the upload form and friends).
 

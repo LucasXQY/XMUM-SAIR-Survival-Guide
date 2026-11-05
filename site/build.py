@@ -244,31 +244,8 @@ def lecturer_links_html(site: Site, cell: str) -> str:
     return "、".join(f'<a href="{site.prefix}lecturers/{lecturer_slug(n)}/">{esc(n)}</a>' for n in names)
 
 
-LECTURER_TEMPLATE = ("- 课程 / Courses：\n- 授课风格 / Teaching style：\n- 考核风格 / Assessment style：\n"
-                     "- 沟通 / Communication：\n- 性格 / Personality：\n- 适合找 TA 做 / Good to approach for：\n- 同学建议 / Tips：")
 
 
-def lecturer_comment_counts(site: Site) -> dict[str, int]:
-    """Lecturer slug → comments in that lecturer's thread. Queried only in CI (GITHUB_ACTIONS) through gh with the job token;
-    anywhere else it is {} so builds and tests stay offline. New comments show up at the next deploy."""
-    if os.environ.get("GITHUB_ACTIONS") != "true":
-        return {}
-    owner, name = REPO.split("/")
-    query = ("query($owner: String!, $name: String!, $cat: ID!) { repository(owner: $owner, name: $name) { "
-             "discussions(first: 100, categoryId: $cat, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { title comments { totalCount } } } } }")
-    try:
-        raw = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}", "-f", f"owner={owner}", "-f", f"name={name}",
-                              "-f", f"cat={GISCUS_GENERAL[1]}"], capture_output=True, text=True, encoding="utf-8", check=True).stdout
-        nodes = json.loads(raw)["data"]["repository"]["discussions"]["nodes"]
-    except Exception as e:  # no gh, no token, API hiccup: the page still builds, just without comment counts
-        warn(f"lecturer comment counts unavailable: {type(e).__name__}")
-        return {}
-    counts: dict[str, int] = {}
-    for n in nodes:
-        title = n.get("title") or ""
-        if title.startswith("教师 | Lecturer: "):
-            counts[lecturer_slug(title.split(": ", 1)[1])] = n["comments"]["totalCount"]
-    return counts
 
 
 def rate_cta(site: Site) -> str:
@@ -276,68 +253,47 @@ def rate_cta(site: Site) -> str:
             '<small>两分钟，需要 GitHub 账号 | two minutes, needs a GitHub account</small></p>')
 
 
+
+
+
+
+
+
 def lecturer_index_html(site: Site) -> str:
-    counts = lecturer_comment_counts(site)
+    """Every lecturer named in a course README, as cards; the finder filters them and Enter opens the first match."""
     cards = []
     for name, taught in lecturers(site).items():
-        slug = lecturer_slug(name)
         codes = sorted({code for code, _ in taught})
-        n = counts.get(slug, 0)
-        stats = f"{n} 条描述 | {n} comments" if n else ""
-        cards.append(f'<a class="card lect" href="{site.prefix}lecturers/{slug}/#profile" data-slug="{slug}" '
-                     f'data-name="{esc(name.lower())}" data-codes="{esc(" ".join(codes).lower())}" data-comments="{n}"{"" if n else " hidden"}>'
-                     f'<h3>{esc(name)}</h3><p>{esc("、".join(codes))}</p><p class="lect-stats">{stats}</p></a>')
-    any_reviewed = any(counts.values())
-    return (rate_cta(site)
-            + '<form class="lect-find" role="search"><label for="lect-q">找老师 | Find a lecturer</label>'
+        sessions = sorted({s for _, s in taught})
+        cards.append(f'<a class="card lect" href="{site.prefix}lecturers/{lecturer_slug(name)}/" '
+                     f'data-name="{esc(name.lower())}" data-codes="{esc(" ".join(codes).lower())}">'
+                     f'<h3>{esc(name)}</h3><p>{esc("、".join(codes))}</p><p>{esc("、".join(sessions))}</p></a>')
+    return ('<form class="lect-find" role="search"><label for="lect-q">找老师 | Find a lecturer</label>'
             '<input id="lect-q" type="search" autocomplete="off" '
-            'placeholder="输入老师名或课程代码，回车直达评论区 | Type a name or course code; Enter opens the page">'
+            'placeholder="输入老师名或课程代码，回车打开 | Type a name or course code; Enter opens the page">'
             '<p class="muted" id="lect-none" hidden>还没有这位老师的记录。名单来自课程 README：上传这门课的资料时填上老师，名单就会多出来。'
             '| No record of this lecturer yet. Names come from the course READMEs: name the lecturer when you upload material and they appear here.</p></form>'
-            '<h3 id="reviewed">有评价的老师 | Lecturers with reviews</h3>'
-            f'<p class="muted" id="lect-empty"{" hidden" if any_reviewed else ""}>暂无评价。做第一个：点上面的「添加评价」。'
-            '| No reviews yet. Be the first: "Add a review" above.</p>'
-            f'<div class="lect-grid" data-ratings-src="{RATINGS_URL}">{"".join(cards)}</div>')
-
-
-def rate_page(site: Site) -> str:
-    content = ("<h1>添加评价 | Add a review</h1>"
-               '<ol class="rate-steps">'
-               "<li><strong>找到课程或老师</strong>：在下面的框里输入课程代码、课名或老师名。"
-               "<br><small>Find the course or lecturer: type a course code, course name or lecturer name below.</small></li>"
-               "<li><strong>选一种方式</strong>：「打分」是匿名的 1–5 分表单，只有分数；「写描述」是老师页面底部的评论区，会显示你的 GitHub 名。"
-               "<br><small>Pick one: Rate is an anonymous 1–5 form, scores only; Describe is the comment thread on the lecturer's page, under your GitHub name.</small></li>"
-               '<li><strong>登录 GitHub 提交</strong>：没有账号的话注册只要一分钟（<a href="https://github.com/signup">github.com/signup</a>）。'
-               "<br><small>Sign in to GitHub and submit; signing up takes a minute.</small></li></ol>"
-               '<form class="lect-find" role="search"><label for="rate-q">课程或老师 | Course or lecturer</label>'
-               '<input id="rate-q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107, Circuits, Chua"></form>'
-               f'<div id="rate-results" data-form="{REVIEW_FORM}" aria-live="polite"><p class="muted">输入后这里会列出匹配的课程和老师。| Matches appear here as you type.</p></div>'
-               f'<p class="muted">要评的课没列出老师？直接<a href="{REVIEW_FORM}">打开打分表单</a>，老师名自己填。'
-               f'| Lecturer missing for your course? <a href="{REVIEW_FORM}">Open the form</a> and type the name yourself.</p>')
-    return page(site, "添加评价 | Add a review", content, "两步给一门课和老师打分或写描述 | rate or describe a course and lecturer in two steps")
+            f'<div class="lect-grid">{"".join(cards)}</div>')
 
 
 def lecturer_page(site: Site, name: str, taught: list[tuple[str, str]]) -> str:
+    """Courses taught, with links to the session and to the course's review section. Nothing is written about the person."""
     rows = []
     for code, sess in sorted(taught, key=lambda t: (t[0], t[1])):
         c = next((c for c in site.courses if c.code == code), None)
         if c is None:
             continue
         rows.append(f'<tr><td>{esc(code)}</td><td><a href="{site.prefix}{c.path}/">{esc(c.name)}</a></td>'
-                    f'<td><a href="{site.prefix}{c.path}/#{sess}">{esc(sess)}</a></td></tr>')
-    table = ('<div class="table-wrap"><table><thead><tr><th>代码 / Code</th><th>课程 / Course</th><th>学期 / Session</th></tr></thead>'
-             f'<tbody>{"".join(rows)}</tbody></table></div>')
-    rules = (f'<p class="notice">写具体、可观察的事实，只描述不打分；不写外貌、私生活、政治或宗教立场，不写私人联系方式。'
-             f'规则见<a href="{site.prefix}lecturers/">教师档案页</a>。老师本人如需修改或移除，邮件 xieqiyi@ieee.org。<br>'
-             f'Concrete, observable facts; descriptions, no scores; nothing about appearance, private life, politics or religion, '
-             f'no private contacts. Rules on the <a href="{site.prefix}lecturers/">lecturers page</a>. '
-             f'Lecturers who want anything changed: xieqiyi@ieee.org.</p>'
-             f"<details><summary>可以照这个模板写 | A template you can follow</summary><pre>{esc(LECTURER_TEMPLATE)}</pre></details>")
-    content = (f"<h1>{esc(name)}</h1><h2>教过的课 | Courses taught</h2>{table}"
-               + '<h2 id="ratings">评分 | Ratings</h2>' + ratings_html(f'data-lecturer="{lecturer_slug(name)}"', f"{REVIEW_FORM}&lecturer={quote(name)}")
-               + f'<h2 id="profile">同学描述 | What students say</h2>{rules}'
-               + giscus_html(*GISCUS_GENERAL, f"教师 | Lecturer: {name}"))
-    return page(site, name, content, f"{name}：教过的课程与同学描述 | courses taught and student descriptions")
+                    f'<td><a href="{site.prefix}{c.path}/#{sess}">{esc(sess)}</a></td>'
+                    f'<td><a href="{site.prefix}{c.path}/#review">课程评价 | Course review</a></td></tr>')
+    table = ('<div class="table-wrap"><table><thead><tr><th>代码 / Code</th><th>课程 / Course</th><th>学期 / Session</th>'
+             f'<th>评分 / Ratings</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
+    content = (f"<h1>{esc(name)}</h1>"
+               '<p class="muted">名单来自各课程文件夹 README 的学期表。评分只在课程页的「课程评价」里，按课程和老师列出；本站不收关于老师的文字评价。'
+               "<br>From the session tables in the course READMEs. Scores live only in each course's review section, listed per course and lecturer; "
+               "this site takes no written reviews of lecturers.</p>"
+               f"<h2>教过的课 | Courses taught</h2>{table}")
+    return page(site, name, content, f"{name}：教过的课程 | courses taught")
 
 
 def added_dates(root: Path) -> dict[str, str]:
@@ -451,6 +407,24 @@ def reviews_page(site: Site) -> str:
                "course and lecturer, averages shown from 3 voters. Click a header to sort.</p>"
                + ratings_html("data-all", REVIEW_FORM))
     return page(site, "课程评价 | Course review", content, "匿名课程评分：课程质量、老师、难度、作业量 | anonymous course ratings")
+
+
+def rate_page(site: Site) -> str:
+    content = ("<h1>添加评价 | Add a review</h1>"
+               '<ol class="rate-steps">'
+               "<li><strong>找到课程</strong>：在下面的框里输入课程代码、课名或老师名，点那一行的「打分」。"
+               "<br><small>Find the course: type a course code, course name or lecturer name below and press Rate on that row.</small></li>"
+               "<li><strong>填表单</strong>：四个主维度（课程质量、老师质量、难度、作业量）必填，四个细分可跳过，全部 1–5 分，不写字。"
+               "<br><small>Fill in the form: four required dimensions (course quality, instructor quality, difficulty, work required), "
+               "four optional ones, all 1–5, no text.</small></li>"
+               '<li><strong>登录 GitHub 提交</strong>：匿名登记，网站只显示平均分和人数；没有账号的话注册只要一分钟（<a href="https://github.com/signup">github.com/signup</a>）。'
+               "<br><small>Sign in to GitHub and submit: recorded anonymously, the site shows averages and counts only; signing up takes a minute.</small></li></ol>"
+               '<form class="lect-find" role="search"><label for="rate-q">课程或老师 | Course or lecturer</label>'
+               '<input id="rate-q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107, Circuits, Chua"></form>'
+               f'<div id="rate-results" data-form="{REVIEW_FORM}" aria-live="polite"><p class="muted">输入后这里会列出匹配的课程和老师。| Matches appear here as you type.</p></div>'
+               f'<p class="muted">要评的课没列出老师？直接<a href="{REVIEW_FORM}">打开打分表单</a>，老师名自己填。'
+               f'| Lecturer missing for your course? <a href="{REVIEW_FORM}">Open the form</a> and type the name yourself.</p>')
+    return page(site, "添加评价 | Add a review", content, "三步给一门课和老师匿名打分 | rate a course and lecturer anonymously in three steps")
 
 
 def site_pages(site: Site) -> list[str]:

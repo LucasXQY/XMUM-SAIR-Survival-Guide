@@ -282,21 +282,6 @@ def test_theme_toggle_and_data_theme_css():
     assert "giscus" in js and "setConfig" in js and "localStorage.setItem('theme'" in js
 
 
-def test_lecturer_pages():
-    site, out = _build()
-    assert build.lecturer_slug("Lohgheswary A/P Nagarethinam") == "lohgheswary-a-p-nagarethinam"
-    lects = build.lecturers(site)
-    assert "Nurul Hafeeza Jumaah" in lects and "Maryani Ahmad" in lects          # a comma-separated cell is two people
-    assert "Lohgheswary A/P Nagarethinam" in lects and "P Nagarethinam" not in lects   # a slash inside a Malaysian name is not a separator
-    assert build.split_lecturers("A, B & C") == ["A", "B", "C"] and build.split_lecturers("Lohgheswary A/P Nagarethinam") == ["Lohgheswary A/P Nagarethinam"]
-    assert ("COM111", "2025-09") in lects["Ng Zi Neng"]
-    idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
-    assert "只描述，不打分" in idx and f'href="{P}lecturers/ng-zi-neng/#profile"' in idx   # cards land on the comment area
-    pg = (out / "lecturers/ng-zi-neng/index.html").read_text(encoding="utf-8")
-    assert "<h1>Ng Zi Neng</h1>" in pg and f'href="{P}EEE/COM111_Electrical_Engineering/#2025-09"' in pg
-    assert 'data-term="教师 | Lecturer: Ng Zi Neng"' in pg and 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in pg
-    course = (out / "EEE/COM111_Electrical_Engineering/index.html").read_text(encoding="utf-8")
-    assert f'href="{P}lecturers/ng-zi-neng/"' in course                       # the session heading links to the lecturer
 
 
 def test_recent_uploads_and_feed():
@@ -346,41 +331,40 @@ def test_ratings_hooks_and_reviews_page():
     assert 'class="ratings" data-code="COM107"' in course and "评价这门课" in course
     assert build.REVIEW_FORM + "&code=COM107&lecturer=Chua%20Ming%20Yam" in course   # one known lecturer: prefilled
     lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
-    assert 'class="ratings" data-lecturer="chua-ming-yam"' in lect
+    assert 'class="ratings"' not in lect and "giscus" not in lect              # lecturer pages carry no scores and no threads
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
     assert 'class="ratings" data-all' in table and "Click a header to sort" in table
     assert "ratings.json" in (out / "static/ratings.js").read_text(encoding="utf-8") and f"{build.SITE_URL}reviews/" in (out / "sitemap.xml").read_text(encoding="utf-8")
 
 
-def test_lecturer_finder_is_interactive():
-    """The lecturers page is a live finder, not a hand-edited template: type a name or code, cards filter, Enter opens the page."""
-    _, out = _build()
-    idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
-    assert 'id="lect-q"' in idx and idx.count("<h2") >= 1 and idx.count("档案 | Profiles") == 1
-    assert "### 模板" not in idx and "更多老师" not in idx
-    card = re.search(r'<a class="card lect"[^>]*>', idx).group(0)
-    assert 'data-name="' in card and 'data-codes="' in card and card.count("#profile") == 1
-    js = (out / "static/site.js").read_text(encoding="utf-8")
-    assert "lect-q" in js and "#profile" in js
 
 
-def test_lecturers_page_lists_reviewed_only_and_rate_page():
-    """Only lecturers with reviews show by default (comment counts from the build, rating counts from ratings.js);
-    the finder still searches everyone; /rate/ is the dead-simple way in."""
+
+
+def test_lecturer_pages_are_a_directory():
+    """Lecturer pages list courses taught and link to the course review sections. No comment threads, no per-lecturer
+    scores, no written reviews of lecturers anywhere (maintainer's decision, 2026-11-05)."""
     site, out = _build()
-    assert build.lecturer_comment_counts(site) == {}                      # outside CI: no network, no counts
+    assert build.lecturer_slug("Lohgheswary A/P Nagarethinam") == "lohgheswary-a-p-nagarethinam"
+    lects = build.lecturers(site)
+    assert "Nurul Hafeeza Jumaah" in lects and "Maryani Ahmad" in lects and "Lohgheswary A/P Nagarethinam" in lects
+    assert ("COM111", "2025-09") in lects["Ng Zi Neng"]
     idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
-    card = re.search(r'<a class="card lect"[^>]*>', idx).group(0)
-    assert 'data-comments="0"' in card and " hidden" in card              # nothing reviewed yet → card starts hidden
-    assert 'id="lect-empty"' in idx and "暂无评价" in idx and "No reviews yet" in idx
-    assert f'href="{P}rate/"' in idx and "添加评价" in idx
-    rate = (out / "rate/index.html").read_text(encoding="utf-8")
-    assert 'id="rate-q"' in rate and "添加评价 | Add a review" in rate and build.REVIEW_FORM in rate
-    assert f"{build.SITE_URL}rate/" in (out / "sitemap.xml").read_text(encoding="utf-8")
+    assert "不收关于老师的文字评价" in idx and 'id="lect-q"' in idx and f'href="{P}lecturers/ng-zi-neng/"' in idx
+    cards = re.findall(r'<a class="card lect"[^>]*>', idx)
+    assert len(cards) == len(lects) and all(" hidden" not in c for c in cards)   # everyone listed, nothing hidden
+    pg = (out / "lecturers/ng-zi-neng/index.html").read_text(encoding="utf-8")
+    assert "<h1>Ng Zi Neng</h1>" in pg and f'href="{P}EEE/COM111_Electrical_Engineering/#2025-09"' in pg
+    assert f'href="{P}EEE/COM111_Electrical_Engineering/#review"' in pg          # scores live on the course page
+    assert "giscus" not in pg and 'class="ratings"' not in pg and "同学描述" not in pg and "Rate this" not in pg
+    course = (out / "EEE/COM111_Electrical_Engineering/index.html").read_text(encoding="utf-8")
+    assert f'href="{P}lecturers/ng-zi-neng/"' in course                          # click the lecturer → their courses
     js = (out / "static/site.js").read_text(encoding="utf-8")
-    assert "rate-q" in js and "ratings-loaded" in js and "ratings-loaded" in (out / "static/ratings.js").read_text(encoding="utf-8")
-    css = (out / "static/style.css").read_text(encoding="utf-8")
-    assert ".lect-find label" in css and "margin" in css.split(".lect-find label")[1][:80]
+    assert "lect-q" in js and "rate-q" in js and "#profile" not in js and "Describe" not in js and "ratings-loaded" not in js
+    rate = (out / "rate/index.html").read_text(encoding="utf-8")
+    assert 'id="rate-q"' in rate and "写描述" not in rate and build.REVIEW_FORM in rate
+    for word in ("教师 | Lecturer:", "Lecturer Profiles", "教师档案"):
+        assert word not in idx and word not in pg, word
 
 
 def test_goatcounter_snippet_on_every_page():
