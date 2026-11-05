@@ -80,3 +80,19 @@
   var initial = new URLSearchParams(location.search).get('q');
   if (initial) { input.value = initial; run(); }
 })();
+
+/* every page: mark the header block that covers the current URL */
+(function () {
+  'use strict';
+  var base = document.body.dataset.base || '/';
+  var here = location.pathname.replace(/\/index\.html$/, '/');
+  var best = null;
+  document.querySelectorAll('.nav-blocks a[href]').forEach(function (a) {
+    var p = a.getAttribute('href');
+    if (p.indexOf('http') === 0 || p === base) return;
+    if (here === p || here.indexOf(p) === 0) {
+      if (!best || p.length > best.getAttribute('href').length) best = a;
+    }
+  });
+  if (best) best.setAttribute('aria-current', 'page');
+})();

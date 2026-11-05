@@ -245,24 +245,44 @@ GISCUS_NOTICE = ("发言需登录 GitHub，用户名公开。请勿张贴答案�
                  "Sign in with GitHub to post; your username is public. Do not post answers, marking schemes, "
                  "other people's personal data or lecturers' private contact details. Comments live in this repo's "
                  "GitHub Discussions and may be removed by the maintainers.")
-NAV = [("EEE", "EEE/"), ("AIT", "AIT/"), ("ROBO", "ROBO/"), ("问答 | Q&A", "qa/"),
-       ("研究机会 | Research", "research/"), ("教师 | Lecturers", "lecturers/"),
-       ("贡献者 | Contributors", "contributors/"), ("如何贡献 | Contribute", "contributing/"),
-       ("关于 | About", "about/")]
+NAV = [("EEE", "EEE/", "⚡"), ("AIT", "AIT/", "🧠"), ("ROBO", "ROBO/", "🤖"), ("问答 | Q&A", "qa/", "💬"),
+       ("研究机会 | Research", "research/", "🔬"), ("教师 | Lecturers", "lecturers/", "🎓"),
+       ("贡献者 | Contributors", "contributors/", "👥"), ("如何贡献 | Contribute", "contributing/", "🤝"),
+       ("关于 | About", "about/", "ℹ️")]
 UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md)
+GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 '
+               '6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
+               '1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 '
+               '.67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 '
+               '3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>')
 
 
 def template() -> Template:
     return Template((HERE / "templates" / "base.html").read_text(encoding="utf-8"))
 
 
+def nav_block(i: int, href: str, icon: str, main: str, sub: str, cls: str = "", label: str = "") -> str:
+    """One header block: icon on the left, two-line label (Chinese over English) on the right."""
+    aria = f' aria-label="{esc(label)}"' if label else ""
+    return (f'<a class="nb{(" " + cls) if cls else ""}" href="{href}"{aria} style="--i:{i}">'
+            f'<span class="nb-ic" aria-hidden="true">{icon}</span>'
+            f'<span class="nb-t">{esc(main)}<small>{esc(sub)}</small></span></a>')
+
+
 def nav_html(site: Site) -> str:
-    links = "".join(f'<a href="{site.prefix}{p}">{esc(t)}</a>' for t, p in NAV)
-    links += f'<a href="{GH}">GitHub</a><a class="btn upload" href="{UPLOAD_URL}">上传 | Upload</a>'
+    blocks = []
+    for i, (title, path, icon) in enumerate(NAV):
+        if title in PROGS:  # programme code over its Chinese name
+            main, sub = title, PROGS[title].split(" | ")[0]
+        else:
+            main, sub = title.split(" | ")
+        blocks.append(nav_block(i, f"{site.prefix}{path}", icon, main, sub))
+    blocks.append(nav_block(len(NAV), GH, GITHUB_MARK, "GitHub", "仓库 Repository"))
+    blocks.append(nav_block(len(NAV) + 1, UPLOAD_URL, "📤", "上传", "Upload", cls="upload", label="上传 | Upload"))
     form = (f'<form class="mini-search" action="{site.prefix}" method="get" role="search">'
             '<label class="sr-only" for="nav-q">搜索 | Search</label>'
             '<input id="nav-q" name="q" type="search" placeholder="搜索 | Search"></form>')
-    return f"<nav>{links}</nav>{form}"
+    return f'{form}<nav class="nav-blocks" aria-label="主导航 | Main navigation">{"".join(blocks)}</nav>'
 
 
 def page(site: Site, title: str, content: str, description: str = "") -> str:
