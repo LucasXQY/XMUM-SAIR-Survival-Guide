@@ -126,7 +126,7 @@ site/
 |---|---|
 | 另一个有对应页面的 `.md`（如 `CONTRIBUTING.md`、`../EEE/README.md`、`COM110_…/README.md`） | 该页面的站内 URL |
 | 课程目录（如 `COM107_Circuits_and_Devices/`） | 课程页 |
-| 学期目录或类型目录（如 `2022-04/`、`2022-04/Tutorials/`） | 课程页内对应学期的锚点 `#2022-04`；若不在该课程页上，改为 GitHub `/tree/main/<path>` |
+| 学期目录或类型目录（如 `2022-04/`、`2022-04/Tutorials/`） | 该课程页内对应学期的锚点 `…/#2022-04`（不论从哪个页面链来） |
 | 仓库内的文件 | GitHub `/blob/main/<path>` |
 | `http(s)://`、`mailto:`、`#锚点` | 不动 |
 

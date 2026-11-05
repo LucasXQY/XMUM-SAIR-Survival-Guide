@@ -11,11 +11,16 @@ See site/DESIGN.md for the design.
 """
 from __future__ import annotations
 
+import html as html_mod
 import os
+import posixpath
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote
+
+import markdown
 
 REPO = "LucasXQY/XMUM-SAIR-Survival-Guide"
 GH = f"https://github.com/{REPO}"
@@ -142,3 +147,72 @@ def scan(root: Path) -> list[Course]:
 
 def all_files(courses: list[Course]) -> list[File]:
     return [f for c in courses for types in c.sessions.values() for files in types.values() for f in files]
+
+
+# ---------------------------------------------------------------- rendering
+
+# repo markdown → site page (directory with index.html)
+ROOT_PAGES = {
+    "README.md": "about/",
+    "DISCLAIMER.md": "disclaimer/",
+    "CONTRIBUTING.md": "contributing/",
+    "CONTRIBUTORS.md": "contributors/",
+    "Lecturers.md": "lecturers/",
+    "Research-Opportunities.md": "research/",
+}
+
+
+class Site:
+    def __init__(self, root: Path, prefix: str):
+        self.root = Path(root)
+        self.prefix = prefix
+        self.courses = scan(self.root)
+        self.by_path = {c.path: c for c in self.courses}
+
+
+def url_path(path: str) -> str:
+    return quote(path, safe="/")
+
+
+def slugify(text: str, sep: str) -> str:
+    """GitHub-style heading id: lowercase, drop punctuation, spaces → sep (repeats kept)."""
+    text = re.sub(r"[^\w\s-]", "", text.lower())
+    return text.strip().replace(" ", sep)
+
+
+def rewrite_link(site: Site, href: str, src_md: str) -> str:
+    """Turn a relative link inside repo markdown into a site URL or a GitHub URL."""
+    if href.startswith(("http://", "https://", "mailto:", "#")):
+        return href
+    path, _, frag = href.partition("#")
+    frag = f"#{frag}" if frag else ""
+    p = posixpath.normpath(posixpath.join(posixpath.dirname(src_md), path)).strip("/")
+    if p in ROOT_PAGES:
+        return site.prefix + ROOT_PAGES[p] + frag
+    parts = p.split("/")
+    if len(parts) == 2 and parts[0] in PROGS and parts[1] == "README.md":
+        return f"{site.prefix}{parts[0]}/{frag}"
+    course = site.by_path.get("/".join(parts[:2]))
+    if course:
+        rest = parts[2:]
+        if not rest or rest == ["README.md"]:
+            return f"{site.prefix}{course.path}/{frag}"
+        if len(rest) <= 2 and (SESSION_RE.fullmatch(rest[0]) or rest[0] == "unknown"):
+            return f"{site.prefix}{course.path}/#{rest[0]}"
+    full = site.root / p
+    if full.is_dir():
+        return f"{GH}/tree/main/{url_path(p)}"
+    if not full.is_file():
+        warn(f"{src_md}: link to missing {p}")
+    return f"{GH}/blob/main/{url_path(p)}"
+
+
+def render_md(site: Site, text: str, src_md: str) -> str:
+    out = markdown.markdown(text, extensions=["tables", "fenced_code", "toc"],
+                            extension_configs={"toc": {"slugify": slugify}})
+
+    def fix(m: re.Match) -> str:
+        href = rewrite_link(site, html_mod.unescape(m.group(1)), src_md)
+        return f'href="{html_mod.escape(href, quote=True)}"'
+
+    return re.sub(r'href="([^"]*)"', fix, out)
