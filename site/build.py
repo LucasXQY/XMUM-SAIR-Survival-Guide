@@ -245,10 +245,12 @@ GISCUS_NOTICE = ("发言需登录 GitHub，用户名公开。请勿张贴答案�
                  "Sign in with GitHub to post; your username is public. Do not post answers, marking schemes, "
                  "other people's personal data or lecturers' private contact details. Comments live in this repo's "
                  "GitHub Discussions and may be removed by the maintainers.")
+# header order = importance: the three programmes, Q&A, (Upload is inserted here), how to contribute, then the rest
 NAV = [("EEE", "EEE/", "⚡"), ("AIT", "AIT/", "🧠"), ("ROBO", "ROBO/", "🤖"), ("问答 | Q&A", "qa/", "💬"),
-       ("研究机会 | Research", "research/", "🔬"), ("教师 | Lecturers", "lecturers/", "🎓"),
-       ("贡献者 | Contributors", "contributors/", "👥"), ("如何贡献 | Contribute", "contributing/", "🤝"),
+       ("如何贡献 | Contribute", "contributing/", "🤝"), ("教师 | Lecturers", "lecturers/", "🎓"),
+       ("研究机会 | Research", "research/", "🔬"), ("贡献者 | Contributors", "contributors/", "👥"),
        ("关于 | About", "about/", "ℹ️")]
+UPLOAD_AFTER = 4  # the Upload block sits right after Q&A
 UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md)
 GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 '
                '6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
@@ -277,8 +279,8 @@ def nav_html(site: Site) -> str:
         else:
             main, sub = title.split(" | ")
         blocks.append(nav_block(i, f"{site.prefix}{path}", icon, main, sub))
-    blocks.append(nav_block(len(NAV), GH, GITHUB_MARK, "GitHub", "仓库 Repository"))
-    blocks.append(nav_block(len(NAV) + 1, UPLOAD_URL, "📤", "上传", "Upload", cls="upload", label="上传 | Upload"))
+    blocks.insert(UPLOAD_AFTER, nav_block(UPLOAD_AFTER, UPLOAD_URL, "📤", "上传", "Upload", cls="upload", label="上传 | Upload"))
+    blocks.append(nav_block(len(blocks), GH, GITHUB_MARK, "GitHub", "仓库 Repository"))
     form = (f'<form class="mini-search" action="{site.prefix}" method="get" role="search">'
             '<label class="sr-only" for="nav-q">搜索 | Search</label>'
             '<input id="nav-q" name="q" type="search" placeholder="搜索 | Search"></form>')
