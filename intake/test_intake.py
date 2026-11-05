@@ -159,6 +159,51 @@ def test_unpack_limits():
         assert "60" in str(e)
 
 
+def _pdf(path, text="Question 1: find x.", author="Someone"):
+    import fitz
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), text)
+    d.set_metadata({"author": author, "title": "t"}); d.save(path); d.close()
+
+
+def _docx(path, creator="Someone", body="Student ID: EEE2109300 answer scheme"):
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("docProps/core.xml", f'<cp:coreProperties xmlns:cp="x" xmlns:dc="y"><dc:creator>{creator}</dc:creator>'
+                                        f'<cp:lastModifiedBy>{creator}</cp:lastModifiedBy><dc:title>T</dc:title></cp:coreProperties>')
+        z.writestr("docProps/app.xml", "<Properties><Company>ACME</Company></Properties>")
+        z.writestr("word/document.xml", f"<w:document><w:p><w:t>{body}</w:t></w:p></w:document>")
+
+
+def test_clear_metadata_pdf_and_docx():
+    import fitz, zipfile
+    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf"); _docx(w / "b.docx")
+    assert intake.clear_metadata(w / "a.pdf") == "cleared"
+    assert not any(v for k, v in fitz.open(w / "a.pdf").metadata.items() if k not in ("format", "encryption"))
+    assert intake.clear_metadata(w / "b.docx") == "cleared"
+    core = zipfile.ZipFile(w / "b.docx").read("docProps/core.xml").decode()
+    assert "<dc:creator></dc:creator>" in core and "Someone" not in core
+    assert "ACME" not in zipfile.ZipFile(w / "b.docx").read("docProps/app.xml").decode()
+    (w / "c.doc").write_bytes(b"\xd0\xcf"); assert "manually" in intake.clear_metadata(w / "c.doc")
+
+
+def test_inspect_file_flags():
+    w = pathlib.Path(tempfile.mkdtemp())
+    _pdf(w / "clean.pdf", text="Question 1: find x. " * 10, author=""); _docx(w / "bad.docx")
+    c = intake.inspect_file(w / "clean.pdf"); b = intake.inspect_file(w / "bad.docx")
+    assert c["pages"] == 1 and c["pii"] == [] and c["answers"] == [] and c["low_text"] is False
+    assert any("EEE2109300" in m for m in b["pii"]) and any("answer scheme" in m.lower() for m in b["answers"]) and b["meta_empty"] is False
+    _pdf(w / "scan.pdf", text="x", author=""); assert intake.inspect_file(w / "scan.pdf")["low_text"] is True
+
+
+def test_thumbnails_sheet():
+    import fitz
+    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf")
+    d = fitz.open(); [d.new_page() for _ in range(3)]; d.save(w / "b.pdf"); d.close()     # only its first two pages are shown
+    assert intake.thumbnails([w / "a.pdf", w / "b.pdf"], w / "sheet.png") == 3 and (w / "sheet.png").stat().st_size > 1000
+    assert intake.thumbnails([], w / "none.png") == 0 and not (w / "none.png").exists()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
