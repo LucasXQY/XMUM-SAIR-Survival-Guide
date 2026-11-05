@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   var boxes = document.querySelectorAll('.ratings[data-src]');
-  if (!boxes.length) return;
+  var grid = document.querySelector('.lect-grid[data-ratings-src]');
+  if (!boxes.length && !grid) return;
 
   var LABELS = {
     course: '课程质量 Course', instructor: '老师质量 Instructor', difficulty: '难度 Difficulty', work: '作业量 Work',
@@ -91,10 +92,14 @@
     box.appendChild(gen);
   }
 
-  var src = boxes[0].dataset.src;
+  var src = boxes.length ? boxes[0].dataset.src : grid.dataset.ratingsSrc;
   fetch(src).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (data) { boxes.forEach(function (b) { fill(b, data); }); })
+    .then(function (data) {
+      boxes.forEach(function (b) { fill(b, data); });
+      document.dispatchEvent(new CustomEvent('ratings-loaded', { detail: data }));   // the lecturers page merges the counts
+    })
     .catch(function () {
+      document.dispatchEvent(new CustomEvent('ratings-loaded', { detail: null }));
       boxes.forEach(function (b) {
         while (b.firstChild) b.removeChild(b.firstChild);
         b.appendChild(el('p', 'muted', '还没有评价数据 | No rating data yet.'));
