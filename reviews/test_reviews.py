@@ -1,0 +1,134 @@
+"""Checks for reviews/reviews.py. Run from the repo root: python reviews/test_reviews.py (no network)."""
+import json, pathlib, subprocess, sys, tempfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import reviews as rv
+
+BODY = """### 课程代码 | Course code
+
+com107
+
+### 老师 | Lecturer
+
+Dr. Chua Ming Yam
+
+### 你修这门课的学期 | Session you took it
+
+2022-04
+
+### 课程质量 | Course quality
+
+4
+
+### 老师质量 | Instructor quality
+
+5
+
+### 难度 | Difficulty
+
+3
+
+### 作业量 | Work required
+
+2
+
+### 学到多少 | Amount learned
+
+4
+
+### 沟通 | Communication
+
+不评 | Skip
+
+### 找得到老师 | Instructor access
+
+_No response_
+
+### 是否推荐 | Would recommend
+
+5
+
+### 确认 | Confirm
+
+- [x] {confirm}
+"""
+
+
+def _body(**over):
+    b = BODY.format(confirm=rv.CONFIRM)
+    for k, v in over.items():
+        b = b.replace(k, v)
+    return b
+
+
+def test_parse_and_validate():
+    r = rv.parse_review(_body())
+    assert (r.code, r.lecturer, r.session, r.confirmed) == ("COM107", "Dr. Chua Ming Yam", "2022-04", True)
+    assert r.scores == {"course": 4, "instructor": 5, "difficulty": 3, "work": 2, "learned": 4, "recommend": 5}
+    assert rv.validate(r) == []
+    bad = rv.parse_review(_body(com107="nope").replace("- [x]", "- [ ]").replace("\n4\n", "\n9\n"))
+    problems = rv.validate(bad)
+    assert len(problems) == 3 and all(" | " in p for p in problems), problems
+    assert any("Course code" in p for p in problems) and any("Confirm" in p for p in problems)
+    none = rv.parse_review("### 课程代码 | Course code\n\nCOM107\n\n### 老师 | Lecturer\n\nX\n\n### 确认 | Confirm\n\n- [x] " + rv.CONFIRM + "\n")
+    assert any("至少" in p for p in rv.validate(none))
+
+
+def test_lecturer_key_merges_spellings():
+    assert rv.lecturer_key("Dr. Chua Ming Yam") == rv.lecturer_key("chua  ming yam") == "chua-ming-yam"
+    assert rv.lecturer_key("Puan Maryani Ahmad") == "maryani-ahmad" and rv.lecturer_key("Prof. Ng Zi Neng") == "ng-zi-neng"
+
+
+def test_record_upserts_per_voter_and_aggregates_with_threshold():
+    data = pathlib.Path(tempfile.mkdtemp())
+    r = rv.parse_review(_body())
+    rv.record(data, r, "voter-a", "2026-11-05T10:00:00Z")
+    rv.record(data, rv.parse_review(_body().replace("\n4\n\n### 老师质量", "\n2\n\n### 老师质量")), "voter-a", "2026-11-05T11:00:00Z")  # same voter again
+    rv.record(data, r, "voter-b", "2026-11-05T12:00:00Z")
+    f = data / "votes" / "COM107" / "chua-ming-yam.json"
+    saved = json.loads(f.read_text(encoding="utf-8"))
+    assert set(saved["votes"]) == {"voter-a", "voter-b"} and saved["votes"]["voter-a"]["scores"]["course"] == 2
+    agg = rv.aggregate(data)
+    entry = agg["courses"]["COM107"]["lecturers"]["chua-ming-yam"]
+    assert entry["n"] == 2 and entry["name"] == "Chua Ming Yam" and "course" not in entry        # below MIN_N: count only
+    rv.record(data, r, "voter-c", "2026-11-05T13:00:00Z")
+    entry = rv.aggregate(data)["courses"]["COM107"]["lecturers"]["chua-ming-yam"]
+    assert entry["n"] == 3 and entry["course"] == 3.3 and entry["instructor"] == 5.0 and entry["communication"] is None
+    assert entry["counts"]["course"] == 3 and entry["counts"]["communication"] == 0
+
+
+def test_voter_hash_is_stable_and_salted():
+    assert rv.voter_hash(123, "s") == rv.voter_hash(123, "s") != rv.voter_hash(123, "t") != rv.voter_hash(124, "t")
+    assert len(rv.voter_hash(1, "x")) == 24
+
+
+def test_cli_dry_run_records_and_writes_ratings():
+    w = pathlib.Path(tempfile.mkdtemp())
+    (w / "form.md").write_text(_body(), encoding="utf-8")
+    for voter in ("a", "b", "c"):
+        r = subprocess.run([sys.executable, str(pathlib.Path(__file__).parent / "reviews.py"), "--dry-run", "--form", str(w / "form.md"),
+                            "--data", str(w / "data"), "--voter", voter, "--out", str(w / "ratings.json")],
+                           capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+    agg = json.loads((w / "ratings.json").read_text(encoding="utf-8"))
+    assert agg["courses"]["COM107"]["lecturers"]["chua-ming-yam"]["n"] == 3 and "generated" in agg
+    (w / "bad.md").write_text(_body().replace("- [x]", "- [ ]"), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(pathlib.Path(__file__).parent / "reviews.py"), "--dry-run", "--form", str(w / "bad.md"),
+                        "--data", str(w / "data"), "--voter", "d", "--out", str(w / "ratings.json")], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0 and "Confirm" in r.stdout
+
+
+def test_issue_form_matches_parser():
+    yml = (pathlib.Path(__file__).resolve().parents[1] / ".github/ISSUE_TEMPLATE/review.yml").read_text(encoding="utf-8")
+    for title in list(rv.FIELDS.values()) + [t for _, t in rv.DIMS]:
+        assert f'label: "{title}"\n' in yml, title
+    assert f'- label: "{rv.CONFIRM}"\n' in yml and f'- "{rv.SKIP}"\n' in yml and "labels: [review]" in yml
+    for key, _ in rv.DIMS:
+        assert f"id: {key}\n" in yml, key
+
+
+if __name__ == "__main__":
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for t in tests:
+        t()
+    print(f"ok {len(tests)} tests")

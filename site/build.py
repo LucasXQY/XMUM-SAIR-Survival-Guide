@@ -32,6 +32,8 @@ GH = f"https://github.com/{REPO}"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main"
 SITE_URL = "https://lucasxqy.github.io/XMUM-SAIR-Survival-Guide/"   # canonical address; changes with REPO after the org move
 DOWNLOADS = f"{GH}/releases/download/downloads"                      # per-session zips kept by .github/workflows/downloads.yml
+RATINGS_URL = f"https://raw.githubusercontent.com/{REPO}/data/ratings.json"   # written by .github/workflows/reviews.yml
+REVIEW_FORM = f"{GH}/issues/new?template=review.yml"
 PROGS = {
     "EEE": "电子信息工程 | Electrical & Electronic Engineering",
     "AIT": "人工智能 | Artificial Intelligence",
@@ -202,8 +204,22 @@ def slugify(text: str, sep: str) -> str:
 
 # ---------------------------------------------------------------- lecturers, recent uploads, wanted list, sitemap
 
+TITLE_RE = re.compile(r"^(?:dr|prof|professor|assoc|associate|asst|assistant|puan|encik|en|cik|mr|mrs|ms|ir|ts)\.?\s+", re.I)
+
+
 def lecturer_slug(name: str) -> str:
+    """Same key as reviews/reviews.py uses: titles dropped, lowercase, hyphens."""
+    name = re.sub(r"\s+", " ", name).strip()
+    while TITLE_RE.match(name):
+        name = TITLE_RE.sub("", name, count=1)
     return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", name.lower())).strip("-")
+
+
+def ratings_html(attrs: str, rate_url: str | None = None) -> str:
+    """A container static/ratings.js fills from ratings.json, plus the link to the review form."""
+    btn = f' <a class="btn" href="{rate_url}">评价这门课 | Rate this course</a>' if rate_url else ""
+    return (f'<div class="ratings" {attrs} data-src="{RATINGS_URL}"><p class="muted">正在读取评价… | Loading ratings…</p></div>'
+            f'<p class="rate">{btn} <small>匿名打分，满 3 人显示平均分 | anonymous scores; averages appear at 3 voters</small></p>')
 
 
 def split_lecturers(cell: str) -> list[str]:
@@ -265,7 +281,8 @@ def lecturer_page(site: Site, name: str, taught: list[tuple[str, str]]) -> str:
              f'Lecturers who want anything changed: xieqiyi@ieee.org.</p>'
              f"<details><summary>可以照这个模板写 | A template you can follow</summary><pre>{esc(LECTURER_TEMPLATE)}</pre></details>")
     content = (f"<h1>{esc(name)}</h1><h2>教过的课 | Courses taught</h2>{table}"
-               f'<h2 id="profile">同学描述 | What students say</h2>{rules}'
+               + '<h2 id="ratings">评分 | Ratings</h2>' + ratings_html(f'data-lecturer="{lecturer_slug(name)}"', f"{REVIEW_FORM}&lecturer={quote(name)}")
+               + f'<h2 id="profile">同学描述 | What students say</h2>{rules}'
                + giscus_html(*GISCUS_GENERAL, f"教师 | Lecturer: {name}"))
     return page(site, name, content, f"{name}：教过的课程与同学描述 | courses taught and student descriptions")
 
@@ -372,9 +389,20 @@ def wanted_page(site: Site) -> str:
     return page(site, "征集榜 | Wanted", "".join(parts))
 
 
+def reviews_page(site: Site) -> str:
+    content = ("<h1>课程评价 | Course review</h1>"
+               "<p>四个主维度：课程质量、老师质量、难度、作业量；另有学到多少、沟通、找得到老师、是否推荐。全部 1–5 分，只打分、不写字，"
+               "匿名登记，每人对同一门课同一位老师一票，满 3 人才显示平均分。点表头可以排序。</p>"
+               "<p>Four main dimensions: course quality, instructor quality, difficulty, work required; plus amount learned, communication, "
+               "instructor access and whether you would recommend it. All on 1–5, scores only, recorded anonymously, one vote per person per "
+               "course and lecturer, averages shown from 3 voters. Click a header to sort.</p>"
+               + ratings_html("data-all", REVIEW_FORM))
+    return page(site, "课程评价 | Course review", content, "匿名课程评分：课程质量、老师、难度、作业量 | anonymous course ratings")
+
+
 def site_pages(site: Site) -> list[str]:
     """Every page's path relative to the site root, for the sitemap."""
-    pages = ["", "qa/", "recent/", "wanted/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
+    pages = ["", "qa/", "recent/", "wanted/", "reviews/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
              *(f"{c.path}/" for c in site.courses), *(f"lecturers/{lecturer_slug(n)}/" for n in lecturers(site))]
     return list(dict.fromkeys(pages))
 
@@ -449,7 +477,7 @@ GISCUS_NOTICE = ("发言需登录 GitHub，用户名公开。请勿张贴答案�
                  "GitHub Discussions and may be removed by the maintainers.")
 # header order = importance: the three programmes, Q&A, (Upload is inserted here), how to contribute, then the rest
 NAV = [("EEE", "EEE/", "⚡"), ("AIT", "AIT/", "🧠"), ("ROBO", "ROBO/", "🤖"), ("问答 | Q&A", "qa/", "💬"),
-       ("如何贡献 | Contribute", "contributing/", "🤝"), ("教师 | Lecturers", "lecturers/", "🎓"),
+       ("如何贡献 | Contribute", "contributing/", "🤝"), ("教师 | Lecturers", "lecturers/", "🎓"), ("评价 | Reviews", "reviews/", "📊"),
        ("研究机会 | Research", "research/", "🔬"), ("贡献者 | Contributors", "contributors/", "👥"),
        ("关于 | About", "about/", "ℹ️")]
 UPLOAD_AFTER = 4  # the Upload block sits right after Q&A
@@ -555,8 +583,11 @@ def course_page(site: Site, c: Course) -> str:
         parts.append(f'<h3 id="{s}">{label}{lect}{zipb}</h3>')
         for t, fs in types.items():
             parts.append(f'<h4>{t} ({len(fs)})</h4><ul class="files">{"".join(file_item(f) for f in fs)}</ul>')
+    lects = sorted({n for cell in c.lecturers.values() for n in split_lecturers(cell)})
+    rate = f"{REVIEW_FORM}&code={quote(c.code)}" + (f"&lecturer={quote(lects[0])}" if len(lects) == 1 else "")
+    review = '<h2 id="review">课程评价 | Course review</h2>' + ratings_html(f'data-code="{esc(c.code)}"', rate)
     qa = '<h2 id="qa">问答 | Q&A</h2>' + giscus_html(*GISCUS_COURSE, title)
-    return page(site, title, body + "".join(parts) + qa,
+    return page(site, title, body + "".join(parts) + review + qa,
                 f"{title}：{PROGS[c.prog]} 课程资料与问答 | course material and Q&A")
 
 
@@ -589,7 +620,7 @@ def home_page(site: Site) -> str:
                      f'<p class="stats">{n_mat} / {len(cs)} 门课有资料 · {n_files} 份文件<br>'
                      f'{n_mat} of {len(cs)} courses with material · {n_files} files</p></a>')
     links = [("上传资料 | Upload material", UPLOAD_URL), ("征集榜 | Wanted", f"{site.prefix}wanted/"),
-             ("最近上传 | Recent uploads", f"{site.prefix}recent/"),
+             ("最近上传 | Recent uploads", f"{site.prefix}recent/"), ("课程评价 | Course review", f"{site.prefix}reviews/"),
              ("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
              ("教师档案 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
              ("如何贡献 | How to contribute", f"{site.prefix}contributing/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
@@ -658,6 +689,7 @@ def build(root: Path, out: Path, prefix: str) -> Site:
     write("404.html", not_found_page(site))
     write("qa/index.html", qa_page(site))
     write("recent/index.html", recent_page(site))
+    write("reviews/index.html", reviews_page(site))
     write("wanted/index.html", wanted_page(site))
     for name, taught in lecturers(site).items():
         write(f"lecturers/{lecturer_slug(name)}/index.html", lecturer_page(site, name, taught))
