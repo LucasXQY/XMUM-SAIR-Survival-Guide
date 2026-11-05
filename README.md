@@ -2,6 +2,8 @@
 
 Ciallo～ (∠・ < )⌒☆
 
+网页版（搜索、预览、问答）| Website (search, preview, Q&A): https://lucasxqy.github.io/XMUM-SAIR-Survival-Guide/
+
 欢迎来到厦马 SAIR 生存指南！本仓库面向厦门大学马来西亚分校人工智能与机器人学院（School of Artificial Intelligence and Robotics, SAIR）的三个本科专业：电子信息工程（EEE）、人工智能（AIT）、机器人与自动化工程（ROBO）。这些专业课程强度较大、考试较为频繁、学习资源相对有限，本仓库旨在为大家建立一个开放的学习资料共享平台。通过汇集同学们的学习笔记、实验经验、考试复习资料与重点总结，并整理教师教学风格与学习建议，实现资源互助与经验传承，帮助更多同学高效学习、顺利备考，取得好成绩，并为未来申请实习与心仪 offer 打下坚实基础。
 
 Welcome to the XMUM SAIR Survival Guide! This repo serves the three undergraduate programmes of XMUM's School of Artificial Intelligence and Robotics (SAIR): Electrical & Electronic Engineering (EEE), Artificial Intelligence (AIT) and Robotics & Automation Engineering (ROBO). They are among the heaviest programmes on campus: lots of courses, frequent exams, and not many shared resources. This repo is an open, student-run place to pool notes, lab experience, revision material and exam-prep summaries, plus honest notes on lecturers' teaching styles and study advice. The goal: help each other study smarter, get through exams with good grades, and build a solid base for internships and that dream offer.
