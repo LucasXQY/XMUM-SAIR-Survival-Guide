@@ -33,11 +33,39 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: session
+  - type: dropdown
+    id: year
     attributes:
-      label: "你修这门课的学期 | Session you took it"
-      placeholder: "2022-04"
+      label: "年份 | Year"
+      description: "你修这门课的年份，可不填 | The year you took the course; optional"
+      options:
+        - "2019"
+        - "2020"
+        - "2021"
+        - "2022"
+        - "2023"
+        - "2024"
+        - "2025"
+        - "2026"
+        - "2027"
+
+  - type: dropdown
+    id: term
+    attributes:
+      label: "学期 | Term"
+      description: "02 二月学期、04 四月学期、09 九月学期；都不是就选「其他」并在下一格填 | 02 February, 04 April, 09 September; otherwise pick Other and fill in the next box"
+      options:
+        - "02"
+        - "04"
+        - "09"
+        - "其他 | Other"
+
+  - type: input
+    id: session_other
+    attributes:
+      label: "其他学期 | Other session (YYYY-MM)"
+      description: "只在上面选了「其他」时填 | Only if you chose Other above"
+      placeholder: "2021-11"
 
   - type: dropdown
     id: course
