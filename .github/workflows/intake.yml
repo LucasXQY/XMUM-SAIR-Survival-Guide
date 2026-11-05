@@ -24,9 +24,11 @@ permissions:
 jobs:
   intake:
     if: >-
+      vars.BOTS_PAUSED != '1' && (
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'upload'))
-      || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # one group per issue (and one for the push-triggered sweep): a newer run for the same issue replaces the queued one,
     # runs for different issues touch different branches and may overlap. GitHub keeps a single queued run per group and
     # cancels older ones, so the sweep on push also picks up upload issues that never got an answer.
@@ -67,9 +69,10 @@ jobs:
   # ("Automatically delete head branches" only covers merged ones)
   cleanup:
     if: >-
-      github.event_name == 'pull_request_target' && github.event.pull_request.merged == false
+      vars.BOTS_PAUSED != '1' && github.event_name == 'pull_request_target' && github.event.pull_request.merged == false
       && startsWith(github.event.pull_request.head.ref, 'upload/issue-')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
