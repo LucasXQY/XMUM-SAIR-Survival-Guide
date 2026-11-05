@@ -265,6 +265,32 @@ def test_apply_places_files_and_matches_course_across_programmes():
     assert "| EEE999 |" in (tmp / "EEE/README.md").read_text(encoding="utf-8")   # index regenerated
 
 
+def test_dry_run_end_to_end():
+    import subprocess, sys
+    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "final.pdf"); _docx(w / "sheet.docx")
+    form = w / "form.md"; form.write_text(_body().replace("Past-Papers", "Tutorials").replace("Final", "_No response_"), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(ROOT / "intake/intake.py"), "--dry-run", "--form", str(form), "--files", str(w / "final.pdf"), str(w / "sheet.docx"),
+                        "--repo", str(tmp), "--login", "tester", "--issue", "7", "--work", str(w / "work")], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    body = (w / "work/PR_BODY.md").read_text(encoding="utf-8")
+    assert "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/COM107_202204_final.pdf" in body and "COM107_202204_sheet.docx" in body
+    assert "EEE2109300" in body and "answer scheme" in body.lower()      # flagged, not blocked
+    assert "Closes #7" in body and "python site/build.py" in body
+    assert (tmp / "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/COM107_202204_sheet.docx").is_file()
+    b = subprocess.run([sys.executable, str(ROOT / "site/build.py"), "--root", str(tmp), "--out", str(w / "site2")], capture_output=True, text=True, encoding="utf-8")
+    assert b.returncode == 0 and "not indexed" not in b.stderr, b.stderr
+
+
+def test_dry_run_validation_failure_writes_problems():
+    import subprocess, sys
+    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    form = w / "form.md"; form.write_text(_body().replace("2022-04", "April 2022"), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(ROOT / "intake/intake.py"), "--dry-run", "--form", str(form), "--repo", str(tmp), "--work", str(w / "work")],
+                       capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    assert "Session" in (w / "work/PROBLEMS.md").read_text(encoding="utf-8") and not (w / "work/PR_BODY.md").exists()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

@@ -434,7 +434,11 @@ FORBIDDEN = ("Co-Authored", "Claude", "Anthropic")
 
 def stragglers(site: Site) -> list[str]:
     """Tracked files under the programme folders that the scan did not pick up (wrong depth or name)."""
-    raw = subprocess.run(["git", "ls-files", "-z", *PROGS], cwd=site.root, capture_output=True, check=True).stdout
+    try:
+        raw = subprocess.run(["git", "ls-files", "-z", *PROGS], cwd=site.root, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):  # no git, or the root is not a checkout (intake dry run)
+        warn("git unavailable, straggler check skipped")
+        return []
     tracked = [p for p in raw.decode("utf-8").split("\0") if p]
     seen = {f.path for f in all_files(site.courses)}
     return [p for p in tracked if p not in seen and posixpath.basename(p) != "README.md"]
@@ -468,8 +472,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="_site")
     ap.add_argument("--prefix", default="/XMUM-SAIR-Survival-Guide/", help="URL path the site is served under")
+    ap.add_argument("--root", default=str(HERE.parent), help="repository tree to build from")
     args = ap.parse_args(argv)
-    root = HERE.parent
+    root = Path(args.root).resolve()
     site = build(root, Path(args.out), args.prefix)
     try:
         check(site, Path(args.out))

@@ -611,3 +611,329 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
     subprocess.run([sys.executable, str(root / "scripts" / "update_index.py"), prog],
                    check=True, cwd=root, capture_output=True, text=True)
     return Placement(f"{prog}/{course.name}", created, placed, notes, meta)
+
+
+# ---------------------------------------------------------------- orchestration: download → PR body → git/gh → CLI
+
+REPO = "LucasXQY/XMUM-SAIR-Survival-Guide"
+BOT_AUTHOR = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+HERE = Path(__file__).resolve().parent
+LABEL_UPLOAD, LABEL_NEEDS_INFO, LABEL_PR = "upload", "needs-info", "pr-opened"
+LABELS = ((LABEL_NEEDS_INFO, "FBCA04", "需要补充信息 | Needs more information"),
+          (LABEL_PR, "1D76DB", "机器人已开 PR | Bot opened a PR"))
+
+
+class NothingAccepted(Exception):
+    """Every attachment was rejected; the reasons are in .rejected."""
+
+    def __init__(self, rejected: list[tuple[str, str]]):
+        super().__init__("没有一份文件能收录 | none of the files could be accepted")
+        self.rejected = rejected
+
+
+def download(links: list[tuple[str, str]], work: Path) -> tuple[list[tuple[str, Path]], list[tuple[str, str]]]:
+    """Fetch each attachment (redirects followed, one retry). Returns (downloaded (name, path), failed (name, reason))."""
+    import urllib.request
+    folder = work / "downloads"
+    folder.mkdir(parents=True, exist_ok=True)
+    ok: list[tuple[str, Path]] = []
+    bad: list[tuple[str, str]] = []
+    for i, (name, url) in enumerate(links):
+        base = re.split(r"[\\/]", name)[-1] or url.rsplit("/", 1)[-1]
+        dest = folder / f"{i}_{clean_label(base) or 'file'}"
+        err: Exception | None = None
+        for _attempt in range(2):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "xmum-survival-guide-intake"})
+                with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as out:
+                    shutil.copyfileobj(resp, out)
+                ok.append((name, dest))
+                err = None
+                break
+            except Exception as e:  # network or HTTP error: retry once, then report
+                err = e
+        if err is not None:
+            bad.append((name, f"下载失败 | download failed: {type(err).__name__}: {err}"))
+    return ok, bad
+
+
+def human_size(n: int) -> str:
+    return f"{n / 2**20:.1f} MB" if n >= 2**20 else f"{max(1, n // 1024)} KB"
+
+
+def problems_comment(problems: list[str]) -> str:
+    items = "\n".join(f"- {p}" for p in problems)
+    return ("表单还差一点，机器人暂时没法整理 | A few things to fix before the bot can file this:\n\n"
+            f"{items}\n\n"
+            "改好后直接编辑这个 Issue（右上角 ··· → Edit），机器人会自动重跑。"
+            "| Edit this issue (··· → Edit at the top right) and the bot will run again by itself.")
+
+
+def pr_body(f: Form, pl: Placement, rejected: list[tuple[str, str]], inspections: dict[str, dict],
+            meta_notes: dict[str, str], build: tuple[bool, list[str]], base_sha: str, run_url: str | None,
+            branch: str, issue: int) -> str:
+    import datetime
+    from urllib.parse import quote
+
+    def link(path: str) -> str:
+        return f"[`{path}`](https://github.com/{REPO}/blob/{quote(branch, safe='/')}/{quote(path, safe='/')})"
+
+    files = ["| 原文件名 / Original | 新路径 / New path | 大小 / Size | 页数 / Pages |", "|---|---|---|---|"]
+    for original, rel in pl.placed:
+        ins = inspections.get(rel, {})
+        files.append(f"| {_cell(original)} | {link(rel)} | {human_size(ins.get('size', 0))} | {ins.get('pages') or '—'} |")
+    not_included = "\n".join(f"- `{_cell(n)}`：{r}" for n, r in rejected) or "- 无 | none"
+    registered = [f"- 课程目录 | Course folder: `{pl.course_dir}/`" + ("（新建 | created）" if pl.created_readme else ""),
+                  f"- 课程 README 的学期行、`{pl.course_dir.split('/')[0]}/README.md` 的修课时间表、`CONTRIBUTORS.md`"
+                  "（匿名则不加 CONTRIBUTORS）| course README row, programme timeline, CONTRIBUTORS (skipped for anonymous)",
+                  "- 课程索引已重跑 | course index regenerated"]
+    registered += [f"- {n}" for n in pl.notes]
+    checks = ["| 文件 / File | 元数据已清空 / Metadata cleared | 可疑文本 / Suspicious text | 答案关键词 / Answer keywords | 文字量低 / Low text |",
+              "|---|---|---|---|---|"]
+    for _, rel in pl.placed:
+        ins = inspections.get(rel, {})
+        meta = meta_notes.get(rel, "")
+        meta_txt = ("✅" if ins.get("meta_empty") else "⚠️") + ("" if meta in ("cleared", "n/a") else f" {meta}")
+        pii = ", ".join(f"`{_cell(m)}`" for m in ins.get("pii", [])) or "—"
+        ans = ", ".join(f"`{_cell(m)}`" for m in ins.get("answers", [])) or "—"
+        low = "⚠️ 像扫描件，请肉眼看 | looks scanned, eyeball it" if ins.get("low_text") else "—"
+        checks.append(f"| `{rel.rsplit('/', 1)[-1]}` | {meta_txt} | {pii} | {ans} | {low} |")
+    ok, warnings = build
+    build_line = ("✅ `python site/build.py` 成功 | succeeded" if ok else "❌ `python site/build.py` 失败 | failed")
+    if warnings:
+        build_line += "\n" + "\n".join(f"  - `{w}`" for w in warnings[:20])
+    thumbs = (f"缩略图 | Thumbnails: [本次运行的 Artifacts | this run's artifacts]({run_url})" if run_url
+              else "缩略图 | Thumbnails: 本地干跑，无 | dry run, none")
+    when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return "\n".join([
+        f"来自 | From #{issue} · {f.code} {f.session} {f.type}" + (f" · {_cell(f.name)}" if f.name else ""),
+        "", "## 文件 | Files", "", *files,
+        "", "## 未收录 | Not included", "", not_included,
+        "", "## 登记 | Registered", "", *registered,
+        "", "## 检查 | Checks（不阻断，供维护者参考 | informational）", "", *checks, "", f"- {thumbs}", f"- {build_line}",
+        "", "## 维护者清单 | Maintainer checklist", "",
+        "- [ ] 看过缩略图或文件预览 | Looked at the thumbnails or file previews",
+        "- [ ] 没有答案、评分标准 | No answers or marking schemes",
+        "- [ ] 没有学号、姓名、私人联系方式 | No student IDs, names or private contacts",
+        "", "---", "",
+        f"重建于 {when}，基于 main `{base_sha[:7]}`。要改内容请编辑原 Issue，PR 会自动重建；不要直接改这个分支。"
+        f" | Rebuilt {when} from main `{base_sha[:7]}`. To change anything edit the issue and the PR rebuilds itself; do not push to this branch.",
+        "", f"Closes #{issue}", ""])
+
+
+def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list[Path] | None = None,
+            base_sha: str = "dry-run", run_url: str | None = None, branch: str = "") -> tuple[Placement, str]:
+    """Download (unless files are given), unpack, place, inspect, build; returns the placement and the PR body."""
+    work.mkdir(parents=True, exist_ok=True)
+    if files is None:
+        downloads, rejected = download(f.links, work)
+    else:
+        downloads, rejected = [(p.name, p) for p in files], []
+    accepted, bad = unpack(downloads, work)
+    rejected += bad
+    if not accepted:
+        raise NothingAccepted(rejected)
+    pl = apply(repo, f, accepted, login)
+    inspections = {rel: inspect_file(repo / rel) for _, rel in pl.placed}
+    pdfs = [repo / rel for _, rel in pl.placed if rel.lower().endswith(".pdf")]
+    thumbnails(pdfs, work.parent / "thumbs" / f"issue-{issue}.png")
+    r = subprocess.run([sys.executable, str(HERE.parent / "site" / "build.py"), "--root", str(repo), "--out", str(work / "site")],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    warnings = list(dict.fromkeys(l.strip() for l in (r.stderr + r.stdout).splitlines() if "WARNING" in l or "ERROR" in l))
+    body = pr_body(f, pl, rejected, inspections, pl.meta, (r.returncode == 0, warnings), base_sha, run_url,
+                   branch or f"upload/issue-{issue}", issue)
+    return pl, body
+
+
+class GH:
+    """The few `gh` calls the bot needs. Arguments are lists: untrusted text never meets a shell."""
+
+    def __init__(self, repo: str = REPO):
+        self.repo = repo
+
+    def _run(self, *args: str, input: str | None = None) -> str:
+        return subprocess.run(["gh", *args], check=True, text=True, capture_output=True, encoding="utf-8",
+                              input=input).stdout.strip()
+
+    def issue(self, n: int) -> dict:
+        import json
+        d = json.loads(self._run("api", f"repos/{self.repo}/issues/{n}"))
+        return {"body": d.get("body") or "", "title": d.get("title") or "", "state": d["state"],
+                "login": d["user"]["login"], "id": d["user"]["id"], "labels": [l["name"] for l in d.get("labels", [])]}
+
+    def comment(self, n: int, text: str) -> None:
+        self._run("issue", "comment", str(n), "--repo", self.repo, "--body-file", "-", input=text)
+
+    def comment_pr(self, n: int, text: str) -> None:
+        self._run("pr", "comment", str(n), "--repo", self.repo, "--body-file", "-", input=text)
+
+    def label(self, n: int, add: tuple[str, ...] = (), remove: tuple[str, ...] = ()) -> None:
+        args = [x for l in add for x in ("--add-label", l)] + [x for l in remove for x in ("--remove-label", l)]
+        if args:
+            self._run("issue", "edit", str(n), "--repo", self.repo, *args)
+
+    def ensure_labels(self) -> None:
+        for name, color, desc in LABELS:
+            self._run("label", "create", name, "--repo", self.repo, "--color", color, "--description", desc, "--force")
+
+    def open_upload_prs(self) -> list[int]:
+        import json
+        prs = json.loads(self._run("pr", "list", "--repo", self.repo, "--state", "open", "--limit", "200", "--json", "headRefName"))
+        out = []
+        for pr in prs:
+            m = re.fullmatch(r"upload/issue-(\d+)", pr["headRefName"])
+            if m:
+                out.append(int(m.group(1)))
+        return sorted(out)
+
+    def pr_for(self, branch: str) -> int | None:
+        import json
+        prs = json.loads(self._run("pr", "list", "--repo", self.repo, "--head", branch, "--state", "open", "--json", "number"))
+        return prs[0]["number"] if prs else None
+
+    def create_or_edit_pr(self, branch: str, title: str, body: str) -> str:
+        n = self.pr_for(branch)
+        if n:
+            self._run("pr", "edit", str(n), "--repo", self.repo, "--title", title, "--body-file", "-", input=body)
+            return f"https://github.com/{self.repo}/pull/{n}"
+        return self._run("pr", "create", "--repo", self.repo, "--base", "main", "--head", branch,
+                         "--title", title, "--body-file", "-", input=body)
+
+
+class Git:
+    def __init__(self, repo: Path):
+        self.repo = repo
+
+    def _run(self, *args: str) -> str:
+        return subprocess.run(["git", *args], cwd=self.repo, check=True, text=True, capture_output=True,
+                              encoding="utf-8").stdout.strip()
+
+    def reset_branch(self, name: str) -> None:
+        """A clean tree at origin/main on branch `name`, whatever happened before."""
+        self._run("fetch", "-q", "origin", "main")
+        self._run("reset", "-q", "--hard")
+        self._run("clean", "-qfd")
+        self._run("checkout", "-q", "-B", name, "origin/main")
+
+    def head(self) -> str:
+        return self._run("rev-parse", "HEAD")
+
+    def commit_all(self, message: str, author: str) -> None:
+        self._run("add", "-A")
+        self._run("commit", "-q", "-m", message, "--author", author)
+
+    def force_push(self, name: str) -> None:
+        self._run("push", "-q", "--force", "-u", "origin", name)
+
+
+def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: Path | None = None) -> None:
+    """One issue → comment with problems, or a rebuilt branch and PR. Unexpected errors are reported and re-raised."""
+    work = work or repo / "_intake"
+    try:
+        iss = gh.issue(n)
+        if iss["state"] != "open":
+            print(f"#{n} is {iss['state']}, skipped")
+            return
+        f = parse_form(iss["body"])
+        branch = f"upload/issue-{n}"
+        problems = validate(f)
+        if problems:
+            gh.comment(n, problems_comment(problems))
+            gh.label(n, add=(LABEL_NEEDS_INFO,))
+            pr = gh.pr_for(branch)
+            if pr:
+                gh.comment_pr(pr, f"#{n} 现在校验不通过，这个 PR 没有重建，保持原样 | #{n} no longer validates; this PR was left as it was.")
+            print(f"#{n}: {len(problems)} problem(s), commented")
+            return
+        if LABEL_NEEDS_INFO in iss["labels"]:
+            gh.label(n, remove=(LABEL_NEEDS_INFO,))
+        git.reset_branch(branch)
+        base = git.head()
+        try:
+            pl, body = process(f, n, iss["login"], repo, work / f"issue-{n}", base_sha=base, run_url=run_url, branch=branch)
+        except (IntakeLimit, NothingAccepted) as e:
+            rejected = getattr(e, "rejected", [])
+            detail = "\n".join(f"- `{_cell(name)}`：{reason}" for name, reason in rejected)
+            gh.comment(n, f"{e}\n\n{detail}\n\n改好后编辑这个 Issue 即可重跑 | Edit this issue to run the bot again.".strip())
+            gh.label(n, add=(LABEL_NEEDS_INFO,))
+            print(f"#{n}: nothing accepted, commented")
+            return
+        anonymous = f.credit == CREDIT_ANON
+        author = BOT_AUTHOR if anonymous else f"{iss['login']} <{iss['id']}+{iss['login']}@users.noreply.github.com>"
+        git.commit_all(f"content: add {f.code} {f.session} {f.type} from #{n}", author)
+        git.force_push(branch)
+        title = f"[上传 | Upload] {f.code} {f.session} {f.type}（#{n}）"
+        existed = gh.pr_for(branch)
+        url = gh.create_or_edit_pr(branch, title, body)
+        if existed:
+            gh.comment_pr(existed, "已按最新的 Issue 和 main 重建 | Rebuilt from the latest issue and main.")
+        else:
+            gh.comment(n, f"已整理成 PR，等维护者审核：{url}\n要改内容就编辑这个 Issue，PR 会自动更新。"
+                          f"\n\nFiled as a pull request for review: {url}\nTo change anything, edit this issue and the PR updates itself.")
+            gh.label(n, add=(LABEL_PR,))
+        print(f"#{n}: {len(pl.placed)} file(s) → {url}")
+    except Exception:
+        try:
+            gh.comment(n, "机器人出错了，维护者会手动处理 | The bot hit an error; a maintainer will handle this by hand."
+                          + (f"\n\n{run_url}" if run_url else ""))
+        except Exception:
+            pass
+        raise
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import traceback
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--issue", type=int, help="process this issue")
+    ap.add_argument("--all-open", action="store_true", help="rebuild every open upload/issue-N pull request")
+    ap.add_argument("--dry-run", action="store_true", help="no network: --form FILE --files F... --repo DIR")
+    ap.add_argument("--form", help="dry run: a file holding the rendered issue body")
+    ap.add_argument("--files", nargs="*", default=[], help="dry run: local files standing in for the attachments")
+    ap.add_argument("--repo", default=str(HERE.parent), help="checkout to modify")
+    ap.add_argument("--login", default="someone", help="dry run: uploader's GitHub login")
+    ap.add_argument("--work", help="scratch directory (default <repo>/_intake)")
+    args = ap.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    repo = Path(args.repo).resolve()
+    work = Path(args.work).resolve() if args.work else repo / "_intake"
+    run_url = os.environ.get("GITHUB_RUN_URL")
+
+    if args.dry_run:
+        f = parse_form(Path(args.form).read_text(encoding="utf-8"))
+        work.mkdir(parents=True, exist_ok=True)
+        problems = validate(f)
+        if problems:
+            (work / "PROBLEMS.md").write_text(problems_comment(problems), encoding="utf-8")
+            print(f"{len(problems)} problem(s) -> {work / 'PROBLEMS.md'}")
+            return 0
+        issue = args.issue or 0
+        try:
+            pl, body = process(f, issue, args.login, repo, work / f"issue-{issue}", files=[Path(p) for p in args.files])
+        except (IntakeLimit, NothingAccepted) as e:
+            (work / "PROBLEMS.md").write_text(str(e), encoding="utf-8")
+            print(f"nothing accepted -> {work / 'PROBLEMS.md'}")
+            return 0
+        (work / "PR_BODY.md").write_text(body, encoding="utf-8")
+        print(f"{len(pl.placed)} file(s) placed under {pl.course_dir}; PR body -> {work / 'PR_BODY.md'}")
+        return 0
+
+    gh, git = GH(), Git(repo)
+    gh.ensure_labels()
+    issues = [args.issue] if args.issue else gh.open_upload_prs() if args.all_open else []
+    if not issues:
+        print("no open upload PRs" if args.all_open else "nothing to do: pass --issue N or --all-open")
+        return 0
+    failed = 0
+    for n in issues:
+        try:
+            run_issue(n, repo, gh, git, run_url, work)
+        except Exception:
+            traceback.print_exc()
+            failed += 1
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
