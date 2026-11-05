@@ -179,24 +179,33 @@ def test_stragglers_reports_misplaced_file():
 
 
 def test_rewrite_link_loose_file_and_unindexed_session():
-    import contextlib, io
-    s = _site()
-    readme = "EEE/COM105_Engineering_Physics_I/README.md"
+    import contextlib, io, shutil
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "repo"
+    course = "EEE/COM107_Circuits_and_Devices"
+    for p in ["EEE/README.md", f"{course}/README.md"]:
+        (tmp / p).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / p, tmp / p)
+    (tmp / course / "2022-04/Tutorials").mkdir(parents=True)
+    (tmp / course / "2022-04/Tutorials/t1.pdf").write_bytes(b"%PDF")
+    (tmp / course / "2023-04").mkdir()
+    (tmp / course / "2023-04/Week 9 lecture.pdf").write_bytes(b"%PDF")   # loose file, no type folder
+    s = build.Site(tmp, P)
+    readme = f"{course}/README.md"
     err = io.StringIO()
     with contextlib.redirect_stderr(err):
         # a file sitting directly in a session folder is not a type folder: link to it on GitHub
-        assert build.rewrite_link(s, "2023-04/COM105 Week 9 lecture.pdf", readme) == \
-            build.GH + "/blob/main/EEE/COM105_Engineering_Physics_I/2023-04/COM105%20Week%209%20lecture.pdf"
+        assert build.rewrite_link(s, "2023-04/Week 9 lecture.pdf", readme) == \
+            build.GH + f"/blob/main/{course}/2023-04/Week%209%20lecture.pdf"
         # percent-encoded hrefs resolve to the same file, encoded once
-        assert build.rewrite_link(s, "2023-04/COM105%20Week%209%20lecture.pdf", readme) == \
-            build.GH + "/blob/main/EEE/COM105_Engineering_Physics_I/2023-04/COM105%20Week%209%20lecture.pdf"
+        assert build.rewrite_link(s, "2023-04/Week%209%20lecture.pdf", readme) == \
+            build.GH + f"/blob/main/{course}/2023-04/Week%209%20lecture.pdf"
     assert err.getvalue() == ""
     # a session folder with no indexed material has no anchor on the course page: send readers to GitHub
     with contextlib.redirect_stderr(err):
-        assert build.rewrite_link(s, "2023-04/", readme) == build.GH + "/tree/main/EEE/COM105_Engineering_Physics_I/2023-04"
+        assert build.rewrite_link(s, "2023-04/", readme) == build.GH + f"/tree/main/{course}/2023-04"
     assert "WARNING" in err.getvalue()
     # the normal case still anchors
-    assert build.rewrite_link(s, "2022-04/Tutorials/", readme) == P + "EEE/COM105_Engineering_Physics_I/#2022-04"
+    assert build.rewrite_link(s, "2022-04/Tutorials/", readme) == P + f"{course}/#2022-04"
 
 
 def test_build_refuses_to_delete_a_foreign_directory():
