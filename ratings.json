@@ -62,6 +62,37 @@
     }
    }
   },
+  "EEE222": {
+   "all": {
+    "counts": {
+     "access": 1,
+     "communication": 1,
+     "course": 1,
+     "difficulty": 1,
+     "instructor": 1,
+     "learned": 1,
+     "recommend": 1,
+     "work": 1
+    },
+    "n": 1
+   },
+   "lecturers": {
+    "atifa-faaidha-munauwer": {
+     "counts": {
+      "access": 1,
+      "communication": 1,
+      "course": 1,
+      "difficulty": 1,
+      "instructor": 1,
+      "learned": 1,
+      "recommend": 1,
+      "work": 1
+     },
+     "n": 1,
+     "name": "Atifa Faaidha Munauwer"
+    }
+   }
+  },
   "EEE305": {
    "all": {
     "counts": {
@@ -228,7 +259,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T10:24:52Z",
+ "generated": "2026-11-05T10:29:13Z",
  "main": [
   "course",
   "instructor",
