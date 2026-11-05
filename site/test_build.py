@@ -140,6 +140,31 @@ def test_root_prefix_preview():
     assert "/XMUM-SAIR-Survival-Guide/" not in html
 
 
+def test_check_passes_on_real_repo():
+    site, out = _build()
+    build.check(site, out)          # must not raise
+    assert build.stragglers(site) == []
+
+
+def test_stragglers_reports_misplaced_file():
+    import shutil, subprocess
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "repo"
+    for p in ["README.md", "DISCLAIMER.md", "CONTRIBUTING.md", "CONTRIBUTORS.md", "Lecturers.md",
+              "Research-Opportunities.md", "EEE/README.md", "AIT/README.md", "ROBO/README.md",
+              "EEE/COM107_Circuits_and_Devices/README.md"]:
+        (tmp / p).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / p, tmp / p)
+    (tmp / "EEE/COM107_Circuits_and_Devices/2024-9/Notes").mkdir(parents=True)
+    (tmp / "EEE/COM107_Circuits_and_Devices/2024-9/Notes/x.pdf").write_bytes(b"%PDF")
+    (tmp / "EEE/COM107_Circuits_and_Devices/stray.pdf").write_bytes(b"%PDF")
+    subprocess.run(["git", "init", "-q"], cwd=tmp, check=True, capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp, check=True, capture_output=True)
+    site = build.Site(tmp, "/")
+    assert build.all_files(site.courses) == []
+    assert sorted(build.stragglers(site)) == ["EEE/COM107_Circuits_and_Devices/2024-9/Notes/x.pdf",
+                                             "EEE/COM107_Circuits_and_Devices/stray.pdf"]
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

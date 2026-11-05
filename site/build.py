@@ -18,6 +18,7 @@ import os
 import posixpath
 import re
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -418,6 +419,43 @@ def build(root: Path, out: Path, prefix: str) -> Site:
     return site
 
 
+# ---------------------------------------------------------------- self-check
+
+FORBIDDEN = ("Co-Authored", "Claude", "Anthropic")
+
+
+def stragglers(site: Site) -> list[str]:
+    """Tracked files under the programme folders that the scan did not pick up (wrong depth or name)."""
+    raw = subprocess.run(["git", "ls-files", "-z", *PROGS], cwd=site.root, capture_output=True, check=True).stdout
+    tracked = [p for p in raw.decode("utf-8").split("\0") if p]
+    seen = {f.path for f in all_files(site.courses)}
+    return [p for p in tracked if p not in seen and posixpath.basename(p) != "README.md"]
+
+
+def check(site: Site, out: Path) -> None:
+    """Assert the generated site is consistent; content problems only warn."""
+    out = Path(out)
+    pages = list(out.glob("*/*_*/index.html"))
+    assert len(pages) == len(site.courses), f"{len(pages)} course pages for {len(site.courses)} courses"
+    idx = json.loads((out / "search.json").read_text(encoding="utf-8"))
+    assert len(idx["files"]) == len(all_files(site.courses)), "search.json file count differs from the scan"
+    for f in idx["files"]:
+        assert (site.root / f["path"]).is_file(), f"search.json path missing: {f['path']}"
+    for page_file in out.rglob("*.html"):
+        text = page_file.read_text(encoding="utf-8")
+        for word in FORBIDDEN:
+            assert word not in text, f"{page_file.relative_to(out)}: contains {word!r}"
+        for href in re.findall(r'href="([^"]*)"', text):
+            href = html_mod.unescape(href)
+            if not href.startswith(site.prefix):
+                continue
+            rel = href[len(site.prefix):].split("#")[0].split("?")[0]
+            target = out / rel / "index.html" if rel == "" or rel.endswith("/") else out / rel
+            assert target.is_file(), f"{page_file.relative_to(out)}: dead internal link {href}"
+    for p in stragglers(site):
+        warn(f"not indexed: {p}")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="_site")
@@ -425,7 +463,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     root = HERE.parent
     site = build(root, Path(args.out), args.prefix)
-    print(f"{len(site.courses)} courses, {len(all_files(site.courses))} files → {args.out}")
+    try:
+        check(site, Path(args.out))
+    except AssertionError as e:
+        print(f"ERROR: self-check failed: {e}", file=sys.stderr)
+        return 1
+    print(f"{len(site.courses)} courses, {len(all_files(site.courses))} files -> {args.out}")
     return 0
 
 
