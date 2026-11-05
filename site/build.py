@@ -401,11 +401,15 @@ def wanted_page(site: Site) -> str:
 def reviews_page(site: Site) -> str:
     content = ("<h1>课程评价 | Course review</h1>" + rate_cta(site) +
                "<p>四个主维度：课程质量、老师质量、难度、作业量；另有学到多少、沟通、找得到老师、是否推荐。全部 1–5 分，只打分、不写字，"
-               "匿名登记，每人对同一门课同一位老师一票，满 3 人才显示平均分。点表头可以排序。</p>"
+               "匿名登记，每人对同一门课同一位老师一票，满 3 人才显示平均分。搜一门课看它的总平均和每位老师的分数；下面的总表点表头可以排序。</p>"
                "<p>Four main dimensions: course quality, instructor quality, difficulty, work required; plus amount learned, communication, "
                "instructor access and whether you would recommend it. All on 1–5, scores only, recorded anonymously, one vote per person per "
-               "course and lecturer, averages shown from 3 voters. Click a header to sort.</p>"
-               + ratings_html("data-all", REVIEW_FORM))
+               "course and lecturer, averages shown from 3 voters. Search a course for its overall average and each lecturer's scores; "
+               "click a header of the table below to sort.</p>"
+               '<form class="lect-find" role="search"><label for="rv-q">搜课程 | Search a course</label>'
+               '<input id="rv-q" type="search" autocomplete="off" placeholder="课程代码、课名或老师 | code, course name or lecturer"></form>'
+               '<div id="rv-list"></div><section id="rv-panel" class="rv-panel" hidden></section>'
+               + ratings_html(f'data-all data-courses="{site.prefix}search.json"'))
     return page(site, "课程评价 | Course review", content, "匿名课程评分：课程质量、老师、难度、作业量 | anonymous course ratings")
 
 

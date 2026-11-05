@@ -147,16 +147,27 @@ def aggregate(data_root: Path) -> dict:
     """ratings.json: per course and lecturer the voter count, and the mean per dimension once MIN_N people voted."""
     out: dict = {"generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "min_n": MIN_N,
                  "dims": [k for k, _ in DIMS], "main": list(MAIN), "courses": {}}
-    for f in sorted((data_root / "votes").glob("*/*.json")) if (data_root / "votes").is_dir() else []:
-        doc = json.loads(f.read_text(encoding="utf-8"))
-        votes = list(doc["votes"].values())
-        entry: dict = {"name": doc["name"], "n": len(votes),
-                       "counts": {k: sum(1 for v in votes if k in v["scores"]) for k, _ in DIMS}}
+
+    def summary(votes: list[dict]) -> dict:
+        entry: dict = {"n": len(votes), "counts": {k: sum(1 for v in votes if k in v["scores"]) for k, _ in DIMS}}
         if len(votes) >= MIN_N:
             for k, _ in DIMS:
                 vals = [v["scores"][k] for v in votes if k in v["scores"]]
                 entry[k] = round(sum(vals) / len(vals), 1) if len(vals) >= MIN_N else None
+        return entry
+
+    per_course_votes: dict[str, dict[str, dict]] = {}   # code → voter → latest vote across all lecturers of the course
+    for f in sorted((data_root / "votes").glob("*/*.json")) if (data_root / "votes").is_dir() else []:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        entry = summary(list(doc["votes"].values()))
+        entry["name"] = doc["name"]
         out["courses"].setdefault(doc["code"], {"lecturers": {}})["lecturers"][f.stem] = entry
+        latest = per_course_votes.setdefault(doc["code"], {})
+        for voter, v in doc["votes"].items():
+            if voter not in latest or v.get("at", "") > latest[voter].get("at", ""):
+                latest[voter] = v
+    for code, by_voter in per_course_votes.items():   # the course as a whole: one vote per person, whoever taught them
+        out["courses"][code]["all"] = summary(list(by_voter.values()))
     return out
 
 

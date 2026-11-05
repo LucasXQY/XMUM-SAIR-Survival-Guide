@@ -116,6 +116,11 @@ def test_record_upserts_per_voter_and_aggregates_with_threshold():
     entry = rv.aggregate(data)["courses"]["COM107"]["lecturers"]["chua-ming-yam"]
     assert entry["n"] == 3 and entry["course"] == 3.3 and entry["instructor"] == 5.0 and entry["communication"] is None
     assert entry["counts"]["course"] == 3 and entry["counts"]["communication"] == 0
+    rv.record(data, rv.parse_review(_body().replace("Dr. Chua Ming Yam", "Someone Else")), "voter-a", "2026-11-05T09:00:00Z")   # older vote, other lecturer
+    rv.record(data, rv.parse_review(_body().replace("Dr. Chua Ming Yam", "Someone Else")), "voter-d", "2026-11-05T14:00:00Z")
+    course = rv.aggregate(data)["courses"]["COM107"]
+    assert course["all"]["n"] == 4 and course["all"]["course"] == 3.5                     # one vote per voter per course, latest wins
+    assert set(course["lecturers"]) == {"chua-ming-yam", "someone-else"} and "course" not in course["lecturers"]["someone-else"]
 
 
 def test_voter_hash_is_stable_and_salted():
