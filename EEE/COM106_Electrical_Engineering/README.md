@@ -7,6 +7,7 @@
 | [2021-09](2021-09/) | Wong Shen Yuong |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Handbooks](2021-09/Handbooks/) · [Past-Papers](2021-09/Past-Papers/) · [Syllabus](2021-09/Syllabus/) · [Labs](2021-09/Labs/) · [Tutorials](2021-09/Tutorials/) |
 | [2022-04](2022-04/) | | | [nsd-chen](https://github.com/nsd-chen) | [Labs](2022-04/Labs/) · [Past-Papers](2022-04/Past-Papers/) · [Tutorials](2022-04/Tutorials/) |
 
+- 代码变更 / Code change：2025 入学起这门课改为 [COM111](../COM111_Electrical_Engineering/)，2025-09 起的大纲、习题、实验手册在那边。Recoded [COM111](../COM111_Electrical_Engineering/) from the 2025 intake; the syllabus, tutorials and lab manuals from 2025-09 on live there.
 - 小贴士 / Tips：
 
 - 习题仅保留题目；夹带的手写解答已移除。Tutorials contain questions only; accompanying handwritten solutions have been removed.

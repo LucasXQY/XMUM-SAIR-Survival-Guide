@@ -38,8 +38,8 @@ def test_scan_real_repo():
     assert c.taken_in == ["2022-04"] and c.lecturers["2022-04"] == "Chua Ming Yam"
     files = build.all_files(courses)
     assert len(files) == N_FILES >= 482 and all((ROOT / f.path).is_file() for f in files)
-    com110 = next(c for c in courses if c.code == "COM110")
-    assert list(com110.sessions) == ["2026-09", "2025-04"]
+    com110 = next(c for c in courses if c.code == "COM110")   # sessions newest first, whatever has been uploaded since
+    assert list(com110.sessions) == sorted(com110.sessions, reverse=True) and {"2026-09", "2025-04"} <= set(com110.sessions)
 
 
 P = "/XMUM-SAIR-Survival-Guide/"
