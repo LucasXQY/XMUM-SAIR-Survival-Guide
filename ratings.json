@@ -18,6 +18,24 @@
     }
    }
   },
+  "COM106": {
+   "lecturers": {
+    "wong-shen-yuong": {
+     "counts": {
+      "access": 1,
+      "communication": 1,
+      "course": 1,
+      "difficulty": 1,
+      "instructor": 1,
+      "learned": 1,
+      "recommend": 1,
+      "work": 1
+     },
+     "n": 1,
+     "name": "Wong Shen Yuong"
+    }
+   }
+  },
   "EEE305": {
    "lecturers": {
     "tan-jian-ding": {
@@ -47,7 +65,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T09:12:26Z",
+ "generated": "2026-11-05T09:13:05Z",
  "main": [
   "course",
   "instructor",
