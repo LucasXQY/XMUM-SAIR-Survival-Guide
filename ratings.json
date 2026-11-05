@@ -92,6 +92,37 @@
      "name": "Tan Jian Ding"
     }
    }
+  },
+  "EEE418": {
+   "all": {
+    "counts": {
+     "access": 1,
+     "communication": 1,
+     "course": 1,
+     "difficulty": 1,
+     "instructor": 1,
+     "learned": 1,
+     "recommend": 1,
+     "work": 1
+    },
+    "n": 1
+   },
+   "lecturers": {
+    "abdul-khalip-rasheed": {
+     "counts": {
+      "access": 1,
+      "communication": 1,
+      "course": 1,
+      "difficulty": 1,
+      "instructor": 1,
+      "learned": 1,
+      "recommend": 1,
+      "work": 1
+     },
+     "n": 1,
+     "name": "Abdul Khalip Rasheed"
+    }
+   }
   }
  },
  "dims": [
@@ -104,7 +135,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T09:30:48Z",
+ "generated": "2026-11-05T10:15:23Z",
  "main": [
   "course",
   "instructor",
