@@ -1,7 +1,7 @@
 name: moderation
 
-# 评论审核：网站问答与老师页的评论（Discussions）、Issue 及其评论，按关键词表折叠辱骂、歧视和政治敏感内容并记日志。见 moderation/DESIGN.md
-# Comment moderation: Discussions (the site's Q&A and lecturer threads), issues and their comments are checked against the
+# 评论审核：网站问答的评论（Discussions）、Issue 及其评论，按关键词表折叠辱骂、歧视和政治敏感内容并记日志。见 moderation/DESIGN.md
+# Comment moderation: Discussions (the site's Q&A), issues and their comments are checked against the
 # word lists; abusive, discriminatory or politically sensitive content is folded and logged. See moderation/DESIGN.md
 on:
   discussion:

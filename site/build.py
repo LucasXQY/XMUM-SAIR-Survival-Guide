@@ -649,7 +649,7 @@ def home_page(site: Site) -> str:
     links = [("上传资料 | Upload material", UPLOAD_URL), ("征集榜 | Wanted", f"{site.prefix}wanted/"),
              ("最近上传 | Recent uploads", f"{site.prefix}recent/"), ("课程评价 | Course review", f"{site.prefix}reviews/"), ("添加评价 | Add a review", f"{site.prefix}rate/"),
              ("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
-             ("教师档案 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
+             ("教师名录 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
              ("如何贡献 | How to contribute", f"{site.prefix}contributing/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
              ("关于 | About", f"{site.prefix}about/"), ("GitHub 仓库 | Repository", GH)]
     content = (
