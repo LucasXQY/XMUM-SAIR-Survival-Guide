@@ -291,6 +291,19 @@ def test_dry_run_validation_failure_writes_problems():
     assert "Session" in (w / "work/PROBLEMS.md").read_text(encoding="utf-8") and not (w / "work/PR_BODY.md").exists()
 
 
+def test_issue_form_matches_parser():
+    """The form's labels are the parser's keys; they must agree byte for byte."""
+    yml = (ROOT / ".github/ISSUE_TEMPLATE/upload.yml").read_text(encoding="utf-8")
+    for title in intake.FIELDS.values():
+        assert f'label: "{title}"\n' in yml, title
+    for s in intake.CHECKS:
+        assert f'- label: "{s}"\n' in yml, s
+    for opt in intake.PROGS + intake.SUBS + intake.CREDITS:
+        assert f'- "{opt}"\n' in yml, opt
+    assert "labels: [upload]" in yml
+    assert (ROOT / ".github/ISSUE_TEMPLATE/config.yml").read_text(encoding="utf-8").strip() == "blank_issues_enabled: true"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

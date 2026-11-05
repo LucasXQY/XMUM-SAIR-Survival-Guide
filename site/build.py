@@ -249,6 +249,7 @@ NAV = [("EEE", "EEE/"), ("AIT", "AIT/"), ("ROBO", "ROBO/"), ("问答 | Q&A", "qa
        ("研究机会 | Research", "research/"), ("教师 | Lecturers", "lecturers/"),
        ("贡献者 | Contributors", "contributors/"), ("如何贡献 | Contribute", "contributing/"),
        ("关于 | About", "about/")]
+UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md)
 
 
 def template() -> Template:
@@ -257,7 +258,7 @@ def template() -> Template:
 
 def nav_html(site: Site) -> str:
     links = "".join(f'<a href="{site.prefix}{p}">{esc(t)}</a>' for t, p in NAV)
-    links += f'<a href="{GH}">GitHub</a>'
+    links += f'<a href="{GH}">GitHub</a><a class="btn upload" href="{UPLOAD_URL}">上传 | Upload</a>'
     form = (f'<form class="mini-search" action="{site.prefix}" method="get" role="search">'
             '<label class="sr-only" for="nav-q">搜索 | Search</label>'
             '<input id="nav-q" name="q" type="search" placeholder="搜索 | Search"></form>')
@@ -342,7 +343,11 @@ def prog_page(site: Site, prog: str) -> str:
 def root_page(site: Site, md: str) -> str:
     text = (site.root / md).read_text(encoding="utf-8")
     m = re.search(r"^# (.+)$", text, flags=re.M)
-    return page(site, m.group(1).strip() if m else md, render_md(site, text, md))
+    body = render_md(site, text, md)
+    if md == "CONTRIBUTING.md":
+        body = (f'<p class="notice">最简单的方式：填<a href="{UPLOAD_URL}">上传表单</a>，机器人会整理文件并开一个 PR 等维护者审核。<br>'
+                f'Easiest way: fill in the <a href="{UPLOAD_URL}">upload form</a>; the bot files everything and opens a PR for review.</p>') + body
+    return page(site, m.group(1).strip() if m else md, body)
 
 
 def home_page(site: Site) -> str:
@@ -353,7 +358,8 @@ def home_page(site: Site) -> str:
         cards.append(f'<a class="card" href="{site.prefix}{prog}/"><h3>{prog}</h3><p>{esc(name)}</p>'
                      f'<p class="stats">{n_mat} / {len(cs)} 门课有资料 · {n_files} 份文件<br>'
                      f'{n_mat} of {len(cs)} courses with material · {n_files} files</p></a>')
-    links = [("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
+    links = [("上传资料 | Upload material", UPLOAD_URL),
+             ("问答 | Q&A", f"{site.prefix}qa/"), ("研究机会 | Research", f"{site.prefix}research/"),
              ("教师档案 | Lecturers", f"{site.prefix}lecturers/"), ("贡献者 | Contributors", f"{site.prefix}contributors/"),
              ("如何贡献 | How to contribute", f"{site.prefix}contributing/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
              ("关于 | About", f"{site.prefix}about/"), ("GitHub 仓库 | Repository", GH)]

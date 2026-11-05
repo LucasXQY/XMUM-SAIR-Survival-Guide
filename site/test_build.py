@@ -220,6 +220,17 @@ def test_build_refuses_to_delete_a_foreign_directory():
     assert (out / "keep.txt").is_file()
 
 
+UPLOAD_URL = "https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml"
+
+
+def test_upload_button_everywhere():
+    _, out = _build()
+    for p in ["index.html", "EEE/index.html", "contributing/index.html"]:
+        assert UPLOAD_URL in (out / p).read_text(encoding="utf-8"), p
+    assert "上传 | Upload" in (out / "index.html").read_text(encoding="utf-8")
+    assert "上传表单" in (out / "contributing/index.html").read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

@@ -81,10 +81,12 @@ The course folder itself may hold a `README.md` (optional): one row per session 
 
 ## 如何贡献 | How to contribute
 
+- 最简单的上传方式：[上传表单](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml)（需要 GitHub 账号），机器人帮你改名、归位、登记并开 PR。
 - 欢迎上传空白试卷、教学大纲、笔记、实验经验、老师风格和考核比例等。
 - 文件命名、存放位置、上传前检查清单，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - 不会用 git 也没关系，发邮件给我们，我们帮你上传并署名。
 
+- Easiest way to upload: the [upload form](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml) (needs a GitHub account); the bot renames, files and registers everything and opens a PR for you.
 - Blank past papers, syllabi, notes, lab tips, lecturer styles, assessment weightings: all welcome.
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for file naming, folder placement and the pre-upload checklist.
 - Not comfortable with git? Email us and we'll upload it for you, with credit.
