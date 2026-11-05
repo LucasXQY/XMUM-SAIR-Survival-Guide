@@ -96,30 +96,30 @@
   "EEE305": {
    "all": {
     "counts": {
-     "access": 1,
-     "communication": 1,
-     "course": 1,
-     "difficulty": 1,
-     "instructor": 1,
-     "learned": 0,
-     "recommend": 1,
-     "work": 1
+     "access": 2,
+     "communication": 2,
+     "course": 2,
+     "difficulty": 2,
+     "instructor": 2,
+     "learned": 1,
+     "recommend": 2,
+     "work": 2
     },
-    "n": 1
+    "n": 2
    },
    "lecturers": {
     "tan-jian-ding": {
      "counts": {
-      "access": 1,
-      "communication": 1,
-      "course": 1,
-      "difficulty": 1,
-      "instructor": 1,
-      "learned": 0,
-      "recommend": 1,
-      "work": 1
+      "access": 2,
+      "communication": 2,
+      "course": 2,
+      "difficulty": 2,
+      "instructor": 2,
+      "learned": 1,
+      "recommend": 2,
+      "work": 2
      },
-     "n": 1,
+     "n": 2,
      "name": "Tan Jian Ding"
     }
    }
@@ -290,7 +290,7 @@
   "access",
   "recommend"
  ],
- "generated": "2026-11-05T10:31:07Z",
+ "generated": "2026-11-05T10:34:01Z",
  "main": [
   "course",
   "instructor",
