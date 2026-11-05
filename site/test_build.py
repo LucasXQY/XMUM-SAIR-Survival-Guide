@@ -240,7 +240,7 @@ def test_forbidden_words_checked_in_generator_not_content():
     assert build.check_generator_sources() == []
 
 
-UPLOAD_URL = "https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml"
+UPLOAD_URL = "https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml"
 
 
 def test_upload_button_everywhere():

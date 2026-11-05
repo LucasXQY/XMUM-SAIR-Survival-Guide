@@ -1,11 +1,11 @@
 name: reviews
 
-# 课程评价：把「课程评价」Issue 的分数匿名登记到私有数据仓库，汇总发布到本仓库的 data 分支，然后删除 Issue。见 site/DESIGN.md §15
+# 课程评价：把「课程评价」Issue 的分数匿名登记到私有数据仓库，汇总发布到本仓库的 data 分支，然后关闭并锁定 Issue。见 site/DESIGN.md §15
 # Course reviews: records the scores of a review issue anonymously in the private data repository, publishes aggregates
-# to this repository's `data` branch and deletes the issue. See site/DESIGN.md §15
+# to this repository's `data` branch and closes and locks the issue. See site/DESIGN.md §15
 #
 # 需要的设置 | Required settings:
-#   secrets.REVIEWS_TOKEN     维护者的 token：能写私有数据仓库、能删除本仓库的 Issue | maintainer token: write on the data repo, delete issues here
+#   secrets.REVIEWS_TOKEN     维护者的 token，只需对私有数据仓库有 Contents 读写 | maintainer token with Contents read/write on the data repo only
 #   secrets.REVIEWS_SALT      任意长随机字符串，投票人哈希用 | any long random string, used to hash voters
 #   vars.REVIEWS_DATA_REPO    私有数据仓库 owner/name | the private data repository, owner/name
 on:

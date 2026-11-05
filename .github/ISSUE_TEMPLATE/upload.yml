@@ -13,7 +13,7 @@ body:
         - 单个附件最大 **25 MB**；多份文件可以打成一个 zip。更大的文件请拆分，或发邮件到 `xieqiyi@ieee.org`。
         - 只收 pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv。**照片请先合成一个 PDF**，单独的图片不收。
         - 一次提交只选一种资料类型；不同类型请分开提交。
-        - 规则见 [CONTRIBUTING.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/CONTRIBUTING.md) 与 [DISCLAIMER.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/DISCLAIMER.md)。
+        - 规则见 [CONTRIBUTING.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/CONTRIBUTING.md) 与 [DISCLAIMER.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/DISCLAIMER.md)。
         - 选「匿名」时仓库里不会出现你的名字，但 GitHub 本身仍会显示这个 Issue 和 PR 是谁发的。
 
         Thanks for sharing! Fill in the form, drag your files into the **Files** box and press **Submit new issue**. Within a few minutes the bot replies here with either a link to the pull request it filed or a list of things to fix. Once a maintainer merges it, the website updates.
@@ -21,7 +21,7 @@ body:
         - Each attachment is at most **25 MB**; several files can go in one zip. Split bigger files or email `xieqiyi@ieee.org`.
         - Accepted: pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv. **Combine photos into one PDF**; images on their own are not accepted.
         - One type of material per submission; submit different types separately.
-        - Rules: [CONTRIBUTING.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/CONTRIBUTING.md) and [DISCLAIMER.md](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/blob/main/DISCLAIMER.md).
+        - Rules: [CONTRIBUTING.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/CONTRIBUTING.md) and [DISCLAIMER.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/DISCLAIMER.md).
         - "Anonymous" keeps your name out of the repository files, but GitHub itself still shows who opened this issue and the PR.
 
   - type: dropdown

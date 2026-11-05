@@ -1,7 +1,7 @@
 # 课程评价表单。字段标题是 reviews/reviews.py 的解析键（FIELDS / DIMS / CONFIRM / SKIP），改标题要同时改脚本。
 # The course-review form. Field labels are the parse keys of reviews/reviews.py; change both or neither.
 name: 课程评价 | Course review
-description: 给一门课和老师打分（只打分，不写字）。匿名登记，这个 Issue 会被机器人自动删除 | Rate a course and its lecturer (scores only). Recorded anonymously; the bot deletes this issue afterwards
+description: 给一门课和老师打分（只打分，不写字）。分数只公开平均值 | Rate a course and its lecturer (scores only). Only averages are published
 title: "[评价 | Review] "
 labels: [review]
 body:
@@ -10,11 +10,11 @@ body:
       value: |
         每人对同一门课、同一位老师只算一票，再提交一次就是改分。只有分数，不收文字；想描述老师请去网站的老师页留言。
 
-        **匿名说明**：机器人读到分数后会立刻删除这个 Issue，原始投票只存在维护者的私有仓库里（记录的是你账号的加盐哈希，不是用户名），网站上只显示平均分和人数，少于 3 人不显示平均分。但在删除前的一两分钟内这个 Issue 是公开的，watch 本仓库的人会收到含表单内容的邮件通知，这一点请知悉。
+        **匿名说明**：原始投票只存在维护者的私有仓库里（记录的是你账号的加盐哈希，不是用户名），网站上只显示平均分和人数，少于 3 人不显示平均分。机器人登记后会关闭并锁定这个 Issue，维护者会定期删除；在删除之前，这个 Issue 和你的分数在 GitHub 上是公开的，这一点请知悉。
 
         One vote per person per course and lecturer; submitting again changes it. Scores only, no text: to describe a lecturer, comment on their page on the site.
 
-        **Anonymity**: the bot deletes this issue as soon as it has read the scores; raw votes live only in the maintainer's private repository (keyed by a salted hash of your account, not your username), and the site shows averages and counts only, with no average below 3 voters. Be aware that for the minute or two before deletion this issue is public and people watching the repository get an email with its contents.
+        **Anonymity**: raw votes live only in the maintainer's private repository (keyed by a salted hash of your account, not your username), and the site shows averages and counts only, with no average below 3 voters. After recording, the bot closes and locks this issue and the maintainer deletes these periodically; until then this issue and your scores are public on GitHub.
 
   - type: input
     id: code

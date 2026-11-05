@@ -1,6 +1,6 @@
 # 上传通道设计 | Upload channel design
 
-2026-11-05 · 适用于 https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide · 网站设计见 [site/DESIGN.md](../site/DESIGN.md)
+2026-11-05 · 适用于 https://github.com/xmum-sair/xmum-sair.github.io · 网站设计见 [site/DESIGN.md](../site/DESIGN.md)
 
 给实现上传通道的人读。仓库内容规则见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
@@ -51,7 +51,7 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 
 ## 4. 上传者看到的 | What the uploader sees（已定）
 
-入口三处：网站页头"上传 | Upload"按钮、网站"如何贡献"页顶部、仓库 README 和 CONTRIBUTING 的"如何提交"一节。都指向 `https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/issues/new?template=upload.yml`。
+入口三处：网站页头"上传 | Upload"按钮、网站"如何贡献"页顶部、仓库 README 和 CONTRIBUTING 的"如何提交"一节。都指向 `https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml`。
 
 表单 `.github/ISSUE_TEMPLATE/upload.yml`，标题前缀 `[上传 | Upload] `，自动打标签 `upload`。字段（标题即解析键，括号内为类型，★ 必填）：
 

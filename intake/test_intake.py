@@ -108,11 +108,11 @@ def test_validate_unticked_box_and_missing_nickname():
 
 def test_attachment_links_accepts_only_file_urls():
     links = intake.attachment_links("[a.pdf](https://github.com/user-attachments/files/1/a.pdf) "
-                                    "[b.pdf](https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/files/2/b.pdf) "
+                                    "[b.pdf](https://github.com/xmum-sair/xmum-sair.github.io/files/2/b.pdf) "
                                     "[x](https://github.com/user-attachments/assets/abc) "
                                     "[a.pdf](https://github.com/user-attachments/files/1/a.pdf)")
     assert links == [("a.pdf", "https://github.com/user-attachments/files/1/a.pdf"),
-                     ("b.pdf", "https://github.com/LucasXQY/XMUM-SAIR-Survival-Guide/files/2/b.pdf")]
+                     ("b.pdf", "https://github.com/xmum-sair/xmum-sair.github.io/files/2/b.pdf")]
 
 
 def test_no_files_message_mentions_images():
