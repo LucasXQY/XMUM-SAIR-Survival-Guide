@@ -249,6 +249,14 @@ def lecturers(site: Site) -> dict[str, list[tuple[str, str]]]:
     return dict(sorted(out.items(), key=lambda kv: kv[0].lower()))
 
 
+def known_lecturers(site: Site) -> str:
+    """Slugs of the lecturers that have a directory page; ratings.js links a name only when it is listed here
+    (a review can name a lecturer no course README mentions)."""
+    if not hasattr(site, "_known"):
+        site._known = " ".join(sorted({lecturer_slug(n) for n in lecturers(site)}))
+    return site._known
+
+
 def lecturer_links_html(site: Site, cell: str) -> str:
     names = split_lecturers(cell)
     if not names:
@@ -426,7 +434,7 @@ def reviews_page(site: Site) -> str:
                '<div id="rv-list"></div><section id="rv-panel" class="rv-panel" hidden></section>'
                '<section id="rv-all"><h2 id="rated">已有评价的课程 | Rated courses</h2>'
                '<p class="muted">点一门课，看它的总平均和每位老师的分数。| Open a course for its overall scores and each lecturer\'s.</p>'
-               + ratings_html(f'data-all data-courses="{site.prefix}search.json" data-form="{REVIEW_FORM}"') + "</section>"
+               + ratings_html(f'data-all data-courses="{site.prefix}search.json" data-form="{REVIEW_FORM}" data-known="{known_lecturers(site)}"') + "</section>"
                + lecturer_directory_html(site))
     return page(site, "课程评价 | Course review", content, "匿名课程评分：课程质量、老师、难度、作业量 | anonymous course ratings")
 
@@ -815,7 +823,7 @@ def course_page(site: Site, c: Course) -> str:
             parts.append(f'<h4>{t} ({len(fs)})</h4><ul class="files">{"".join(file_item(f) for f in fs)}</ul>')
     lects = sorted({n for cell in c.lecturers.values() for n in split_lecturers(cell)})
     rate = f"{REVIEW_FORM}&code={quote(c.code)}" + (f"&lecturer={quote(lects[0])}" if len(lects) == 1 else "")
-    review = '<h2 id="review">课程评价 | Course review</h2>' + ratings_html(f'data-code="{esc(c.code)}"', rate)
+    review = '<h2 id="review">课程评价 | Course review</h2>' + ratings_html(f'data-code="{esc(c.code)}" data-known="{known_lecturers(site)}"', rate)
     info = ['<h2 id="details">课程信息 | Course details</h2>',
             f'<p class="meta">修课学期 | Taken in: {"、".join(c.taken_in) or "—"}</p>']
     if details:

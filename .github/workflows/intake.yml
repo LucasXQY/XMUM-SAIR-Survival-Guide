@@ -42,13 +42,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "pymupdf>=1.24,<2" "markdown>=3.4,<4"
+      - run: pip install "pymupdf>=1.24,<2" "markdown>=3.4,<4" "anthropic>=2.6,<3"
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Rebuild upload pull requests
         env:
           GH_TOKEN: ${{ github.token }}
+          # Claude pre-check of the uploaded files, written into the PR; without the key the PR just says it did not run
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL_UPLOAD: ${{ vars.CLAUDE_MODEL_UPLOAD }}
+          CLAUDE_DAILY_UPLOAD: ${{ vars.CLAUDE_DAILY_UPLOAD }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           EVENT: ${{ github.event_name }}
           ISSUE: ${{ github.event.issue.number || inputs.issue }}

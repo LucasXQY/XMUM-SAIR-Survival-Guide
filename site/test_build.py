@@ -385,6 +385,12 @@ def test_ratings_hooks_and_reviews_page():
     assert build.lecturer_slug("Dr. Chua Ming Yam") == build.lecturer_slug("chua  ming yam") == "chua-ming-yam"
     course = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
     assert 'class="ratings" data-code="COM107"' in course and "评价这门课" in course
+    # a lecturer named only in a review has no directory page: ratings.js links only the names listed in data-known
+    known = re.search(r'data-known="([^"]*)"', course).group(1).split()
+    assert "chua-ming-yam" in known and all((out / "lecturers" / k / "index.html").is_file() for k in known)
+    assert known == sorted({build.lecturer_slug(n) for n in build.lecturers(build.Site(ROOT, P))})
+    rjs = (out / "static/ratings.js").read_text(encoding="utf-8")
+    assert "dataset.known" in rjs and "data.courses[want" in rjs
     assert build.REVIEW_FORM + "&code=COM107&lecturer=Chua%20Ming%20Yam" in course   # one known lecturer: prefilled
     lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
     assert 'class="ratings"' not in lect and "giscus" not in lect              # lecturer pages carry no scores and no threads
