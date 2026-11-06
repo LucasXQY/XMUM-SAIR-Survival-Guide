@@ -58,3 +58,28 @@ npm test
 本地联调：`npx wrangler dev --port 8787 --var TURNSTILE_SECRET:1x0000000000000000000000000000000AA --var ANTHROPIC_API_KEY:<key>`，再用 `ASSISTANT_URL=http://localhost:8787 TURNSTILE_SITE_KEY=1x00000000000000000000AA python site/build.py` 生成网站（这两个是 Cloudflare 公布的总是通过的测试密钥）。
 
 Local run: start `wrangler dev` as above and build the site with those two variables (Cloudflare's always-pass Turnstile test keys).
+
+## 课程评价 | Course reviews
+
+2026-11-06 起，课程评价也由这个 Worker 处理，不再用 GitHub 表单。
+
+Since 2026-11-06 this Worker also takes the course reviews; the GitHub form is gone.
+
+- 网站 `/rate/` 上直接打分，不用登录。每一票都要过一次 Turnstile 人机验证。
+- 同一浏览器对同一门课同一位老师只算一票（浏览器里存一个随机编号），再交一次就是改分。
+- 硬上限：同一网络（IP）每天 100 票，同一浏览器每天 20 票。IP 只用于这一条上限，从不把票标成可疑，因为校园 WiFi 下很多同学共用一个地址。地址和浏览器编号都只存加盐哈希。
+- 这两种票会被标记「待审」，但照常计入平均分：某门课某位老师一小时内超过 8 票；老师或课程不在网站名单里。名单外的老师名和课程，在你保留之前，网站上只显示「待确认」，免得有人把骂人的话当成名字。
+- 管理页：`https://xmum-sair-assistant.xieqiyi.workers.dev/admin`，输入口令（secret `REVIEWS_ADMIN_TOKEN`）后逐个或整组「保留」「丢弃」。每周一工作流 `review-queue` 有待审的票就开 Issue 提醒，审完自动关闭。
+- GitHub 表单时期的票在部署时自动导入（可重复，不会重复计票），平均分和人数不变。私有数据仓库留作备份，确认无误后可以删掉。
+- 投票存在 Durable Object 的 SQLite 里（`Reviews`），免费计划每天 10 万行写入、5 GB 存储，超出只报错不收费。
+
+- Rate on the site's `/rate/` page with no login; every vote needs one Turnstile check.
+- One vote per browser per course and lecturer (a random id in the browser); submitting again changes it.
+- Hard caps: 100 votes a day per network (IP) and 20 per browser. The address is used for that cap only and never makes a vote suspicious, since a whole class can share one campus address. Addresses and browser ids are stored as salted hashes.
+- Flagged for review but counted: more than 8 votes for one course and lecturer within an hour; a lecturer or course not on the site list. Unlisted names show as "unconfirmed" until you keep one of their votes.
+- Admin page at `/admin` on the Worker with the `REVIEWS_ADMIN_TOKEN` secret; the weekly `review-queue` workflow opens an issue while flagged votes wait.
+- Votes from the GitHub-form days are imported on every deploy (idempotent).
+
+**设置 | Setup**：在仓库 Secrets 里加 `REVIEWS_ADMIN_TOKEN`（一长串随机字符，自己保存好，管理页要用），然后运行一次 **Actions → assistant**。
+
+Add the `REVIEWS_ADMIN_TOKEN` secret (a long random string you keep for the admin page), then run **Actions → assistant** once.

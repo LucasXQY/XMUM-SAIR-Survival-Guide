@@ -151,22 +151,32 @@ def main(argv: list[str] | None = None) -> int:
     import claude_check as cc
     state = cc.StateFile(REPO, PENDING)
     pending_data, pending_sha = state.read()
-    pending = pending_data.get("items", [])
-    raw = run("gh", "api", f"repos/{REPO}/contents/ratings.json?ref=data", check=False)
-    ratings = json.loads(base64.b64decode(json.loads(raw)["content"])) if raw.startswith("{") else {}
+    legacy = pending_data.get("items", [])   # noted by the GitHub-form bot; nothing new arrives here any more
+    pending = list(legacy)
+    worker, admin = os.environ.get("ASSISTANT_URL", "").rstrip("/"), os.environ.get("REVIEWS_ADMIN_TOKEN", "")
+    if worker and admin:   # since 2026-11-06 the reviews live on the Worker: its kept votes give lecturer and session
+        import urllib.request
+        req = urllib.request.Request(f"{worker}/admin/api", data=json.dumps({"token": admin, "op": "lecturers"}).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=60) as r:
+            pending = pending + json.loads(r.read().decode("utf-8"))["lecturers"]
+        ratings = {}
+    else:                  # the GitHub-form days: the data branch's ratings.json (course and lecturer, no session)
+        raw = run("gh", "api", f"repos/{REPO}/contents/ratings.json?ref=data", check=False)
+        ratings = json.loads(base64.b64decode(json.loads(raw)["content"])) if raw.startswith("{") else {}
     if not args.dry_run:
         run("git", "fetch", "-q", "origin", "main")
         run("git", "checkout", "-q", "-B", BRANCH, "origin/main")
     paths = course_readmes(ROOT)
     readmes = {code: p.read_text(encoding="utf-8") for code, p in paths.items()}
     add, missing = wanted(pending, ratings, readmes)
-    keep = [p for p in pending if (p["code"], lecturer_key(p["name"])) in {(a["code"], lecturer_key(a["name"])) for a in add}
+    keep = [p for p in legacy if (p["code"], lecturer_key(p["name"])) in {(a["code"], lecturer_key(a["name"])) for a in add}
             or p["code"] not in readmes]   # entries main already has are done
     print(f"{len(add)} to add, {len(missing)} without a course folder")
     if args.dry_run:
         print(pr_body(add, missing) if add else "nothing to propose")
         return 0
-    if keep != pending:
+    if keep != legacy:
         state.write({"items": keep}, pending_sha, "pending lecturers: drop the ones now in main")
     existing = run("gh", "pr", "list", "--repo", REPO, "--head", BRANCH, "--state", "open", "--json", "number", "--jq", ".[0].number", check=False)
     if not add:

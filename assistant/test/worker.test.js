@@ -68,3 +68,52 @@ test("daily caps stop a visitor, then the whole site", async () => {
   const fourth = new Request(other.url, { method: "POST", headers: { Origin: ORIGIN, "CF-Connecting-IP": "9.9.9.9" }, body: JSON.stringify({ ...Q, session }) });
   assert.equal((await (await handle(fourth, e, deps())).json()).message.includes("总次数"), true);
 });
+
+// ---- course reviews on the same Worker
+
+import { reviewsApi, MemoryStore } from "../src/reviews.js";
+
+function reviewsEnv(overrides = {}) {
+  const store = new MemoryStore();
+  const reviews = { fetch: async (url, init) => {
+    const r = await reviewsApi(store, JSON.parse(init.body));
+    return new Response(JSON.stringify(r.data), { status: r.status });
+  } };
+  return { ...env(), REVIEWS_ADMIN_TOKEN: "letmein", REVIEWS: { idFromName: () => "id", get: () => reviews }, ...overrides };
+}
+const SEARCH = { courses: [{ code: "COM107", name: "Circuits and Devices", url: "/EEE/COM107/" }], files: [],
+                 lecturers: [{ name: "Chua Ming Yam", slug: "chua-ming-yam", codes: ["COM107"] }] };
+function reviewDeps(turnstileOk = true) {
+  return { ...deps(turnstileOk), fetch: async (url) => ({ ok: true, json: async () => (String(url).includes("turnstile") ? { success: turnstileOk } : SEARCH) }) };
+}
+const VOTE = { code: "COM107", lecturer: "Chua Ming Yam", session: "2022-04", confirm: true, device: "dev-1",
+               scores: { course: 4, instructor: 5, difficulty: 3, work: 2 } };
+const post = (path, body, origin = ORIGIN) => new Request(`https://helper.example${path}`, {
+  method: "POST", headers: { Origin: origin, "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" }, body: JSON.stringify(body) });
+
+test("every vote needs its own human check; no GitHub account involved", async () => {
+  const e = reviewsEnv();
+  assert.equal((await handle(post("/vote", VOTE), e, reviewDeps())).status, 401);
+  assert.equal((await handle(post("/vote", { ...VOTE, turnstile: "bad" }), e, reviewDeps(false))).status, 401);
+  const ok = await handle(post("/vote", { ...VOTE, turnstile: "good" }), e, reviewDeps());
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).course.all.n, 1);
+  assert.equal((await handle(post("/vote", { ...VOTE, turnstile: "good" }, "https://evil.example"), e, reviewDeps())).status, 403);
+});
+
+test("ratings are public and the admin API needs the token", async () => {
+  const e = reviewsEnv();
+  await handle(post("/vote", { ...VOTE, turnstile: "good" }), e, reviewDeps());
+  const r = await handle(new Request("https://helper.example/ratings", { headers: { Origin: "https://anywhere.example" } }), e, reviewDeps());
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("Access-Control-Allow-Origin"), "*");
+  assert.equal((await r.json()).courses.COM107.all.n, 1);
+  const admin = (body) => handle(new Request("https://helper.example/admin/api", { method: "POST", body: JSON.stringify(body) }), e, reviewDeps());
+  assert.equal((await admin({ token: "nope", op: "summary" })).status, 401);
+  const s = await admin({ token: "letmein", op: "summary" });
+  assert.equal(s.status, 200);
+  assert.equal((await s.json()).total, 1);
+  const page = await handle(new Request("https://helper.example/admin"), e, reviewDeps());
+  assert.equal(page.status, 200);
+  assert.ok((await page.text()).includes("/admin/api"));
+});
