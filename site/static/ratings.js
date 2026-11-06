@@ -1,5 +1,6 @@
 /* XMUM SAIR 生存指南 — course ratings: fills .ratings containers from ratings.json (written by reviews.yml to the data branch).
-   On /reviews/ it also runs the course search and the course panel (overall tiles + per-lecturer table). */
+   A course page gets its overall tiles and one score card per lecturer. /reviews/ gets the search (courses and lecturers),
+   the rated courses as chips, and a course panel that opens when one is picked. */
 (function () {
   'use strict';
   var boxes = Array.prototype.slice.call(document.querySelectorAll('.ratings[data-src]'));
@@ -17,17 +18,9 @@
     if (text !== undefined && text !== null) e.textContent = String(text);
     return e;
   }
-  function score(v) {
-    var s = el('span', 'score');
-    if (v === null || v === undefined) { s.textContent = '—'; return s; }
-    var bar = el('span', 'bar');
-    bar.style.setProperty('--v', (v / 5).toFixed(2));
-    s.appendChild(bar);
-    s.appendChild(el('span', null, v.toFixed(1)));
-    return s;
-  }
-  function tiles(data, entry) {   // the four main dimensions as big tiles; darker = higher
-    var wrap = el('div', 'tiles');
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function tiles(data, entry, cls) {   // the four main dimensions as tiles; darker = higher
+    var wrap = el('div', 'tiles' + (cls ? ' ' + cls : ''));
     data.main.forEach(function (d) {
       var t = el('div', 'tile'), v = entry ? entry[d] : null;
       if (v === null || v === undefined) { t.classList.add('empty'); t.appendChild(el('b', null, '—')); }
@@ -37,84 +30,77 @@
     });
     return wrap;
   }
-  function rows(data, courses, filter) {
-    var out = [];
-    Object.keys(data.courses).sort().forEach(function (code) {
-      var lects = data.courses[code].lecturers || {};
-      Object.keys(lects).forEach(function (key) {
-        var r = { code: code, key: key, e: lects[key], name: (courses[code] || {}).name || '' };
-        if (filter(r)) out.push(r);
-      });
-    });
-    return out;
+  function lecturersOf(data, code) {
+    var lects = (data.courses[code] || {}).lecturers || {};
+    return Object.keys(lects).map(function (key) { return { key: key, e: lects[key] }; })
+      .sort(function (a, b) { return b.e.n - a.e.n || a.e.name.localeCompare(b.e.name); });
   }
-  function table(data, list, withCourse, onCourse) {
-    var dims = data.main.concat(data.dims.filter(function (d) { return data.main.indexOf(d) < 0; }));
-    var t = el('table'), thead = el('thead'), tr = el('tr'), tbody = el('tbody');
-    var cols = [];
-    if (withCourse) cols.push({ key: 'code', label: '课程 Course' });
-    cols.push({ key: 'name', label: '老师 Lecturer' });
-    cols.push({ key: 'n', label: '人数 Voters' });
-    dims.forEach(function (d) { cols.push({ key: d, label: LABELS[d] || d }); });
-    cols.forEach(function (c) {
-      var th = el('th', null, c.label);
-      th.setAttribute('data-sort', c.key);
-      th.addEventListener('click', function () { render(c.key); });
-      tr.appendChild(th);
-    });
-    thead.appendChild(tr); t.appendChild(thead); t.appendChild(tbody);
-    var dir = 1;
-    function value(r, k) { return k === 'code' ? r.code : k === 'name' ? r.e.name : k === 'n' ? r.e.n : (r.e[k] === undefined || r.e[k] === null ? -1 : r.e[k]); }
-    function render(sortKey) {
-      if (sortKey) { list.sort(function (a, b) { var x = value(a, sortKey), y = value(b, sortKey); return (x < y ? -1 : x > y ? 1 : 0) * dir; }); dir = -dir; }
-      while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
-      list.forEach(function (r) {
-        var row = el('tr');
-        if (withCourse) {
-          var td = el('td'); var a = el('a', null, r.code + (r.name ? ' ' + r.name : ''));
-          a.href = base + 'reviews/?c=' + encodeURIComponent(r.code);
-          if (onCourse) a.addEventListener('click', function (ev) { ev.preventDefault(); onCourse(r.code); });
-          td.appendChild(a); row.appendChild(td);
-        }
-        var td2 = el('td'); var a2 = el('a', null, r.e.name); a2.href = base + 'lecturers/' + r.key + '/'; td2.appendChild(a2); row.appendChild(td2);
-        row.appendChild(el('td', 'n', r.e.n));
-        dims.forEach(function (d) {
-          var td3 = el('td');
-          if (r.e.n < data.min_n) td3.textContent = d === dims[0] ? ('满 ' + data.min_n + ' 人显示 | shown at ' + data.min_n) : '';
-          else td3.appendChild(score(r.e[d]));
-          row.appendChild(td3);
+  function cards(data, list) {   // one card per lecturer: name, voters, the four main tiles, the extra dimensions in a line
+    var wrap = el('div', 'lcards');
+    list.forEach(function (r) {
+      var c = el('div', 'lcard'), top = el('div', 'lcard-top');
+      var a = el('a', 'lcard-name', r.e.name); a.href = base + 'lecturers/' + r.key + '/';
+      top.appendChild(a);
+      top.appendChild(el('small', null, r.e.n + ' 人评价 | voters'));
+      c.appendChild(top);
+      var shown = r.e.n >= data.min_n;
+      c.appendChild(tiles(data, shown ? r.e : null, 'mini'));
+      if (shown) {
+        var extra = data.dims.filter(function (d) { return data.main.indexOf(d) < 0; }).map(function (d) {
+          var v = r.e[d];
+          return (LABELS[d] || d) + ' ' + (v === null || v === undefined ? '—' : v.toFixed(1));
         });
-        tbody.appendChild(row);
-      });
-    }
-    render();
-    var wrap = el('div', 'table-wrap'); wrap.appendChild(t);
+        if (extra.length) c.appendChild(el('p', 'extras', extra.join(' · ')));
+      } else {
+        c.appendChild(el('p', 'extras', '满 ' + data.min_n + ' 人显示分数 | scores appear at ' + data.min_n + ' voters'));
+      }
+      wrap.appendChild(c);
+    });
     return wrap;
   }
   function updated(data) { return el('p', 'muted', '数据更新于 | Updated ' + (data.generated || '').replace('T', ' ').replace('Z', ' UTC')); }
-  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function belowMin(data, all) {
+    return all && all.n < data.min_n ? el('p', 'muted', all.n + ' 人评价，满 ' + data.min_n + ' 人显示平均分 | ' + all.n + ' rated; averages appear at ' + data.min_n) : null;
+  }
 
-  // a course page: overall tiles, then the lecturers of that course
-  function fillCourse(box, data, courses) {
+  // a course page: overall tiles, then a card per lecturer
+  function fillCourse(box, data) {
     var code = box.dataset.code, entry = data.courses[code];
     clear(box);
     if (!entry) { box.appendChild(el('p', 'muted', '还没有人评价，来做第一个 | No ratings yet; be the first.')); return; }
     box.appendChild(tiles(data, entry.all));
-    if (entry.all && entry.all.n < data.min_n) box.appendChild(el('p', 'muted', entry.all.n + ' 人评价，满 ' + data.min_n + ' 人显示平均分 | ' + entry.all.n + ' rated; averages appear at ' + data.min_n));
-    box.appendChild(table(data, rows(data, courses, function (r) { return r.code === code; }), false));
+    var note = belowMin(data, entry.all);
+    if (note) box.appendChild(note);
+    box.appendChild(cards(data, lecturersOf(data, code)));
     box.appendChild(updated(data));
   }
 
-  // /reviews/: search box (courses and lecturers), course panel, global table
+  // /reviews/: search box (courses and lecturers), rated courses as chips, course panel
   function setupReviews(box, data, courses, people) {
     var q = document.getElementById('rv-q'), list = document.getElementById('rv-list'), panel = document.getElementById('rv-panel');
     var codes = Object.keys(courses).sort();
-    var all = document.getElementById('rv-all') || box;   // the table and its heading step aside while a course is open
-    function renderTable(filter) {
+    var all = document.getElementById('rv-all') || box;   // the chips and their heading step aside while a course is open
+    var rated = Object.keys(data.courses).sort(function (a, b) {
+      var x = (data.courses[a].all || {}).n || 0, y = (data.courses[b].all || {}).n || 0;
+      return y - x || (a < b ? -1 : 1);
+    });
+    function courseLink(code, cls, label) {
+      var a = el('a', cls, label);
+      a.href = base + 'reviews/?c=' + encodeURIComponent(code);
+      a.addEventListener('click', function (ev) { ev.preventDefault(); showCourse(code); });
+      return a;
+    }
+    function renderChips(filter) {
       clear(box);
-      var l = rows(data, courses, function (r) { return !filter || (r.code + ' ' + r.name + ' ' + r.e.name).toLowerCase().indexOf(filter) >= 0; });
-      if (!l.length) { box.appendChild(el('p', 'muted', filter ? '总表里没有匹配的行 | Nothing in the table matches.' : '还没有人评价，来做第一个 | No ratings yet; be the first.')); return; }
-      box.appendChild(table(data, l, true, showCourse));
+      var hits = rated.filter(function (c) { return !filter || (c + ' ' + ((courses[c] || {}).name || '')).toLowerCase().indexOf(filter) >= 0; });
+      if (!hits.length) { box.appendChild(el('p', 'muted', filter ? '没有匹配的已评价课程 | No rated course matches.' : '还没有人评价，来做第一个 | No ratings yet; be the first.')); return; }
+      var wrap = el('div', 'chips');
+      hits.forEach(function (c) {
+        var a = courseLink(c, 'chip', c + ' ' + ((courses[c] || {}).name || ''));
+        a.appendChild(el('small', null, ((data.courses[c].all || {}).n || 0) + ' 人'));
+        wrap.appendChild(a);
+      });
+      box.appendChild(wrap);
       box.appendChild(updated(data));
     }
     function renderList(filter) {
@@ -127,11 +113,8 @@
         list.appendChild(el('p', 'rv-group', '课程 | Courses'));
         var ul = el('ul', 'rv-list');
         hits.forEach(function (c) {
-          var li = el('li'), a = el('a', null, c + ' ' + courses[c].name);
-          a.href = base + 'reviews/?c=' + encodeURIComponent(c);
-          a.addEventListener('click', function (ev) { ev.preventDefault(); showCourse(c); });
-          var e = data.courses[c];
-          li.appendChild(a);
+          var li = el('li'), e = data.courses[c];
+          li.appendChild(courseLink(c, null, c + ' ' + courses[c].name));
           li.appendChild(el('small', null, e && e.all ? ' · ' + e.all.n + ' 人评价 | voters' : ' · 还没有评价 | no ratings yet'));
           ul.appendChild(li);
         });
@@ -168,12 +151,13 @@
       var avg = el('div');
       avg.appendChild(el('p', 'rv-label', entry && entry.all ? '总平均 | Overall · ' + entry.all.n + ' 人 | voters' : '还没有人评价 | No ratings yet'));
       avg.appendChild(tiles(data, entry && entry.all));
-      if (entry && entry.all && entry.all.n < data.min_n) avg.appendChild(el('p', 'muted', '满 ' + data.min_n + ' 人显示平均分 | averages appear at ' + data.min_n + ' voters'));
+      var note = belowMin(data, entry && entry.all);
+      if (note) avg.appendChild(note);
       head.appendChild(avg);
       panel.appendChild(head);
       if (entry) {
         panel.appendChild(el('h3', null, '按老师 | By lecturer'));
-        panel.appendChild(table(data, rows(data, courses, function (r) { return r.code === code; }), false));
+        panel.appendChild(cards(data, lecturersOf(data, code)));
       }
       panel.hidden = false; all.hidden = true; list.hidden = true;
       var url = new URL(location.href); url.searchParams.set('c', code); history.replaceState(null, '', url);
@@ -182,7 +166,7 @@
       panel.hidden = true; all.hidden = false; list.hidden = false;
       var url = new URL(location.href); url.searchParams.delete('c'); history.replaceState(null, '', url);
     }
-    function onInput() { var s = q.value.trim().toLowerCase(); if (!panel.hidden) hideCourse(); renderList(s); renderTable(s); }
+    function onInput() { var s = q.value.trim().toLowerCase(); if (!panel.hidden) hideCourse(); renderList(s); renderChips(s); }
     q.addEventListener('input', onInput);
     if (q.form) q.form.addEventListener('submit', function (ev) {
       ev.preventDefault();
@@ -191,7 +175,7 @@
       var first = exact || codes.filter(function (c) { return (c + ' ' + courses[c].name + ' ' + (courses[c].lecturers || []).join(' ')).toLowerCase().indexOf(s) >= 0; })[0];
       if (first) showCourse(first);
     });
-    renderTable('');
+    renderChips('');
     var want = new URLSearchParams(location.search).get('c');
     if (want && courses[want.toUpperCase()]) showCourse(want.toUpperCase());
   }
@@ -206,7 +190,7 @@
     var data = res[0], idx = res[1];
     boxes.forEach(function (b) {
       if (b.hasAttribute('data-all')) setupReviews(b, data, idx.courses, idx.people);
-      else if (b.dataset.code) fillCourse(b, data, idx.courses);
+      else if (b.dataset.code) fillCourse(b, data);
     });
   }).catch(function () { boxes.forEach(fail); });
 })();
