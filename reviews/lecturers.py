@@ -24,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 from reviews import lecturer_key   # noqa: E402  (same key the ratings use)
+from export_legacy import post    # noqa: E402  (names the client; Cloudflare blocks Python's default)
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "xmum-sair/xmum-sair.github.io")
 PROGS = ("EEE", "AIT", "ROBO", "GE")
@@ -155,11 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     pending = list(legacy)
     worker, admin = os.environ.get("ASSISTANT_URL", "").rstrip("/"), os.environ.get("REVIEWS_ADMIN_TOKEN", "")
     if worker and admin:   # since 2026-11-06 the reviews live on the Worker: its kept votes give lecturer and session
-        import urllib.request
-        req = urllib.request.Request(f"{worker}/admin/api", data=json.dumps({"token": admin, "op": "lecturers"}).encode(),
-                                     headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=60) as r:
-            pending = pending + json.loads(r.read().decode("utf-8"))["lecturers"]
+        pending = pending + post(f"{worker}/admin/api", {"token": admin, "op": "lecturers"})["lecturers"]
         ratings = {}
     else:                  # the GitHub-form days: the data branch's ratings.json (course and lecturer, no session)
         raw = run("gh", "api", f"repos/{REPO}/contents/ratings.json?ref=data", check=False)

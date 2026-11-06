@@ -51,6 +51,12 @@ def test_pr_body_lists_additions_and_courses_without_a_folder():
     assert "EEE406" in body and "A B" in body and "unknown" in body and "EEE222" in body and "学期" in body
 
 
+def test_worker_calls_go_through_the_shared_post():
+    """The Worker sits behind Cloudflare, which blocks Python's default client name; export_legacy.post names the client."""
+    import export_legacy
+    assert lc.post is export_legacy.post
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

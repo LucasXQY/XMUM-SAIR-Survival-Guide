@@ -22,6 +22,26 @@ def test_votes_from_the_private_repo_layout():
     assert [len(c) for c in ex.chunks(list(range(450)), 200)] == [200, 200, 50]
 
 
+def test_post_names_the_client():
+    """Cloudflare answers Python's default client name (Python-urllib) with 403, error 1010, so every call names itself."""
+    sent = {}
+
+    class Reply:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"imported": 2}'
+
+    def fake_urlopen(req, timeout=None):
+        sent["ua"], sent["body"] = req.get_header("User-agent"), json.loads(req.data)
+        return Reply()
+    real, ex.urllib.request.urlopen = ex.urllib.request.urlopen, fake_urlopen
+    try:
+        assert ex.post("https://w.example/admin/api", {"op": "import"}) == {"imported": 2}
+    finally:
+        ex.urllib.request.urlopen = real
+    assert sent["body"] == {"op": "import"} and sent["ua"] and not sent["ua"].startswith("Python-urllib")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

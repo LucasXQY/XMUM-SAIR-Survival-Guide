@@ -10,7 +10,10 @@ import json
 import os
 import subprocess
 import sys
-import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from export_legacy import post   # noqa: E402  (names the client; Cloudflare blocks Python's default)
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "xmum-sair/xmum-sair.github.io")
 LABEL, TITLE = "review-queue", "待审评价 | Reviews to check"
@@ -42,10 +45,7 @@ def main() -> int:
     if not (worker and admin):
         print("skipped: ASSISTANT_URL and REVIEWS_ADMIN_TOKEN are needed")
         return 0
-    req = urllib.request.Request(f"{worker}/admin/api", data=json.dumps({"token": admin, "op": "summary"}).encode(),
-                                 headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=60) as r:
-        summary = json.loads(r.read().decode("utf-8"))
+    summary = post(f"{worker}/admin/api", {"token": admin, "op": "summary"})
     text = issue_text(summary, f"{worker}/admin")
     print(text or "nothing to check")
     found = json.loads(gh("issue", "list", "--repo", REPO, "--label", LABEL, "--state", "open", "--json", "number"))
