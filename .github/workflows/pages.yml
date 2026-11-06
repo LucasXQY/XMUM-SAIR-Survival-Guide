@@ -46,7 +46,12 @@ jobs:
         run: |
           mkdir -p _data
           gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/topics.json?ref=bot-state" > _data/topics.json || rm -f _data/topics.json
-      - run: python site/build.py
+      - env:
+          # the helper's chat window shows once its Worker is deployed (assistant/README.md); BOTS_PAUSED hides it
+          ASSISTANT_URL: ${{ vars.ASSISTANT_URL }}
+          TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+          BOTS_PAUSED: ${{ vars.BOTS_PAUSED }}
+        run: python site/build.py
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

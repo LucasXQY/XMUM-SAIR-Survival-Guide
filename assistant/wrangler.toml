@@ -1,0 +1,20 @@
+# 小帮手的 Cloudflare Worker 配置。部署由 .github/workflows/assistant.yml 完成，见 assistant/README.md
+# Cloudflare Worker config for the helper. Deployed by .github/workflows/assistant.yml; see assistant/README.md
+name = "xmum-sair-assistant"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://xmum-sair.github.io,http://localhost:8767"
+PER_VISITOR_DAILY = "15"   # questions per visitor per day
+GLOBAL_DAILY = "150"       # questions for the whole site per day
+PAUSED = "0"               # the deploy workflow sets 1 when the repository variable BOTS_PAUSED is 1
+
+# one Durable Object keeps the daily counts (SQLite-backed: available on the free plan)
+[[durable_objects.bindings]]
+name = "LIMITER"
+class_name = "Limiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Limiter"]

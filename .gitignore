@@ -2,3 +2,5 @@ _site/
 __pycache__/
 _intake/
 _data/
+assistant/node_modules/
+assistant/.wrangler/

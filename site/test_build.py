@@ -532,6 +532,31 @@ def test_search_index_carries_topics():
     assert "f.topics" in js and "知识点" in js
 
 
+def test_helper_window_appears_only_when_configured():
+    """The chat window (static/assistant.js) needs the Worker address and the Turnstile site key; BOTS_PAUSED hides it."""
+    import os
+    keys = ("ASSISTANT_URL", "TURNSTILE_SITE_KEY", "BOTS_PAUSED")
+    saved = {k: os.environ.pop(k, None) for k in keys}
+    try:
+        _, out = _build()
+        assert 'id="helper"' not in (out / "index.html").read_text(encoding="utf-8")
+        os.environ.update({"ASSISTANT_URL": "https://helper.example.workers.dev", "TURNSTILE_SITE_KEY": "0x4AAA"})
+        _, out = _build()
+        for p in ["index.html", "EEE/COM107_Circuits_and_Devices/index.html", "404.html"]:
+            html = (out / p).read_text(encoding="utf-8")
+            assert 'id="helper" data-url="https://helper.example.workers.dev" data-sitekey="0x4AAA"' in html, p
+            assert f'src="{P}static/assistant.js"' in html, p
+        js = (out / "static/assistant.js").read_text(encoding="utf-8")
+        assert "turnstile" in js and "sessionStorage" in js and "xmum-sair\\.github\\.io" in js   # links only to the site
+        os.environ["BOTS_PAUSED"] = "1"
+        assert 'id="helper"' not in (_build()[1] / "index.html").read_text(encoding="utf-8")
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+
+
 def test_goatcounter_snippet_on_every_page():
     _, out = _build()
     for p in ["index.html", "EEE/COM107_Circuits_and_Devices/index.html", "404.html"]:
