@@ -291,6 +291,38 @@ def sweep(repo: str, token: str) -> int:
     return gone
 
 
+def site_lecturers() -> set[tuple[str, str]]:
+    """(course code, lecturer key) pairs the site lists, from the published search index; empty if unreadable."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen("https://xmum-sair.github.io/search.json", timeout=20) as r:
+            people = json.loads(r.read().decode("utf-8")).get("lecturers", [])
+    except Exception as e:
+        print(f"lecturer list unavailable: {e}", file=sys.stderr)
+        return set()
+    return {(code, p["slug"]) for p in people for code in p.get("codes", [])}
+
+
+def note_new_lecturer(r: Review, known: set[tuple[str, str]] | None = None, state=None, repo: str = "") -> bool:
+    """Put (course, lecturer, session) on the pending list on bot-state when the site does not list this lecturer for
+    this course; reviews/lecturers.py turns the list into a pull request. True when something was added."""
+    known = site_lecturers() if known is None else known
+    key = lecturer_key(r.lecturer)
+    if not key or (r.code, key) in known:
+        return False
+    if state is None:
+        sys.path.insert(0, str(HERE.parent / "llm"))
+        import claude_check as cc
+        state = cc.StateFile(repo, "pending-lecturers.json")
+    data, sha = state.read()
+    items = list(data.get("items", []))
+    item = {"code": r.code, "name": display_name(r.lecturer), "session": r.session or "unknown"}
+    if any(i["code"] == item["code"] and lecturer_key(i["name"]) == key and i["session"] == item["session"] for i in items):
+        return False
+    state.write({"items": items + [item]}, sha, f"pending lecturer: {r.code}")
+    return True
+
+
 def recorded_reply(code: str, lecturer: str, deleting: bool) -> str:
     what = f"{code} · {display_name(lecturer)}"
     if deleting:
@@ -326,6 +358,11 @@ def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | No
     commit_and_push(data, f"vote: {r.code} {lecturer_key(r.lecturer)}", "main")
     if publish_after:
         publish(aggregate(data), work, repo, os.environ.get("GH_TOKEN", ""))
+    try:   # a lecturer new to this course: remembered for the lecturer PR (reviews/lecturers.py); never blocks the vote
+        if note_new_lecturer(r, repo=repo):
+            print(f"#{n}: new lecturer noted for {r.code}")
+    except Exception as e:
+        print(f"#{n}: could not note the lecturer: {e}", file=sys.stderr)
     delete_token = os.environ.get("REVIEWS_DELETE_TOKEN", "")
     gh("issue", "comment", str(n), "--repo", repo, "--body-file", "-", input=recorded_reply(r.code, r.lecturer, bool(delete_token)))
     deleted = remove_source(n, repo, iss["node_id"], delete_token)

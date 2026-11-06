@@ -1,0 +1,40 @@
+name: lecturers
+
+# 评价里出现、课程 README 里没有的老师：机器人开（或更新）一个 PR 把他们加进对应课程，维护者确认后合并。见 reviews/lecturers.py
+# Lecturers named in reviews but missing from the course READMEs: the bot opens or updates a PR adding them; a
+# maintainer merges it. See reviews/lecturers.py
+on:
+  workflow_run:
+    workflows: [reviews]
+    types: [completed]
+  schedule:
+    - cron: "30 1 * * 1"    # Mondays, after the link check
+  workflow_dispatch:
+
+permissions:
+  contents: write          # the bot/new-lecturers branch and the pending list on bot-state
+  pull-requests: write
+
+concurrency:
+  group: lecturers
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    if: vars.BOTS_PAUSED != '1' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*/*/README.md
+            /reviews/
+            /llm/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python reviews/lecturers.py
