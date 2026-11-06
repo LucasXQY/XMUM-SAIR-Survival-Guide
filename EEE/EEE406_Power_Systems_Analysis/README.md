@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | 2024-09 |  | | LucasXQY |  |
 | [2025-09](2025-09/) | | | [nsd-chen](https://github.com/nsd-chen) | [Assignments](2025-09/Assignments/) · [Tutorials](2025-09/Tutorials/) |
+| unknown | Abdul Rashid Abdul Rahman |  |  | 老师来自课程评价 | lecturer from a course review |
 
 - 小贴士 / Tips：
 
