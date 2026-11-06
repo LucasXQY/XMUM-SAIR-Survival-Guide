@@ -1,0 +1,27 @@
+name: review-queue
+
+# 每周提醒待审的课程评价：有被标记、还没审的票就开（或更新）一个 Issue，附管理页链接；审完自动关闭。见 reviews/remind.py
+# Weekly reminder about flagged course reviews: opens or updates an issue with the admin page link, closes it when
+# none are left. See reviews/remind.py
+on:
+  schedule:
+    - cron: "45 1 * * 1"    # Mondays
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    if: vars.BOTS_PAUSED != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: reviews
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ASSISTANT_URL: ${{ vars.ASSISTANT_URL }}
+          REVIEWS_ADMIN_TOKEN: ${{ secrets.REVIEWS_ADMIN_TOKEN }}
+        run: python3 reviews/remind.py

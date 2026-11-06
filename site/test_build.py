@@ -391,7 +391,7 @@ def test_ratings_hooks_and_reviews_page():
     assert known == sorted({build.lecturer_slug(n) for n in build.lecturers(build.Site(ROOT, P))})
     rjs = (out / "static/ratings.js").read_text(encoding="utf-8")
     assert "dataset.known" in rjs and "data.courses[want" in rjs
-    assert build.REVIEW_FORM + "&code=COM107&lecturer=Chua%20Ming%20Yam" in course   # one known lecturer: prefilled
+    assert f'href="{P}rate/?code=COM107&amp;lecturer=Chua%20Ming%20Yam"' in course   # one known lecturer: prefilled
     lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
     assert 'class="ratings"' not in lect and "giscus" not in lect              # lecturer pages carry no scores and no threads
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
@@ -421,9 +421,9 @@ def test_lecturer_pages_are_a_directory():
     course = (out / "EEE/COM111_Electrical_Engineering/index.html").read_text(encoding="utf-8")
     assert f'href="{P}lecturers/ng-zi-neng/"' in course                          # click the lecturer → their courses
     js = (out / "static/site.js").read_text(encoding="utf-8")
-    assert "rate-q" in js and "#profile" not in js and "Describe" not in js and "ratings-loaded" not in js
+    assert "rate-q" not in js and "#profile" not in js and "Describe" not in js and "ratings-loaded" not in js
     rate = (out / "rate/index.html").read_text(encoding="utf-8")
-    assert 'id="rate-q"' in rate and "写描述" not in rate and build.REVIEW_FORM in rate
+    assert 'id="rate-q"' in rate and "写描述" not in rate and 'id="rate-form"' in rate
     for word in ("教师 | Lecturer:", "Lecturer Profiles", "教师档案"):
         assert word not in idx and word not in pg, word
 
@@ -434,7 +434,7 @@ def test_reviews_page_search_and_course_panel():
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
     assert table.count("添加评价 | Add a review") == 1 and "评价这门课" not in table         # no second button for the same thing
     assert 'id="rv-q"' in table and 'id="rv-panel"' in table and 'data-courses="' + P + 'search.json"' in table
-    assert f'data-form="{build.REVIEW_FORM}"' in table                               # the panel's Rate button has a form to open
+    assert f'data-form="{P}rate/?from=reviews"' in table                             # the panel's Rate button opens the site's form
     js = (out / "static/ratings.js").read_text(encoding="utf-8")
     assert "rv-panel" in js and "tile" in js and "data.courses[" in js and ".all" in js and "lecturers/" in js
     assert "box.dataset.form" in js and "formUrl" not in js
@@ -555,6 +555,25 @@ def test_helper_window_appears_only_when_configured():
             os.environ.pop(k, None)
             if v is not None:
                 os.environ[k] = v
+
+
+def test_reviews_are_submitted_on_the_site_without_github():
+    """The rating form posts to the Worker (assistant/src/reviews.js): no GitHub account, a human check on every vote,
+    ratings read from the Worker with the old data-branch file as a fallback (maintainer's decision, 2026-11-06)."""
+    site, out = _build()
+    rate = (out / "rate/index.html").read_text(encoding="utf-8")
+    assert f'data-vote="{build.WORKER_URL}/vote"' in rate and f'data-sitekey="{build.TURNSTILE_SITE_KEY}"' in rate
+    for dim in ("course", "instructor", "difficulty", "work", "learned", "communication", "access", "recommend"):
+        assert f'name="{dim}"' in rate, dim
+    assert 'id="rate-confirm"' in rate and "不需要 GitHub 账号" in rate and 'id="rate-year"' in rate and 'id="rate-term"' in rate
+    assert f'src="{P}static/rate.js"' in rate
+    js = (out / "static/rate.js").read_text(encoding="utf-8")
+    assert "turnstile" in js and "localStorage" in js and "URLSearchParams" in js and "data-vote" not in js and "dataset.vote" in js
+    course = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
+    assert f'data-src="{build.WORKER_URL}/ratings"' in course and f'data-fallback="{build.LEGACY_RATINGS_URL}"' in course
+    assert "dataset.fallback" in (out / "static/ratings.js").read_text(encoding="utf-8")
+    for page in out.rglob("*.html"):                                                  # the GitHub form is gone everywhere
+        assert "template=review.yml" not in page.read_text(encoding="utf-8"), page
 
 
 def test_goatcounter_snippet_on_every_page():

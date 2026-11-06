@@ -1,5 +1,5 @@
 /* XMUM SAIR 生存指南 — page-wide behaviour: the header blocks and their Courses menu, the light/dark toggle,
-   the add-a-review search and the upload helper (search is in search.js, ratings in ratings.js). */
+   and the upload helper (search is in search.js, ratings in ratings.js, the rating form in rate.js). */
 (function () {
   'use strict';
   var root = document.documentElement;
@@ -126,46 +126,6 @@
     onCode();
   }
 
-  // 4. /rate/: type a course or lecturer, get one row per (course, lecturer) with a Rate button
-  var rq = document.getElementById('rate-q'), results = document.getElementById('rate-results');
-  if (rq && results) {
-    var pairs = null;
-    var mk = function (tag, cls, text) { var el = document.createElement(tag); if (cls) el.className = cls; if (text) el.textContent = text; return el; };
-    var show = function () {
-      var s = rq.value.trim().toLowerCase();
-      while (results.firstChild) results.removeChild(results.firstChild);
-      if (!s) { results.appendChild(mk('p', 'muted', '输入后这里会列出匹配的课程和老师。| Matches appear here as you type.')); return; }
-      var hits = pairs.filter(function (p) { return p.hay.indexOf(s) >= 0; }).slice(0, 40);
-      if (!hits.length) { results.appendChild(mk('p', 'muted', '没有匹配的课程或老师。| Nothing matches.')); return; }
-      hits.forEach(function (p) {
-        var row = mk('div', 'rate-row');
-        row.appendChild(mk('span', 'rate-course', p.code + ' ' + p.name));
-        row.appendChild(mk('span', 'rate-lect', p.lecturer || '老师未知 | lecturer unknown'));
-        var rateBtn = mk('a', 'btn', '打分 | Rate');
-        rateBtn.href = results.dataset.form + '&code=' + encodeURIComponent(p.code) + (p.lecturer ? '&lecturer=' + encodeURIComponent(p.lecturer) : '');
-        row.appendChild(rateBtn);
-        results.appendChild(row);
-      });
-    };
-    var ready = function () {
-      if (pairs) { show(); return; }
-      fetch(base + 'search.json').then(function (r) { return r.json(); }).then(function (d) {
-        pairs = [];
-        d.courses.forEach(function (c) {
-          var names = c.lecturers && c.lecturers.length ? c.lecturers : [''];
-          names.forEach(function (l) {
-            pairs.push({ code: c.code, name: c.name, lecturer: l, hay: (c.code + ' ' + c.name + ' ' + l).toLowerCase() });
-          });
-        });
-        show();
-      }).catch(function () { results.appendChild(mk('p', 'muted', '课程列表加载失败，请刷新。| Course list failed to load; please refresh.')); });
-    };
-    rq.addEventListener('input', ready);
-    rq.addEventListener('focus', ready);
-    if (rq.form) rq.form.addEventListener('submit', function (e) { e.preventDefault(); ready(); });
-    var pre = new URLSearchParams(location.search).get('q');
-    if (pre) { rq.value = pre; ready(); }
-  }
   // giscus arrives after this script: once its iframe exists, tell it the chosen theme
   if (stored() && !document.querySelector('iframe.giscus-frame') && window.MutationObserver) {
     var mo = new MutationObserver(function () {

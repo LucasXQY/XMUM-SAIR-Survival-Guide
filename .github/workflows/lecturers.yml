@@ -4,9 +4,6 @@ name: lecturers
 # Lecturers named in reviews but missing from the course READMEs: the bot opens or updates a PR adding them; a
 # maintainer merges it. See reviews/lecturers.py
 on:
-  workflow_run:
-    workflows: [reviews]
-    types: [completed]
   schedule:
     - cron: "30 1 * * 1"    # Mondays, after the link check
   workflow_dispatch:
@@ -21,7 +18,7 @@ concurrency:
 
 jobs:
   propose:
-    if: vars.BOTS_PAUSED != '1' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    if: vars.BOTS_PAUSED != '1'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -37,4 +34,6 @@ jobs:
           python-version: "3.12"
       - env:
           GH_TOKEN: ${{ github.token }}
+          ASSISTANT_URL: ${{ vars.ASSISTANT_URL }}               # the reviews live on the Worker since 2026-11-06
+          REVIEWS_ADMIN_TOKEN: ${{ secrets.REVIEWS_ADMIN_TOKEN }}
         run: python reviews/lecturers.py

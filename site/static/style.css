@@ -267,3 +267,26 @@ ul.posts small { white-space: nowrap; }
 .helper-note { margin: 0; padding: 0 12px 10px; font-size: .74rem; color: var(--muted); }
 @media (max-width: 600px) { .helper-panel { right: 16px; bottom: 70px; } .helper-btn { right: 16px; bottom: 16px; } }
 @media (prefers-reduced-motion: reduce) { .helper-btn { transition: none; } }
+
+/* the rating form on /rate/ (static/rate.js) */
+.rate-form { max-width: 44em; margin: 16px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.rate-form h2 { margin-top: .4rem; }
+.rate-form > label { display: block; font-weight: 600; margin: 14px 0 6px; }
+.rate-form input:not([type]), .rate-form select, .rate-form input[list] {
+  font: inherit; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg);
+}
+.rate-form .up-row select, .rate-form .up-row input { flex: 1 1 8em; width: auto; }
+.scale { border: 0; padding: 0; margin: 14px 0 0; }
+.scale legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
+.scale-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.scale-row small { color: var(--muted); }
+.scale label { cursor: pointer; }
+.scale input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.scale label span { display: inline-block; min-width: 2.2em; padding: 5px 10px; text-align: center; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.scale input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+.scale input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scale .skip span { min-width: 0; font-size: .85rem; }
+.rate-extra { margin-top: 14px; }
+.rate-extra summary { cursor: pointer; font-weight: 600; }
+.rate-form .confirm { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; margin-top: 16px; }
+#rate-verify { margin-top: 12px; min-height: 65px; }

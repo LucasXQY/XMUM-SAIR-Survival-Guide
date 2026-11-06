@@ -1,4 +1,5 @@
-/* XMUM SAIR 生存指南 — course ratings: fills .ratings containers from ratings.json (written by reviews.yml to the data branch).
+/* XMUM SAIR 生存指南 — course ratings: fills .ratings containers from the Worker's /ratings (assistant/src/reviews.js);
+   if the Worker cannot be reached, from the last ratings.json the GitHub form wrote to the data branch.
    A course page gets its overall tiles and one score card per lecturer. /reviews/ gets the search (courses and lecturers),
    the rated courses as chips, and a course panel that opens when one is picked. */
 (function () {
@@ -186,7 +187,9 @@
   var coursesP = wantCourses ? fetch(boxes.filter(function (b) { return b.dataset.courses; })[0].dataset.courses).then(function (r) { return r.json(); })
     .then(function (d) { var m = {}; d.courses.forEach(function (c) { m[c.code] = c; }); return { courses: m, people: d.lecturers || [] }; })
     .catch(function () { return { courses: {}, people: [] }; }) : Promise.resolve({ courses: {}, people: [] });
-  var ratingsP = fetch(boxes[0].dataset.src).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  function getJSON(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  // the Worker's live ratings; if it cannot be reached, the last file the GitHub form wrote (older, but better than nothing)
+  var ratingsP = getJSON(boxes[0].dataset.src).catch(function (e) { if (boxes[0].dataset.fallback) return getJSON(boxes[0].dataset.fallback); throw e; });
   Promise.all([ratingsP, coursesP]).then(function (res) {
     var data = res[0], idx = res[1];
     boxes.forEach(function (b) {

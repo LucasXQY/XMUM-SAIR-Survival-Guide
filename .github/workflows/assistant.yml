@@ -29,7 +29,9 @@ jobs:
       - if: steps.ready.outputs.go == 'true'
         uses: actions/checkout@v4
         with:
-          sparse-checkout: assistant
+          sparse-checkout: |
+            assistant
+            reviews
       - if: steps.ready.outputs.go == 'true'
         uses: actions/setup-node@v4
         with:
@@ -52,3 +54,21 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
+      # the course reviews' admin token (assistant/README.md); skipped until the secret exists
+      - if: steps.ready.outputs.go == 'true'
+        working-directory: assistant
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          T: ${{ secrets.REVIEWS_ADMIN_TOKEN }}
+        run: |
+          if [ -n "$T" ]; then printf '%s' "$T" | npx wrangler secret put REVIEWS_ADMIN_TOKEN; else echo "REVIEWS_ADMIN_TOKEN not set yet"; fi
+      # move the votes from the GitHub-form days to the Worker; repeating it changes nothing
+      - if: steps.ready.outputs.go == 'true'
+        continue-on-error: true
+        env:
+          REVIEWS_TOKEN: ${{ secrets.REVIEWS_TOKEN }}
+          REVIEWS_DATA_REPO: ${{ vars.REVIEWS_DATA_REPO }}
+          REVIEWS_ADMIN_TOKEN: ${{ secrets.REVIEWS_ADMIN_TOKEN }}
+          ASSISTANT_URL: ${{ vars.ASSISTANT_URL }}
+        run: python3 reviews/export_legacy.py

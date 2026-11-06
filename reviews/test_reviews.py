@@ -202,16 +202,6 @@ def test_new_lecturers_are_noted_with_their_session():
     assert st.data["items"][-1]["session"] == "unknown"
 
 
-def test_issue_form_matches_parser():
-    yml = (pathlib.Path(__file__).resolve().parents[1] / ".github/ISSUE_TEMPLATE/review.yml").read_text(encoding="utf-8")
-    for title in list(rv.FIELDS.values()) + [t for _, t in rv.DIMS]:
-        assert f'label: "{title}"\n' in yml, title
-    assert f'- label: "{rv.CONFIRM}"\n' in yml and f'- "{rv.SKIP}"\n' in yml and "labels: [review]" in yml
-    for key in [k for k, _ in rv.DIMS] + ["year", "term", "session_other"]:
-        assert f"id: {key}\n" in yml, key
-    assert '- "' + rv.TERM_OTHER + '"\n' in yml and '- "2022"\n' in yml
-
-
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

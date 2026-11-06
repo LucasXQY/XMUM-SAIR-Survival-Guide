@@ -1,4 +1,9 @@
-"""课程评价机器人：把「课程评价」Issue 表单里的分数匿名登记到维护者的私有仓库，公开的只有汇总。
+"""（2026-11-06 起停用：评价改在网站上提交，存在 Cloudflare Worker，见 assistant/src/reviews.js。这里还留着 lecturer_key、
+读私有仓库的函数和旧数据的格式，供 export_legacy.py 和 lecturers.py 使用。）
+(Retired 2026-11-06: reviews are submitted on the site and stored by the Cloudflare Worker, assistant/src/reviews.js.
+What stays is used by export_legacy.py and lecturers.py.)
+
+课程评价机器人：把「课程评价」Issue 表单里的分数匿名登记到维护者的私有仓库，公开的只有汇总。
 Course-review bot: records the scores from a "course review" issue form anonymously in the maintainer's private
 repository and publishes aggregates only.
 

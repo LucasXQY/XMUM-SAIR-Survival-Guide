@@ -33,8 +33,12 @@ GH = f"https://github.com/{REPO}"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main"
 SITE_URL = "https://xmum-sair.github.io/"   # canonical address; changes with REPO after the org move
 DOWNLOADS = f"{GH}/releases/download/downloads"                      # per-session zips kept by .github/workflows/downloads.yml
-RATINGS_URL = f"https://raw.githubusercontent.com/{REPO}/data/ratings.json"   # written by .github/workflows/reviews.yml
-REVIEW_FORM = f"{GH}/issues/new?template=review.yml"
+# the site's Cloudflare Worker (assistant/): the helper and, since 2026-11-06, the course reviews. pages.yml passes the
+# repository variables; the defaults are the deployed Worker and its public Turnstile site key.
+WORKER_URL = os.environ.get("ASSISTANT_URL", "").strip().rstrip("/") or "https://xmum-sair-assistant.xieqiyi.workers.dev"
+TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "").strip() or "0x4AAAAAAF1_G8n4iH_6hvtK"
+RATINGS_URL = f"{WORKER_URL}/ratings"
+LEGACY_RATINGS_URL = f"https://raw.githubusercontent.com/{REPO}/data/ratings.json"   # the GitHub form's last file: fallback only
 NEW_POST = f"{GH}/discussions/new?category=general"   # one post per question; discussions/boards.py files it under a board
 BOARDS_CFG = json.loads((Path(__file__).resolve().parent.parent / "discussions" / "boards.json").read_text(encoding="utf-8"))
 PROGS = {
@@ -252,9 +256,11 @@ def lecturer_slug(name: str) -> str:
 
 
 def ratings_html(attrs: str, rate_url: str | None = None) -> str:
-    """A container static/ratings.js fills from ratings.json, plus the link to the review form."""
-    btn = f' <a class="btn" href="{rate_url}">评价这门课 | Rate this course</a>' if rate_url else ""
-    return (f'<div class="ratings" {attrs} data-src="{RATINGS_URL}"><p class="muted">正在读取评价… | Loading ratings…</p></div>'
+    """A container static/ratings.js fills from the Worker's ratings (the old data-branch file if the Worker is down),
+    plus the link to the site's rating form."""
+    btn = f' <a class="btn" href="{esc(rate_url)}">评价这门课 | Rate this course</a>' if rate_url else ""
+    return (f'<div class="ratings" {attrs} data-src="{RATINGS_URL}" data-fallback="{LEGACY_RATINGS_URL}">'
+            '<p class="muted">正在读取评价… | Loading ratings…</p></div>'
             f'<p class="rate">{btn} <small>匿名打分，满 3 人显示平均分 | anonymous scores; averages appear at 3 voters</small></p>')
 
 
@@ -290,7 +296,7 @@ def lecturer_links_html(site: Site, cell: str) -> str:
 
 def rate_cta(site: Site) -> str:
     return (f'<p class="rate-cta"><a class="btn big" href="{site.prefix}rate/">➕ 添加评价 | Add a review</a> '
-            '<small>两分钟，需要 GitHub 账号 | two minutes, needs a GitHub account</small></p>')
+            '<small>一分钟，不用登录 | a minute, no login</small></p>')
 
 
 def lecturer_directory_html(site: Site) -> str:
@@ -476,7 +482,7 @@ def reviews_page(site: Site) -> str:
                '<div id="rv-list"></div><section id="rv-panel" class="rv-panel" hidden></section>'
                '<section id="rv-all"><h2 id="rated">已有评价的课程 | Rated courses</h2>'
                '<p class="muted">点一门课，看它的总平均和每位老师的分数。| Open a course for its overall scores and each lecturer\'s.</p>'
-               + ratings_html(f'data-all data-courses="{site.prefix}search.json" data-form="{REVIEW_FORM}" data-known="{known_lecturers(site)}"') + "</section>"
+               + ratings_html(f'data-all data-courses="{site.prefix}search.json" data-form="{site.prefix}rate/?from=reviews" data-known="{known_lecturers(site)}"') + "</section>"
                + lecturer_directory_html(site))
     return page(site, "课程评价 | Course review", content, "匿名课程评分：课程质量、老师、难度、作业量 | anonymous course ratings")
 
@@ -568,22 +574,58 @@ def redirect_page(site: Site, target: str) -> str:
             f'<body><p>这一页已移到 | This page moved to <a href="{url}">{url}</a></p></body></html>\n')
 
 
+RATE_DIMS = [  # (key, Chinese, English, label for 1, label for 5)
+    ("course", "课程质量", "Course quality", "很差 poor", "很好 great"),
+    ("instructor", "老师质量", "Instructor quality", "很差 poor", "很好 great"),
+    ("difficulty", "难度", "Difficulty", "很简单 easy", "很难 hard"),
+    ("work", "作业量", "Work required", "很少 light", "很多 heavy"),
+    ("learned", "学到多少", "Amount learned", "很少 little", "很多 a lot"),
+    ("communication", "沟通", "Communication", "很差 poor", "很好 great"),
+    ("access", "找得到老师", "Instructor access", "很难找 hard", "很好找 easy"),
+    ("recommend", "是否推荐", "Would recommend", "不推荐 no", "强烈推荐 yes"),
+]
+
+
 def rate_page(site: Site) -> str:
-    content = ("<h1>添加评价 | Add a review</h1>"
-               '<ol class="rate-steps">'
-               "<li><strong>找到课程</strong>：在下面的框里输入课程代码、课名或老师名，点那一行的「打分」。"
-               "<br><small>Find the course: type a course code, course name or lecturer name below and press Rate on that row.</small></li>"
-               "<li><strong>填表单</strong>：四个主维度（课程质量、老师质量、难度、作业量）必填，四个细分可跳过，全部 1–5 分，不写字。"
-               "<br><small>Fill in the form: four required dimensions (course quality, instructor quality, difficulty, work required), "
-               "four optional ones, all 1–5, no text.</small></li>"
-               '<li><strong>登录 GitHub 提交</strong>：匿名登记，网站只显示平均分和人数；没有账号的话注册只要一分钟（<a href="https://github.com/signup">github.com/signup</a>）。'
-               "<br><small>Sign in to GitHub and submit: recorded anonymously, the site shows averages and counts only; signing up takes a minute.</small></li></ol>"
-               '<form class="lect-find" role="search"><label for="rate-q">课程或老师 | Course or lecturer</label>'
-               '<input id="rate-q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107, Circuits, Chua"></form>'
-               f'<div id="rate-results" data-form="{REVIEW_FORM}" aria-live="polite"><p class="muted">输入后这里会列出匹配的课程和老师。| Matches appear here as you type.</p></div>'
-               f'<p class="muted">要评的课没列出老师？直接<a href="{REVIEW_FORM}">打开打分表单</a>，老师名自己填。'
-               f'| Lecturer missing for your course? <a href="{REVIEW_FORM}">Open the form</a> and type the name yourself.</p>')
-    return page(site, "添加评价 | Add a review", content, "三步给一门课和老师匿名打分 | rate a course and lecturer anonymously in three steps")
+    """Search a course and lecturer, then rate on this page: posted to the Worker, no GitHub account (static/rate.js)."""
+    def scale(key: str, zh: str, en: str, lo: str, hi: str, optional: bool) -> str:
+        opts = "".join(f'<label><input type="radio" name="{key}" value="{n}"><span>{n}</span></label>' for n in range(1, 6))
+        skip = f'<label class="skip"><input type="radio" name="{key}" value="" checked><span>不评 Skip</span></label>' if optional else ""
+        return (f'<fieldset class="scale"><legend>{zh} | {en}{"" if optional else " *"}</legend>'
+                f'<div class="scale-row"><small>1 {esc(lo)}</small>{opts}<small>5 {esc(hi)}</small>{skip}</div></fieldset>')
+    years = "".join(f'<option value="{y}">{y}</option>' for y in range(datetime.date.today().year + 1, 2017, -1))
+    codes = "".join(f'<option value="{esc(c.code)}">{esc(c.name)}</option>' for c in sorted(site.courses, key=lambda c: c.code))
+    main = "".join(scale(*d, optional=False) for d in RATE_DIMS[:4])
+    extra = "".join(scale(*d, optional=True) for d in RATE_DIMS[4:])
+    content = (
+        "<h1>添加评价 | Add a review</h1>"
+        "<p>不需要 GitHub 账号。只打分、不写字，匿名登记；每台浏览器对同一门课同一位老师只算一票，再交一次就是改分。每次提交都要过一次人机验证。"
+        "<br>No GitHub account needed. Scores only, recorded anonymously; one vote per browser per course and lecturer, and "
+        "submitting again changes it. Every submission needs a quick human check.</p>"
+        '<form class="lect-find" role="search"><label for="rate-q">先找课程和老师 | Find the course and lecturer</label>'
+        '<input id="rate-q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107, Circuits, Chua"></form>'
+        '<div id="rate-results" aria-live="polite"><p class="muted">输入后这里会列出匹配的课程和老师。| Matches appear here as you type.</p></div>'
+        f'<form id="rate-form" class="rate-form" hidden data-vote="{WORKER_URL}/vote" data-sitekey="{TURNSTILE_SITE_KEY}">'
+        '<h2 id="rate-title">打分 | Rate</h2>'
+        '<label for="rate-code">课程代码 | Course code *</label><input id="rate-code" list="rate-codes" autocomplete="off" required>'
+        f'<datalist id="rate-codes">{codes}</datalist>'
+        '<label for="rate-lecturer">老师 | Lecturer *</label>'
+        '<input id="rate-lecturer" list="rate-lects" maxlength="80" autocomplete="off" required placeholder="名单里没有的可以直接写 | type a name not on the list">'
+        '<datalist id="rate-lects"></datalist>'
+        '<label for="rate-year">修课学期 | Session（可不填 | optional）</label><div class="up-row">'
+        f'<select id="rate-year" aria-label="年份 | Year"><option value="">年份 | Year</option>{years}</select>'
+        '<select id="rate-term" aria-label="学期 | Term"><option value="">学期 | Term</option><option value="02">02</option>'
+        '<option value="04">04</option><option value="09">09</option><option value="other">其他 | Other</option></select>'
+        '<input id="rate-other" hidden placeholder="YYYY-MM" aria-label="其他学期 | Other session"></div>'
+        f"{main}<details class=\"rate-extra\"><summary>四个细分（可跳过）| Four optional extras</summary>{extra}</details>"
+        '<label class="confirm"><input type="checkbox" id="rate-confirm"> 我修过这门课，这些分数是我自己的评价 | I took this course; these scores are my own</label>'
+        '<div id="rate-verify"></div><p id="rate-error" class="error" role="alert"></p>'
+        '<p><button type="submit" class="btn big">提交 | Submit</button></p></form>'
+        '<div id="rate-done" class="notice" hidden></div>'
+        '<p class="muted">为防刷分：同一网络每天最多 100 票，同一浏览器每天最多 20 票；地址和浏览器只以加密哈希保存，不可还原。'
+        "<br>Against vote stuffing: at most 100 votes a day per network and 20 per browser; addresses and browsers are kept only as salted hashes.</p>"
+        f'<script src="{site.prefix}static/rate.js" defer></script>')
+    return page(site, "添加评价 | Add a review", content, "不用登录，给一门课和老师匿名打分 | rate a course and lecturer anonymously, no login")
 
 
 def site_pages(site: Site) -> list[str]:
@@ -879,7 +921,7 @@ def course_page(site: Site, c: Course) -> str:
         for t, fs in types.items():
             parts.append(f'<h4>{t} ({len(fs)})</h4><ul class="files">{"".join(file_item(f) for f in fs)}</ul>')
     lects = sorted({n for cell in c.lecturers.values() for n in split_lecturers(cell)})
-    rate = f"{REVIEW_FORM}&code={quote(c.code)}" + (f"&lecturer={quote(lects[0])}" if len(lects) == 1 else "")
+    rate = f"{site.prefix}rate/?code={quote(c.code)}" + (f"&lecturer={quote(lects[0])}" if len(lects) == 1 else "")
     review = '<h2 id="review">课程评价 | Course review</h2>' + ratings_html(f'data-code="{esc(c.code)}" data-known="{known_lecturers(site)}"', rate)
     info = ['<h2 id="details">课程信息 | Course details</h2>',
             f'<p class="meta">修课学期 | Taken in: {"、".join(c.taken_in) or "—"}</p>']

@@ -18,3 +18,12 @@ class_name = "Limiter"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Limiter"]
+
+# the course reviews: votes in one SQLite-backed Durable Object (src/reviews.js, src/worker.js)
+[[durable_objects.bindings]]
+name = "REVIEWS"
+class_name = "Reviews"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Reviews"]
