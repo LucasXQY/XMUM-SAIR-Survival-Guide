@@ -29,7 +29,7 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "xmum-sair/xmum-sair.github.io")
 PROGS = ("EEE", "AIT", "ROBO", "GE")
 PENDING = "pending-lecturers.json"
 BRANCH = "bot/new-lecturers"
-NOTE = "老师来自课程评价 | lecturer from a course review"
+NOTE = "老师来自课程评价 / lecturer from a course review"   # no "|": it would split the table cell
 BOT = ["-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com"]
 
 

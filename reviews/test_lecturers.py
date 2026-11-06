@@ -27,6 +27,7 @@ def test_add_fills_an_empty_cell_appends_to_a_full_one_or_adds_a_row():
     c = lc.add_lecturer(README, "2023-04", "New Person").splitlines()
     i = next(k for k, l in enumerate(c) if l.startswith("| 2023-04 |"))
     assert c[i + 1].startswith("| [2024-09]") and lc.NOTE in c[i]                     # sessions stay in order
+    assert len(lc._cells(c[i])) == 5                                                    # the note must not add a column
     d = lc.add_lecturer(README, "unknown", "Unsure Person").splitlines()
     assert next(k for k, l in enumerate(d) if l.startswith("| unknown |")) == max(k for k, l in enumerate(d) if l.startswith("|"))
     assert lc.add_lecturer(README, "2025-09", "Dr Someone") == README                  # already there (titles ignored)
