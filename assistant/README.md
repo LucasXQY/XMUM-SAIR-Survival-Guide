@@ -12,6 +12,7 @@ The "💬 小帮手" button on every page: students ask on the site and it finds
 - 先由 Claude Haiku 5.5 判断问题是否和本站、课程、学习有关；无关的直接回一句固定的话，不调用 Opus。
 - 有关的由 Claude Opus 5.5 回答，只能用两个工具：在本站搜索（课程、文件和文件里的知识点、老师）和查一门课的信息（学期、资料类型、评价平均分）。不上网。每个问题最多查 4 轮，回答最多 1500 token。
 - 不替人做作业、试卷题，不评价老师本人；只回答本站、课程和这里的学习生活。
+- 开了 Smart Placement（`wrangler.toml` 的 `[placement]`）：Cloudflare 测出更快时，Worker 改在离 Claude API 更近的机房运行，同学仍然连最近的机房。响应头 `cf-placement` 显示实际位置：`remote-XXX` 表示被挪过，`local-XXX` 表示就地运行。
 
 - The site is static and cannot hold an API key, so questions go to a Cloudflare Worker (`src/worker.js`); the key lives only in the Worker's secrets.
 - The first question of a session needs one Cloudflare Turnstile check; the session then lasts an hour.
@@ -19,6 +20,7 @@ The "💬 小帮手" button on every page: students ask on the site and it finds
 - Claude Haiku 5.5 first checks that the question is about the site, its courses or study; anything else gets a fixed reply and no Opus call.
 - Claude Opus 5.5 answers with two tools only: search the site (courses, files and the topics inside them, lecturers) and look up one course (sessions, file types, review averages). No web access. At most 4 tool rounds and 1500 tokens per answer.
 - It does not solve homework or exam questions or judge lecturers as people; it stays on this site, its courses and student life here.
+- Smart Placement is on (`[placement]` in `wrangler.toml`): when Cloudflare measures it is faster, the Worker runs nearer the Claude API while visitors still connect to their nearest data center. The `cf-placement` response header shows where it ran: `remote-XXX` means moved, `local-XXX` means it ran where the request arrived.
 
 ## 第一次设置 | First-time setup
 
