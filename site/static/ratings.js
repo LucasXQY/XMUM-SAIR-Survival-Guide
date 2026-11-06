@@ -105,12 +105,11 @@
     box.appendChild(updated(data));
   }
 
-  // /reviews/: search box, course list, course panel, global table
-  function setupReviews(box, data, courses) {
+  // /reviews/: search box (courses and lecturers), course panel, global table
+  function setupReviews(box, data, courses, people) {
     var q = document.getElementById('rv-q'), list = document.getElementById('rv-list'), panel = document.getElementById('rv-panel');
-    var form = (document.querySelector('.ratings[data-src]') || {}).dataset ? null : null;
-    var formUrl = (box.dataset.form || '') ;
     var codes = Object.keys(courses).sort();
+    var all = document.getElementById('rv-all') || box;   // the table and its heading step aside while a course is open
     function renderTable(filter) {
       clear(box);
       var l = rows(data, courses, function (r) { return !filter || (r.code + ' ' + r.name + ' ' + r.e.name).toLowerCase().indexOf(filter) >= 0; });
@@ -122,18 +121,34 @@
       clear(list);
       if (!filter) return;
       var hits = codes.filter(function (c) { return (c + ' ' + courses[c].name + ' ' + (courses[c].lecturers || []).join(' ')).toLowerCase().indexOf(filter) >= 0; }).slice(0, 12);
-      if (!hits.length) { list.appendChild(el('p', 'muted', '没有这门课 | No such course.')); return; }
-      var ul = el('ul', 'rv-list');
-      hits.forEach(function (c) {
-        var li = el('li'), a = el('a', null, c + ' ' + courses[c].name);
-        a.href = base + 'reviews/?c=' + encodeURIComponent(c);
-        a.addEventListener('click', function (ev) { ev.preventDefault(); showCourse(c); });
-        var e = data.courses[c];
-        li.appendChild(a);
-        li.appendChild(el('small', null, e && e.all ? ' · ' + e.all.n + ' 人评价 | voters' : ' · 还没有评价 | no ratings yet'));
-        ul.appendChild(li);
-      });
-      list.appendChild(ul);
+      var who = people.filter(function (l) { return (l.name + ' ' + l.codes.join(' ')).toLowerCase().indexOf(filter) >= 0; }).slice(0, 8);
+      if (!hits.length && !who.length) { list.appendChild(el('p', 'muted', '没有匹配的课程或老师 | No course or lecturer matches.')); return; }
+      if (hits.length) {
+        list.appendChild(el('p', 'rv-group', '课程 | Courses'));
+        var ul = el('ul', 'rv-list');
+        hits.forEach(function (c) {
+          var li = el('li'), a = el('a', null, c + ' ' + courses[c].name);
+          a.href = base + 'reviews/?c=' + encodeURIComponent(c);
+          a.addEventListener('click', function (ev) { ev.preventDefault(); showCourse(c); });
+          var e = data.courses[c];
+          li.appendChild(a);
+          li.appendChild(el('small', null, e && e.all ? ' · ' + e.all.n + ' 人评价 | voters' : ' · 还没有评价 | no ratings yet'));
+          ul.appendChild(li);
+        });
+        list.appendChild(ul);
+      }
+      if (who.length) {   // a lecturer opens their directory page: the courses they taught, each with its review section
+        list.appendChild(el('p', 'rv-group', '老师 | Lecturers'));
+        var ul2 = el('ul', 'rv-list');
+        who.forEach(function (l) {
+          var li = el('li'), a = el('a', null, l.name);
+          a.href = base + 'lecturers/' + l.slug + '/';
+          li.appendChild(a);
+          li.appendChild(el('small', null, ' · ' + l.codes.join(' ')));
+          ul2.appendChild(li);
+        });
+        list.appendChild(ul2);
+      }
     }
     function showCourse(code) {
       var c = courses[code] || { name: '', url: '' }, entry = data.courses[code];
@@ -160,11 +175,11 @@
         panel.appendChild(el('h3', null, '按老师 | By lecturer'));
         panel.appendChild(table(data, rows(data, courses, function (r) { return r.code === code; }), false));
       }
-      panel.hidden = false; box.hidden = true; list.hidden = true;
+      panel.hidden = false; all.hidden = true; list.hidden = true;
       var url = new URL(location.href); url.searchParams.set('c', code); history.replaceState(null, '', url);
     }
     function hideCourse() {
-      panel.hidden = true; box.hidden = false; list.hidden = false;
+      panel.hidden = true; all.hidden = false; list.hidden = false;
       var url = new URL(location.href); url.searchParams.delete('c'); history.replaceState(null, '', url);
     }
     function onInput() { var s = q.value.trim().toLowerCase(); if (!panel.hidden) hideCourse(); renderList(s); renderTable(s); }
@@ -184,13 +199,14 @@
   function fail(box) { clear(box); box.appendChild(el('p', 'muted', '还没有评价数据 | No rating data yet.')); }
   var wantCourses = boxes.some(function (b) { return b.dataset.courses; });
   var coursesP = wantCourses ? fetch(boxes.filter(function (b) { return b.dataset.courses; })[0].dataset.courses).then(function (r) { return r.json(); })
-    .then(function (d) { var m = {}; d.courses.forEach(function (c) { m[c.code] = c; }); return m; }).catch(function () { return {}; }) : Promise.resolve({});
+    .then(function (d) { var m = {}; d.courses.forEach(function (c) { m[c.code] = c; }); return { courses: m, people: d.lecturers || [] }; })
+    .catch(function () { return { courses: {}, people: [] }; }) : Promise.resolve({ courses: {}, people: [] });
   var ratingsP = fetch(boxes[0].dataset.src).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
   Promise.all([ratingsP, coursesP]).then(function (res) {
-    var data = res[0], courses = res[1];
+    var data = res[0], idx = res[1];
     boxes.forEach(function (b) {
-      if (b.hasAttribute('data-all')) setupReviews(b, data, courses);
-      else if (b.dataset.code) fillCourse(b, data, courses);
+      if (b.hasAttribute('data-all')) setupReviews(b, data, idx.courses, idx.people);
+      else if (b.dataset.code) fillCourse(b, data, idx.courses);
     });
   }).catch(function () { boxes.forEach(fail); });
 })();

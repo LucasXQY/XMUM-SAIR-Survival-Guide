@@ -79,21 +79,24 @@ site/
 
 | URL | 内容 | 来源 |
 |---|---|---|
-| `/` | 首页：站名、Ciallo、两句简介、搜索框、三个专业卡片（有资料的课程数、文件数）、入口链接行 | 生成 |
-| `/about/` | 仓库介绍 | 根目录 `README.md` 渲染 |
-| `/EEE/` `/AIT/` `/ROBO/` | 专业页：课程表 + 修课时间表 + 命名规则 | 专业 `README.md` 渲染，其中 `<!-- COURSE-INDEX -->` 块替换为生成的课程表（见第 6 节） |
-| `/EEE/COM107_Circuits_and_Devices/` | 课程页：课程 README、按学期/类型的文件列表、问答区 | 课程 `README.md` + 文件夹扫描 + giscus |
+| `/` | 首页：站名、Ciallo、两句简介、搜索框、四张课程卡片（EEE、AIT、ROBO、公共课；有资料的课程数、文件数）、入口链接行 | 生成 |
+| `/courses/` | 课程总览：同样的四张卡片（页头「课程」块在没有脚本时的去处） | 生成 |
+| `/about/` | 仓库介绍 + 贡献者名单 | 根目录 `README.md` 渲染，其中「贡献者」一节换成 `CONTRIBUTORS.md` 的内容（第 16 节） |
+| `/EEE/` `/AIT/` `/ROBO/` `/GE/` | 专业页：一句介绍 + 生成的课程表 + 折叠的修课时间表（GE 分 G 选修和 MPU 两张表，没有时间表） | 生成；时间表取自专业 `README.md`（第 16 节） |
+| `/EEE/COM107_Circuits_and_Devices/` | 课程页：课程评价 → 资料 → 课程信息（README 学期表）→ 问答 | 课程 `README.md` + 文件夹扫描 + ratings.json + giscus |
+| `/upload/` | 上传助手：已有课程和老师边输入边提示，填完跳到预填好的 GitHub 上传表单 | 生成 |
+| `/reviews/` `/rate/` | 课程评价（搜索课程或老师、课程面板、总表、教师名录）；添加评价 | 生成 + ratings.js |
 | `/qa/` | 综合问答：不属于某门课的问题（新生、选课、科研、实习） | 模板 + giscus |
 | `/research/` | 研究机会 | `Research-Opportunities.md` |
-| `/lecturers/` | 教师名录（无评价）| `Lecturers.md` |
-| `/contributors/` | 贡献者 | `CONTRIBUTORS.md` |
+| `/lecturers/<slug>/` | 某位老师教过的课（无评价）；`/lecturers/` 本身跳到 `/reviews/#lecturers` | 生成 |
+| `/contributors/` | 跳到 `/about/#contributors` | 生成 |
 | `/contributing/` | 如何贡献 | `CONTRIBUTING.md` |
 | `/disclaimer/` | 免责声明 | `DISCLAIMER.md` |
 | `/search.json` | 搜索索引 | 生成 |
 | `/404.html` | 找不到页面，给首页和搜索的链接 | 模板 |
 
 每页共有：
-- 页头：站名（回首页）、导航 EEE / AIT / ROBO / 问答 / 研究机会 / 更多（教师、贡献者、如何贡献、关于）、GitHub 仓库链接。
+- 页头：站名（回首页）、导航块 课程（点开一排：EEE / AIT / ROBO / 公共课 / 总览）/ 问答 / 上传 / 如何贡献 / 评价 / 研究机会 / 关于 / GitHub（第 16 节）。
 - 页脚：一行免责声明（见第 8 节）、免责声明页链接、GitHub 仓库链接、联系邮箱 `xieqiyi@ieee.org`、`Ciallo～ (∠・ < )⌒☆`。
 - `<title>` 为"页面名 · XMUM SAIR 生存指南"，`<meta name="description">`，`<meta name="viewport">`，`<html lang="zh-Hans">`。
 
@@ -210,3 +213,16 @@ site/
 - **不做**：离线 PWA（收益小、缓存失效容易出错）；访问统计需要维护者自己注册 GoatCounter 之类的账号后再加一行脚本。
 - **仓库迁移**（等维护者建好组织 `xmum-sair`）：转移仓库并改名 `xmum-sair.github.io`，网址变为根路径 `https://xmum-sair.github.io/`；需要改 `REPO`、`SITE_URL`、默认 `--prefix`、giscus 的 `data-repo`、README / CONTRIBUTING / 表单里的链接；仓库 id 与 Discussions 分类 id 不变。旧的 Pages 地址不会自动跳转，旧的仓库地址会。
 - **课程评价**（路线 A，待做）：Issue 表单打分（Course / Instructor / Difficulty / Work 四个主维度 + 学到多少 / 沟通 / 找得到老师 / 是否推荐四个细分，各 1–5，不收文字）。机器人读取后把原始投票写进维护者的**私有仓库**（只有维护者可见），按"用户 + 课程 + 老师"去重（后提交覆盖先提交），随后关闭并锁定该 Issue（维护者 2026-11-05 决定不让机器人删除，自己定期手动删；token 只需对私有数据仓库有读写），把汇总（人数、各维度平均；少于 3 人只显示人数）推到公开仓库的 `data` 分支，网站客户端读取 `ratings.json` 渲染在课程页、老师页和 `/reviews/` 总表。Issue 在被维护者删除前是公开的，这是路线 A 的已知边界。
+
+## 16. 第四阶段（2026-11-06 定）| Phase 4
+
+维护者 2026-11-06 的决定与我的实现选择：
+
+- **公共课 `GE/`**（维护者决定：G 和 MPU 一起搬）：代码以 G 开头的全校选修课和 MPU 开头的马来西亚必修通识课所有专业都修，从 `EEE/` 搬到顶层 `GE/`。GE 没有自己的修课时间表：谁修了记在自己专业的时间表里，链接写成 `../GE/<课程文件夹>/`；`scripts/update_index.py` 和网站都从 EEE、AIT、ROBO 三个时间表合并读取修课学期。上传机器人见 `intake/DESIGN.md` 第 7 步。旧地址 `/EEE/G…/` 生成跳转页；「最近上传」跟随改名（`git log -M --name-status`），搬家不会让旧文件显得是新传的。
+- **页头**：三个专业块合成一个「课程」块，点开在下面展开一排（EEE、AIT、ROBO、公共课、总览），Esc 或点别处收起；没有脚本时它就是 `/courses/` 的链接。在课程或专业页时「课程」块高亮。教师并入评价页，贡献者并入关于页；页头剩 课程 / 问答 / 上传 / 如何贡献 / 评价 / 研究机会 / 关于 / GitHub。
+- **课程页顺序**：课程评价 → 资料 → 课程信息（学期表、修课学期、README 里的其他备注）→ 问答。README 里的「代码变更」备注放在标题下方，因为它决定读者是不是来错了页。
+- **只改网站显示，仓库文件不动**（维护者决定）：网站渲染时去掉课程 README 的模板说明句（「每个修读学期一行……」）、空的「小贴士」行、备注栏里的文件夹链接、学期格里的链接，以及每一行都为空的列；贡献者表去掉 `[Name]` 模板行。专业页不再整页渲染 README：一句网站自己写的介绍，生成的四列课程表（代码 / 课程 / 资料学期 / 文件数，只有课名是链接），修课时间表折叠在 `<details>` 里、每行只留课名一个链接；README 里写给贡献者的说明（索引怎么生成、命名规则、「还没有你的表」）只在 GitHub 上看得到。
+- **上传助手 `/upload/`**：GitHub Issue 表单不能做输入提示，所以网站先问：专业、课程代码（datalist 提示已有课程，命中就自动填课名并隐藏课名框；没命中就当新课，要求填课名）、老师（datalist，本课教过的老师排在前面；没有的直接写，算新老师）、学期（年份 + 02/04/09/其他）、类型、试卷的考核名称。点「下一步」拼出 `issues/new?template=upload.yml&prog=…&code=…&name=…&session=…&type=…&lecturer=…` 打开 GitHub，上传者只需拖文件、勾确认。课程和老师的数据在生成时嵌入页面（`<script type="application/json" id="up-data">`），不额外请求。
+- **评价页**：搜索框同时搜课程和老师（老师结果链到老师页）；课程面板的「打分」按钮修好（评价页的容器加了 `data-form`）；页尾是全部老师的名录（`#lecturers`）。
+- **自动删除评分来源**（维护者决定，取代 2026-11-05「维护者手动删除」）：机器人登记并回复后等 60 秒（让作者先收到通知邮件），用 `secrets.REVIEWS_DELETE_TOKEN` 调 GraphQL `deleteIssue` 删除 Issue。删除 Issue 需要仓库管理员，所以这个 token 是维护者自己的 fine-grained token，资源所有者 `xmum-sair`、只选本仓库、Issues 读写；没有这个 secret 或 GitHub 拒绝时退回关闭并锁定，日志里写明原因。登记失败的表单关闭后保留 7 天让作者看到原因；每次运行（每个评价 Issue 和手动 Run workflow）顺带清理：已登记的关闭 Issue 立即删除，失败满 7 天的删除，机器人没回复过的不动。注意：仓库关注者（watch）收到的通知邮件里仍有原文，删除 Issue 删不掉别人邮箱里的副本。
+
