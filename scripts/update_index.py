@@ -1,34 +1,43 @@
 """Regenerate the course-index table in <Programme>/README.md.
 
-用法 / Usage:  python scripts/update_index.py EEE
+用法 / Usage:  python scripts/update_index.py EEE   （或 AIT、ROBO、GE | or AIT, ROBO, GE）
 
 扫描 EEE/<CODE>_<Course_Name>/<YYYY-MM>/<子文件夹>/，统计每个学期每类资料的文件数，
-并从同一个 README 里"修课时间表"的表格读出每门课被修读的学期（YYYY-MM），然后重写
-<!-- COURSE-INDEX --> 和 <!-- /COURSE-INDEX --> 之间的内容。时间表本身是手写的。
+并从 EEE、AIT、ROBO 三个 README 里"修课时间表"的表格读出每门课被修读的学期（YYYY-MM），
+然后重写 <!-- COURSE-INDEX --> 和 <!-- /COURSE-INDEX --> 之间的内容。时间表本身是手写的。
+GE/（G 选修和 MPU 公共课）没有自己的时间表，修读学期来自三个专业的时间表。
 
 Scans EEE/<CODE>_<Course_Name>/<YYYY-MM>/<subfolder>/, counts files per session
 and type, reads the sessions (YYYY-MM) each course was taken in from the
-hand-written course-timeline tables in the same README, and rewrites everything
-between the COURSE-INDEX markers.
+hand-written course-timeline tables of the EEE, AIT and ROBO READMEs, and rewrites
+everything between the COURSE-INDEX markers. GE/ (G electives and MPU courses) has
+no timeline of its own; its sessions come from the three programme timelines.
 """
 import os, re, sys
 
 SUBS = ("Past-Papers", "Syllabus", "Assignments", "Labs", "Tutorials",
         "Handbooks", "Notes", "Exam-Review", "Tips")
+PROGRAMMES = ("EEE", "AIT", "ROBO")   # the timelines live in these; GE/ (G and MPU courses) has none of its own
 prog = sys.argv[1] if len(sys.argv) > 1 else "EEE"
-root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), prog)
+repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root = os.path.join(repo, prog)
 readme = os.path.join(root, "README.md")
 text = open(readme, encoding="utf-8").read()
 
-# when each course was taken: timeline rows "| 2022-04 | [COM107](folder/) | ..."
+# when each course was taken: timeline rows "| 2022-04 | [COM107](folder/) | ..." in any programme README
+# (a G or MPU course under GE/ is listed in the timeline of whoever took it)
 taught = {}
-for line in text.splitlines():
-    m = re.match(r"^\| (\d{4}-\d{2}) \| \[?([^\]|]+?)\]?(?:\([^)]*\))? \|", line)
-    if m:
-        sess, code = m.groups()
-        taught.setdefault(code.strip(), [])
-        if sess not in taught[code.strip()]:
-            taught[code.strip()].append(sess)
+for p in PROGRAMMES:
+    path = os.path.join(repo, p, "README.md")
+    if not os.path.isfile(path):
+        continue
+    for line in open(path, encoding="utf-8").read().splitlines():
+        m = re.match(r"^\| (\d{4}-\d{2}) \| \[?([^\]|]+?)\]?(?:\([^)]*\))? \|", line)
+        if m:
+            sess, code = m.groups()
+            taught.setdefault(code.strip(), [])
+            if sess not in taught[code.strip()]:
+                taught[code.strip()].append(sess)
 
 rows = []
 for d in sorted(os.listdir(root)):

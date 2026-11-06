@@ -28,6 +28,7 @@ body:
     id: prog
     attributes:
       label: "专业 | Programme"
+      description: "你自己的专业。代码以 G 或 MPU 开头的全校公共课不管选哪个都放进 GE/ | Your own programme. University-wide courses (codes starting with G or MPU) go to GE/ whichever you pick"
       options:
         - "EEE"
         - "AIT"

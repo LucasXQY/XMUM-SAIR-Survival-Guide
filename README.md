@@ -22,9 +22,9 @@ Welcome to the XMUM SAIR Survival Guide! This repo serves the three undergraduat
 
 ## 仓库结构 | Repository layout
 
-按专业 → 课程 → 学期组织：每门课一个文件夹，里面按学期（`YYYY-MM`）分子文件夹，所有年份的资料都在同一门课下面；每位贡献者在哪个学期修了哪门课，记在专业 README 的「修课时间表」里。目前资料以 EEE 为主，AIT 和 ROBO 的位置已预留，等同学们加入。
+按专业 → 课程 → 学期组织：每门课一个文件夹，里面按学期（`YYYY-MM`）分子文件夹，所有年份的资料都在同一门课下面；每位贡献者在哪个学期修了哪门课，记在专业 README 的「修课时间表」里。目前资料以 EEE 为主，AIT 和 ROBO 的位置已预留，等同学们加入。代码以 G 或 MPU 开头的全校公共课（选修和马来西亚必修通识课）各专业通用，放在 `GE/`。
 
-Organised by programme → course → session: one folder per course, split into session subfolders (`YYYY-MM`), so material from every year sits under the same course; each contributor's courses are listed by session in the programme README's "Course timeline". Most material so far is EEE; AIT and ROBO folders are ready and waiting for contributors.
+Organised by programme → course → session: one folder per course, split into session subfolders (`YYYY-MM`), so material from every year sits under the same course; each contributor's courses are listed by session in the programme README's "Course timeline". Most material so far is EEE; AIT and ROBO folders are ready and waiting for contributors. University-wide courses (codes starting with G or MPU: electives and Malaysia's compulsory subjects) are shared by every programme and live in `GE/`.
 
 ```
 README.md
@@ -45,6 +45,7 @@ EEE/
   …                        (one folder per course, one subfolder per session)
 AIT/README.md       (人工智能 | Artificial Intelligence)
 ROBO/README.md      (机器人与自动化工程 | Robotics & Automation Engineering)
+GE/README.md        (公共课：G 选修 + MPU | university-wide: G electives + MPU)
 ```
 
 每门课一个文件夹，里面每个学期一个子文件夹，例如 `EEE/COM107_Circuits_and_Devices/2022-04/`，学期文件夹里按需包含：

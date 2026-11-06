@@ -96,7 +96,7 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
    - 类型为 Past-Papers 且填了考核名称：单个文件 → `<CODE>_<YYYYMM>_<Assessment>_Question.<ext>`；多个文件 → `<CODE>_<YYYYMM>_<Assessment>_<Label>_Question.<ext>`。考核名称同样经过字符清洗（`Test 1` → `Test1`）。
    - 目标路径已存在同名文件 → 在 Label 后加 `_2`、`_3`。
 6. **清元数据**：PDF 用 PyMuPDF `set_metadata({})` 后 `save(garbage=3, deflate=True)`；docx/pptx/xlsx 重写 zip，把 `docProps/core.xml` 的 creator、lastModifiedBy、title、subject、keywords、description 和 `docProps/app.xml` 的 Company、Manager 置空，其他条目原样复制。doc/ppt/xls（旧格式）不处理，报告里注明"请维护者手动检查"。
-7. **归位**：`<PROG>/<CODE>_<Course_Name>/<session>/<Type>/`。课程目录按 `<CODE>_` 前缀在**三个专业目录里**匹配：已有就用已有的，哪怕它在别的专业下（通识课 MPU / G0xxx 都放在 EEE 下，AIT 同学选了 AIT 也归到现有目录，PR 正文说明）；表单里的课名与目录名不同时在 PR 正文提示。都没有则在所选专业下新建，并按 CONTRIBUTING 的模板生成课程 `README.md`（标题 `# <CODE> <Course Name>`、表头、空的小贴士）。课名转目录名：空格→`_`，去掉 `[^A-Za-z0-9_-]`。
+7. **归位**：`<PROG>/<CODE>_<Course_Name>/<session>/<Type>/`。课程目录按 `<CODE>_` 前缀在**三个专业目录和 `GE/` 里**匹配：已有就用已有的，哪怕它在别的专业下（AIT 同学选了 AIT 也归到现有目录，PR 正文说明）；代码以 G 或 MPU 开头的全校公共课一律放 `GE/`（2026-11-06 起），修课时间表那一行写进上传者所选专业的 README，链接 `../GE/<课程文件夹>/`；表单里的课名与目录名不同时在 PR 正文提示。都没有则在所选专业下新建，并按 CONTRIBUTING 的模板生成课程 `README.md`（标题 `# <CODE> <Course Name>`、表头、空的小贴士）。课名转目录名：空格→`_`，去掉 `[^A-Za-z0-9_-]`。
 8. **登记**：
    - 课程 README 第一张表：该学期已有行 → 在"资料来自"后追加 ` · <署名>`（已有则不重复），在"备注"后追加 ` · [<Type>](<session>/<Type>/)`（已有则不重复），表单给的老师/考核比例只在原格为空时填入；没有该学期 → 新增一行，按学期顺序插入。表单的"备注"文字追加到备注列。
    - 专业 README 的「其他同学 | Other contributors」表：追加 `| <修读学期> | [<CODE>](<dir>/) | [<Course Name>](<dir>/) | <署名> |`，修读学期取表单"你修这门课的学期"，留空则用资料学期（同一行已存在则跳过）。AIT / ROBO 的 README 目前没有这张表：没有就先按 EEE 的格式创建。

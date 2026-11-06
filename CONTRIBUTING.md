@@ -156,7 +156,7 @@ EEE/COM208_Engineering_Mathematics_IV/2021-09/Past-Papers/
 EEE/COM208_Engineering_Mathematics_IV/2023-04/Syllabus/
 ```
 
-- 专业：`EEE/`、`AIT/`、`ROBO/`。
+- 专业：`EEE/`、`AIT/`、`ROBO/`。代码以 `G`（全校选修）或 `MPU`（马来西亚必修通识课）开头的课所有专业都修，放在 `GE/`；修课记录照样写进你自己专业的时间表，链接指向 `../GE/<课程文件夹>/`。
 - 每门课一个文件夹，**所有年份、所有届的资料都放同一个课程文件夹**，不按届分目录。
 - 课程文件夹里**按学期分子文件夹**，名字是 `YYYY-MM`（例如 `2022-04`），和文件名里的 `YYYYMM` 一致。学期指资料本身的学期：试卷就是卷子上印的学期，大纲、作业就是发布的那个学期。实在查不到就放 `unknown/`。
 - 学期文件夹里再按类型分：`Past-Papers/`、`Syllabus/`、`Assignments/`、`Labs/`、`Tutorials/`、`Handbooks/`、`Notes/`、`Exam-Review/`、`Tips/`，有内容才建。
@@ -165,7 +165,7 @@ EEE/COM208_Engineering_Mathematics_IV/2023-04/Syllabus/
 - 上传前先看看同一学期的同类文件是否已经有人传过：内容一样就不用重复传；是另一套（例如 Set B）或版本不同，就在文件名里加区分，见下面的命名规则。
 - 课程改了代码（例如 COM204 → EEE220）就按新代码新建文件夹，并在两边的 `README.md` 里互相注明。
 
-- Programme: `EEE/`, `AIT/`, `ROBO/`.
+- Programme: `EEE/`, `AIT/`, `ROBO/`. Courses whose code starts with `G` (university electives) or `MPU` (Malaysia's compulsory subjects) are taken by every programme and live in `GE/`; your timeline row still goes in your own programme's README, linking to `../GE/<course folder>/`.
 - One folder per course: **material from every year and every cohort goes in the same course folder**. No per-cohort folders.
 - Inside the course folder, **one subfolder per session**, named `YYYY-MM` (e.g. `2022-04`), matching the `YYYYMM` in the file name. The session is the material's own: for a paper, the session printed on it; for a syllabus or assignment, the session it was issued in. If you really can't tell, use `unknown/`.
 - Inside the session folder, split by type: `Past-Papers/`, `Syllabus/`, `Assignments/`, `Labs/`, `Tutorials/`, `Handbooks/`, `Notes/`, `Exam-Review/`, `Tips/`. Create only the ones you fill.
