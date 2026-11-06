@@ -155,3 +155,13 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 2. Settings → General → Pull Requests：勾 "Automatically delete head branches"（只对合并的 PR 生效）；未合并就关闭的上传 PR，由工作流的 `pull_request_target: closed` 任务删掉 `upload/issue-<n>` 分支，被拒的文件不会一直留在公开分支上。
 3. 标签 `upload` 必须在上线前手动建好（表单要打这个标签，工作流只认这个标签，脚本自己没机会创建它）；`needs-info`、`pr-opened` 脚本缺失时自动创建。
 4. 分支保护已开；本通道的代码将以 PR 方式提交。
+
+## Claude 预检 | Claude pre-check（2026-11-06）
+
+每个上传文件交给 Claude 读一遍（PDF 原样发送，最多前 40 页；其他格式发文字，最多 6 万字符；doc/ppt/xls 旧格式不发），判断有没有答案或学生作答、个人信息（姓名、学号、签名、私人联系方式、Moodle 密钥、二维码）、评分标准，再加一句内容概述，写进 PR 正文的「Claude 预检」表。只是参考：不阻断、不删文件，维护者照常审核。
+
+- 结果按上传文件字节的 sha256 缓存在 PR 正文末尾的隐藏注释里；main 每次更新都会重建所有上传 PR，缓存保证同一个文件只付一次钱。
+- 每次运行最多 20 个文件；每天最多 30 个（仓库变量 `CLAUDE_DAILY_UPLOAD`），计数在 `bot-state` 分支。超出、没有 `ANTHROPIC_API_KEY`、调用失败时，表里写明原因，其余照旧。
+- 模型默认 Claude Opus 5.5，仓库变量 `CLAUDE_MODEL_UPLOAD` 可改。Claude 不复述个人信息，只说在哪一页。文件内容视为不可信输入。
+- 代码：`intake.py` 的 `precheck_input`、`precheck`、`precheck_lines`、`make_prechecker`；调用与计数在 `llm/claude_check.py`。
+

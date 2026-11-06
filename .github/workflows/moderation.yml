@@ -14,6 +14,7 @@ on:
     types: [created, edited]
 
 permissions:
+  contents: write        # only for the Claude call counter on the bot-state branch (llm/claude_check.py)
   discussions: write
   issues: write
   pull-requests: write
@@ -26,10 +27,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: moderation
+          sparse-checkout: |
+            moderation
+            llm
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: pip install "anthropic>=2.6,<3"
       - env:
           GH_TOKEN: ${{ github.token }}
+          # Claude's second opinion on keyword hits; without the key the keyword rules work alone
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL_MODERATION: ${{ vars.CLAUDE_MODEL_MODERATION }}
+          CLAUDE_DAILY_MODERATION: ${{ vars.CLAUDE_DAILY_MODERATION }}
         run: python moderation/moderation.py --event "$GITHUB_EVENT_PATH"

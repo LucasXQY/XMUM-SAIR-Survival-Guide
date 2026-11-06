@@ -1,0 +1,48 @@
+# 拿不准的词：单独出现不折叠，只在有 Claude 时请它判断（政治话题的宽泛说法、较轻的骂人话）。没有 Claude 时什么都不做。
+# Words too broad to fold on their own: with Claude available they get its opinion (broad political terms, milder insults);
+# without Claude nothing happens.
+政府
+政治
+政权
+党中央
+总书记
+国家主席
+领导人
+台湾
+香港
+新疆
+西藏
+民主
+人权
+抗议
+游行
+示威
+革命
+选举
+爱国
+统一台湾
+马来人特权
+种族
+宗教
+废物
+笨蛋
+闭嘴
+恶心
+government
+politics
+political
+regime
+communist
+democracy
+protest
+election
+taiwan
+tibet
+xinjiang
+hong kong
+racist
+religion
+stupid
+loser
+shut up
+disgusting

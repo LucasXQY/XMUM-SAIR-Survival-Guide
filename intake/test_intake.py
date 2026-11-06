@@ -408,6 +408,59 @@ def test_git_errors_carry_stderr():
         assert "repository" in str(e).lower()
 
 
+# ---- Claude pre-check (llm/claude_check.py does the call; here: what is sent, caching, limits, the PR section)
+
+VERDICT = {"summary": "期末试卷 | final paper", "answers": "yes", "personal_data": "no", "marking_scheme": "unsure",
+           "notes": "第 3 页有手写答案 | handwritten answers on page 3"}
+
+
+def test_precheck_input_sends_pdfs_whole_and_other_files_as_text():
+    import fitz
+    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf"); _docx(w / "b.docx", body="Question 2 only")
+    blocks, note = intake.precheck_input(w / "a.pdf")
+    assert blocks["type"] == "document" and blocks["source"]["media_type"] == "application/pdf" and note == ""
+    long = fitz.open(); [long.new_page() for _ in range(intake.PRECHECK_PAGES + 5)]; long.save(w / "long.pdf"); long.close()
+    blocks, note = intake.precheck_input(w / "long.pdf")
+    import base64
+    assert len(fitz.open(stream=base64.b64decode(blocks["source"]["data"]), filetype="pdf")) == intake.PRECHECK_PAGES
+    assert str(intake.PRECHECK_PAGES) in note                                     # the PR says only part was read
+    blocks, note = intake.precheck_input(w / "b.docx")
+    assert blocks["type"] == "text" and "Question 2 only" in blocks["text"]
+
+
+def test_precheck_caches_by_file_hash_and_respects_the_limit():
+    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf"); _pdf(w / "b.pdf", text="other")
+    files = {"X/a.pdf": w / "a.pdf", "X/b.pdf": w / "b.pdf"}
+    asked = []
+
+    def ask(content):
+        asked.append(content)
+        return dict(VERDICT)
+    out = intake.precheck(files, {}, ask=ask, take=lambda n: True)
+    assert len(asked) == 2 and {r["status"] for r in out.values()} == {"ok"} and out["X/a.pdf"]["answers"] == "yes"
+    cache = {r["sha"]: {k: r[k] for k in VERDICT} for r in out.values()}
+    again = intake.precheck(files, cache, ask=ask, take=lambda n: True)             # a rebuild: nothing is sent again
+    assert len(asked) == 2 and {r["status"] for r in again.values()} == {"cached"}
+    assert {r["status"] for r in intake.precheck(files, {}, ask=ask, take=lambda n: False).values()} == {"limit"}
+    assert {r["status"] for r in intake.precheck(files, {}, ask=lambda c: None, take=lambda n: True).values()} == {"error"}
+    assert {r["status"] for r in intake.precheck(files, {}).values()} == {"off"}    # no API key
+
+
+def test_pr_body_shows_the_precheck_and_carries_its_cache():
+    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "final.pdf")
+    f = intake.parse_form(_body())
+    pl = intake.apply(tmp, f, [("final.pdf", w / "final.pdf")], "someone")
+    rel = pl.placed[0][1]
+    pre = {rel: {"status": "ok", "sha": "s" * 64, **VERDICT}}
+    body = intake.pr_body(f, pl, [], {}, {}, (True, []), "abc1234", None, "upload/issue-9", 9, prechecks=pre)
+    assert "## Claude 预检 | Claude pre-check" in body and "⚠️" in body and "❓" in body and "handwritten answers on page 3" in body
+    assert intake.parse_precheck_cache(body) == {"s" * 64: VERDICT}
+    off = intake.pr_body(f, pl, [], {}, {}, (True, []), "abc1234", None, "upload/issue-9", 9,
+                         prechecks={rel: {"status": "off", "sha": "t"}})
+    assert "未运行" in off and intake.parse_precheck_cache(off) == {}
+    assert intake.parse_precheck_cache("no cache here") == {} and intake.parse_precheck_cache("<!-- claude-precheck !!! -->") == {}
+
+
 class _FakeGH:
     def __init__(self, body, labels=("upload",)):
         self.body, self.labels, self.calls = body, list(labels), []

@@ -12,7 +12,7 @@ Comments on the site are posted by anyone signed in to GitHub and appear at once
 
 ## 2. 已定 | Decided
 
-- **只用关键词表**（维护者选择：免费、粗）。误杀和漏判都会有；维护者可以在日志里恢复或补删。
+- **关键词表打底，Claude 复核**（2026-11-05 只用关键词表；2026-11-06 起维护者接入 Claude API）。关键词命中时请 Claude 给第二意见：`ok` 不折叠（日志里写明，维护者可手动折叠），`hide` 折叠，`human` 或没有答案时按原来的关键词规则。新增 `suspect.txt`（政治话题的宽泛说法、较轻的骂人话）：只在有 Claude 时请它判断，它说 `hide` 才折叠，没有 Claude 时什么都不做。没命中任何词的评论不调用 Claude。模型默认 Claude Haiku 5.5（维护者选择），仓库变量 `CLAUDE_MODEL_MODERATION` 可改；每天最多 100 次（`CLAUDE_DAILY_MODERATION`），计数在 `bot-state` 分支；没有 key、额度用完、出错、Claude 拒答都退回关键词规则。调用代码在 `llm/claude_check.py`。
 - **分两档**：`hide`（脏话、攻击、歧视、政治敏感）命中就隐藏；`review`（投诉类词，如"性骚扰""抄袭"）不隐藏，只记日志给维护者看，因为这类内容可能是正当反映。
 - **词表就是仓库里的文本文件**（`moderation/words/*.txt`，一行一个，`#` 注释），改词表走 PR，不用改代码。
 - **动作**：
@@ -26,7 +26,7 @@ Comments on the site are posted by anyone signed in to GitHub and appear at once
 
 ## 3. 不做 | Not doing
 
-- 不做语义判断（大模型），维护者如以后想要，在 `scan()` 后面加一层即可。
+- 不让 Claude 看没有命中关键词的评论（控制费用）；如果漏判多，再考虑扩充 `suspect.txt`。
 - 不删任何内容；删除是人的决定。
 - 不审网站之外的东西，不审 PR 代码评论之外的 PR 内容（PR 评论走 `issue_comment`，顺带审）。
 

@@ -35,11 +35,12 @@
     return Object.keys(lects).map(function (key) { return { key: key, e: lects[key] }; })
       .sort(function (a, b) { return b.e.n - a.e.n || a.e.name.localeCompare(b.e.name); });
   }
-  function cards(data, list) {   // one card per lecturer: name, voters, the four main tiles, the extra dimensions in a line
+  function cards(data, list, known) {   // one card per lecturer: name, voters, the four main tiles, the extras in a line
     var wrap = el('div', 'lcards');
     list.forEach(function (r) {
-      var c = el('div', 'lcard'), top = el('div', 'lcard-top');
-      var a = el('a', 'lcard-name', r.e.name); a.href = base + 'lecturers/' + r.key + '/';
+      var c = el('div', 'lcard'), top = el('div', 'lcard-top'), a;
+      if (known.indexOf(r.key) >= 0) { a = el('a', 'lcard-name', r.e.name); a.href = base + 'lecturers/' + r.key + '/'; }
+      else { a = el('span', 'lcard-name', r.e.name); a.title = '这位老师还没有名录页 | no directory page yet'; }   // named only in a review
       top.appendChild(a);
       top.appendChild(el('small', null, r.e.n + ' 人评价 | voters'));
       c.appendChild(top);
@@ -71,7 +72,7 @@
     box.appendChild(tiles(data, entry.all));
     var note = belowMin(data, entry.all);
     if (note) box.appendChild(note);
-    box.appendChild(cards(data, lecturersOf(data, code)));
+    box.appendChild(cards(data, lecturersOf(data, code), (box.dataset.known || '').split(' ')));
     box.appendChild(updated(data));
   }
 
@@ -157,7 +158,7 @@
       panel.appendChild(head);
       if (entry) {
         panel.appendChild(el('h3', null, '按老师 | By lecturer'));
-        panel.appendChild(cards(data, lecturersOf(data, code)));
+        panel.appendChild(cards(data, lecturersOf(data, code), (box.dataset.known || '').split(' ')));
       }
       panel.hidden = false; all.hidden = true; list.hidden = true;
       var url = new URL(location.href); url.searchParams.set('c', code); history.replaceState(null, '', url);
@@ -177,7 +178,7 @@
     });
     renderChips('');
     var want = new URLSearchParams(location.search).get('c');
-    if (want && courses[want.toUpperCase()]) showCourse(want.toUpperCase());
+    if (want && (courses[want.toUpperCase()] || data.courses[want.toUpperCase()])) showCourse(want.toUpperCase());
   }
 
   function fail(box) { clear(box); box.appendChild(el('p', 'muted', '还没有评价数据 | No rating data yet.')); }
