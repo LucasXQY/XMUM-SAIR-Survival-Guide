@@ -6,6 +6,6 @@
 |---|---|---|---|---|
 | 2025-04 |  | | LucasXQY |  |
 | [2025-09](2025-09/) | | | [nsd-chen](https://github.com/nsd-chen) | [Assignments](2025-09/Assignments/) · [Past-Papers](2025-09/Past-Papers/) |
-| unknown | Abdul Khalip Rasheed |  |  | 老师来自课程评价 | lecturer from a course review |
+| unknown | Abdul Khalip Rasheed |  |  | 老师来自课程评价 / lecturer from a course review |
 
 - 小贴士 / Tips：
