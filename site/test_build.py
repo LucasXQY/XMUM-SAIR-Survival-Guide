@@ -517,6 +517,21 @@ def test_fetch_discussions_shapes_the_graphql_answer():
     assert out[0] == {"number": 1, "title": "t", "url": "u", "created": "c", "updated": "d", "comments": 2, "labels": ["板块:其他"]}
 
 
+def test_search_index_carries_topics():
+    """The topic index (topics/topics.py) makes file contents searchable: Fourier finds the notes about it."""
+    rel = "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/" + sorted(
+        p.name for p in (ROOT / "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials").iterdir())[0]
+    topics = {rel: {"sha": "x", "topics": ["基尔霍夫定律 Kirchhoff's laws", "节点分析 nodal analysis"], "about": "电路习题 | circuit problems"}}
+    out = pathlib.Path(tempfile.mkdtemp()) / "_site"
+    build.build(ROOT, out, P, topics=topics)
+    idx = json.loads((out / "search.json").read_text(encoding="utf-8"))
+    f = next(f for f in idx["files"] if f["path"] == rel)
+    assert f["topics"] == ["基尔霍夫定律 Kirchhoff's laws", "节点分析 nodal analysis"] and f["about"] == "电路习题 | circuit problems"
+    assert all("topics" not in g for g in idx["files"] if g["path"] != rel)          # files without topics stay small
+    js = (out / "static/search.js").read_text(encoding="utf-8")
+    assert "f.topics" in js and "知识点" in js
+
+
 def test_goatcounter_snippet_on_every_page():
     _, out = _build()
     for p in ["index.html", "EEE/COM107_Circuits_and_Devices/index.html", "404.html"]:

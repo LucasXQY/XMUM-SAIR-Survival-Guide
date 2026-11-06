@@ -1,0 +1,41 @@
+name: topics
+
+# 知识点索引：新文件或内容变了的文件交给 Claude（默认 Haiku）列出知识点，存到 bot-state 分支的 topics.json，然后重建网站。见 topics/topics.py
+# Topic index: new or changed files go to Claude (Haiku by default) for their topics, stored in topics.json on the
+# bot-state branch; then the site is rebuilt. See topics/topics.py
+on:
+  push:
+    branches: [main]
+    paths: ["EEE/**", "AIT/**", "ROBO/**", "GE/**", "topics/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # topics.json and the call counter live on the bot-state branch
+  actions: write         # to request the site rebuild afterwards
+
+concurrency:
+  group: topics
+  cancel-in-progress: false
+
+jobs:
+  index:
+    if: vars.BOTS_PAUSED != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # the first run reads every file once (about 550)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pymupdf>=1.24,<2" "anthropic>=2.6,<3"
+      - id: index
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL_TOPICS: ${{ vars.CLAUDE_MODEL_TOPICS }}
+          CLAUDE_DAILY_TOPICS: ${{ vars.CLAUDE_DAILY_TOPICS }}
+        run: python topics/topics.py
+      - if: steps.index.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
