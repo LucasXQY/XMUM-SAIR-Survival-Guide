@@ -209,7 +209,7 @@ def _repo_copy():
     tmp = pathlib.Path(tempfile.mkdtemp()) / "repo"
     for rel in ["README.md", "CONTRIBUTORS.md", "CONTRIBUTING.md", "DISCLAIMER.md", "Lecturers.md", "Research-Opportunities.md",
                 "EEE/README.md", "AIT/README.md", "ROBO/README.md", "scripts/update_index.py", "EEE/COM107_Circuits_and_Devices/README.md",
-                "EEE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/README.md"]:
+                "GE/README.md", "GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/README.md"]:
         (tmp / rel).parent.mkdir(parents=True, exist_ok=True); shutil.copy(ROOT / rel, tmp / rel)
     src = ROOT / "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials"
     (tmp / "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials").mkdir(parents=True)
@@ -253,16 +253,36 @@ def test_update_timeline_and_contributors():
 
 def test_apply_places_files_and_matches_course_across_programmes():
     tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "final.pdf")
-    f = intake.parse_form(_body().replace("EEE\n", "AIT\n").replace("com107", "MPU3.1").replace("Circuits and Devices", "Constitution"))
+    f = intake.parse_form(_body().replace("EEE\n", "AIT\n"))         # an EEE course uploaded from the AIT form stays under EEE
     pl = intake.apply(tmp, f, [("final.pdf", w / "final.pdf")], "someone")
-    assert pl.course_dir == "EEE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia" and not list((tmp / "AIT").glob("MPU3.1*"))
-    assert pl.placed == [("final.pdf", "EEE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/2022-04/Past-Papers/MPU3.1_202204_Final_Question.pdf")]
+    assert pl.course_dir == "EEE/COM107_Circuits_and_Devices" and not list((tmp / "AIT").glob("COM107*"))
+    assert pl.placed == [("final.pdf", "EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question.pdf")]
     assert any("EEE" in n for n in pl.notes) and (tmp / pl.placed[0][1]).is_file()
-    assert "| 2022-04 | [MPU3.1]" in (tmp / "EEE/README.md").read_text(encoding="utf-8")
+    assert "| 2022-04 | [COM107](COM107_Circuits_and_Devices/) |" in (tmp / "EEE/README.md").read_text(encoding="utf-8")
     g = intake.parse_form(_body().replace("com107", "EEE999").replace("Circuits and Devices", "New Course"))
     pl2 = intake.apply(tmp, g, [("final.pdf", w / "final.pdf")], "someone")
     assert pl2.created_readme and (tmp / "EEE/EEE999_New_Course/README.md").read_text(encoding="utf-8").startswith("# EEE999 New Course")
     assert "| EEE999 |" in (tmp / "EEE/README.md").read_text(encoding="utf-8")   # index regenerated
+
+
+def test_shared_courses_live_under_ge():
+    """G electives and MPU compulsory courses belong to every programme: they sit under GE/ whatever the form says,
+    and the uploader's own programme timeline links to them."""
+    assert all(intake.is_shared(c) for c in ("G0191", "GE0227", "MPU3.1", "MPU1.1")) and not intake.is_shared("COM107")
+    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "final.pdf")
+    f = intake.parse_form(_body().replace("EEE\n", "AIT\n").replace("com107", "MPU3.1").replace("Circuits and Devices", "Constitution"))
+    pl = intake.apply(tmp, f, [("final.pdf", w / "final.pdf")], "someone")
+    assert pl.course_dir == "GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia" and not list((tmp / "AIT").glob("MPU3.1*"))
+    assert not any("already lives" in n for n in pl.notes)
+    assert "| 2022-04 | [MPU3.1](../GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) |" in (tmp / "AIT/README.md").read_text(encoding="utf-8")
+    ge = (tmp / "GE/README.md").read_text(encoding="utf-8")
+    assert "2022-04" in next(l for l in ge.splitlines() if l.startswith("| MPU3.1 |"))   # index rerun, taken-in from the AIT timeline
+    g = intake.parse_form(_body().replace("com107", "G0999").replace("Circuits and Devices", "New Elective"))
+    pl2 = intake.apply(tmp, g, [("final.pdf", w / "final.pdf")], "someone")
+    assert pl2.course_dir == "GE/G0999_New_Elective" and pl2.created_readme and not list((tmp / "EEE").glob("G0999*"))
+    assert "| G0999 |" in (tmp / "GE/README.md").read_text(encoding="utf-8")
+    eee = (tmp / "EEE/README.md").read_text(encoding="utf-8")
+    assert "| 2022-04 | [G0999](../GE/G0999_New_Elective/) |" in eee and "| G0999 |" not in eee
 
 
 def test_dry_run_end_to_end():
@@ -417,7 +437,7 @@ def test_run_issue_glue_with_fakes():
         assert git.calls[0] == ("reset", "upload/issue-5") and git.calls[-1] == ("push", "upload/issue-5")
         assert git.calls[1][2] == intake.BOT_AUTHOR and "MPU3.1 2022-04 Past-Papers" in git.calls[1][1]
         pr = next(c for c in gh.calls if c[0] == "pr")
-        assert "MPU3.1" in pr[1] and "Closes #5" in pr[2] and "EEE/MPU3.1_Introduction" in pr[2] and "CONTRIBUTORS.md" in pr[2]
+        assert "MPU3.1" in pr[1] and "Closes #5" in pr[2] and "GE/MPU3.1_Introduction" in pr[2] and "CONTRIBUTORS.md" in pr[2]
         first = next(c for c in gh.calls if c[0] == "comment")
         assert "https://example/pr/1" in first[1] and "dead.pdf" in first[1]
         assert ("label", ("pr-opened",), ()) in gh.calls and "comment_pr" not in [c[0] for c in gh.calls]

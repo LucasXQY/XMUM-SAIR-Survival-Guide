@@ -38,6 +38,9 @@ def test_scan_real_repo():
     assert c.taken_in == ["2022-04"] and c.lecturers["2022-04"] == "Chua Ming Yam"
     files = build.all_files(courses)
     assert len(files) == N_FILES >= 482 and all((ROOT / f.path).is_file() for f in files)
+    g = next(c for c in courses if c.code == "G0191")                 # G electives and MPU subjects sit under GE/
+    assert g.prog == "GE" and g.path == "GE/G0191_Face_Recognition_with_Machine_Learning" and g.taken_in == ["2023-02"]
+    assert not [c.code for c in courses if c.prog != "GE" and c.code.startswith(("G", "MPU"))]
     com110 = next(c for c in courses if c.code == "COM110")   # sessions newest first, whatever has been uploaded since
     assert list(com110.sessions) == sorted(com110.sessions, reverse=True) and {"2026-09", "2025-04"} <= set(com110.sessions)
 
@@ -65,6 +68,9 @@ def test_rewrite_link_rules():
     assert build.rewrite_link(s, "scripts/update_index.py", "README.md") == build.GH + "/blob/main/scripts/update_index.py"
     assert build.rewrite_link(s, "https://github.com/nsd-chen", "EEE/README.md") == "https://github.com/nsd-chen"
     assert build.rewrite_link(s, "#top", "README.md") == "#top"
+    assert build.rewrite_link(s, "CONTRIBUTORS.md", "README.md") == P + "about/#contributors"
+    assert build.rewrite_link(s, "Lecturers.md", "README.md") == P + "reviews/#lecturers"
+    assert build.rewrite_link(s, "../GE/G0191_Face_Recognition_with_Machine_Learning/", "EEE/README.md") == P + "GE/G0191_Face_Recognition_with_Machine_Learning/"
     assert build.rewrite_link(s, "../EEE999_X/", "EEE/COM107_Circuits_and_Devices/README.md") == build.GH + "/blob/main/EEE/EEE999_X"
 
 
@@ -96,14 +102,23 @@ def _build(prefix=P):
     return build.build(ROOT, out, prefix), out
 
 
+def _course_pages(out):
+    return [p for p in out.glob("*/*_*/index.html") if build.REDIRECT_MARK not in p.read_text(encoding="utf-8")]
+
+
 def test_build_writes_every_page():
     site, out = _build()
-    for p in ["index.html", "404.html", "about/index.html", "disclaimer/index.html", "qa/index.html",
-              "contributing/index.html", "contributors/index.html", "lecturers/index.html", "research/index.html",
-              "EEE/index.html", "AIT/index.html", "ROBO/index.html", "EEE/COM107_Circuits_and_Devices/index.html",
-              "search.json", "static/style.css", "static/search.js"]:
+    for p in ["index.html", "404.html", "about/index.html", "disclaimer/index.html", "qa/index.html", "courses/index.html",
+              "upload/index.html", "contributing/index.html", "research/index.html", "EEE/index.html", "AIT/index.html",
+              "ROBO/index.html", "GE/index.html", "EEE/COM107_Circuits_and_Devices/index.html",
+              "GE/G0191_Face_Recognition_with_Machine_Learning/index.html", "search.json", "static/style.css", "static/search.js"]:
         assert (out / p).is_file(), p
-    assert len(site.courses) == len(list(out.glob("*/*_*/index.html"))) == N_COURSES
+    assert len(site.courses) == len(_course_pages(out)) == N_COURSES
+    # addresses that moved keep working: the folded pages and the G/MPU courses that used to sit under EEE/
+    for old, new in [("contributors/", "about/#contributors"), ("lecturers/", "reviews/#lecturers"),
+                     ("EEE/G0191_Face_Recognition_with_Machine_Learning/", "GE/G0191_Face_Recognition_with_Machine_Learning/")]:
+        html = (out / old / "index.html").read_text(encoding="utf-8")
+        assert build.REDIRECT_MARK in html and f'url={P}{new}"' in html, old
 
 
 def test_course_page_contents():
@@ -117,6 +132,22 @@ def test_course_page_contents():
     assert "请勿张贴答案" in html and "Student-run, not affiliated with XMUM" in html and "Ciallo～ (∠・ < )⌒☆" in html
 
 
+def test_course_page_order_and_cleanup():
+    """Course review first, then the files, then the details from the README, then Q&A; README boilerplate stays out."""
+    _, out = _build()
+    html = (out / "EEE/COM208_Engineering_Mathematics_IV/index.html").read_text(encoding="utf-8")
+    at = [html.index(x) for x in ('id="review"', 'id="files"', 'id="details"', 'id="qa"')]
+    assert at == sorted(at), at
+    assert "每个修读学期一行" not in html and "One row per session" not in html and "小贴士 / Tips" not in html
+    details = html[html.index('id="details"'):html.index('id="qa"')]
+    assert "Mounir Nisse" in details and "LucasXQY" in details and "2023-04" in details
+    assert "考核 / Assessment" not in details and "备注 / Notes" not in details      # columns empty in every row are hidden
+    assert ">Past-Papers</a>" not in details and ">2021-09</a>" not in details        # no folder links; the files section has them
+    com106 = (out / "EEE/COM106_Electrical_Engineering/index.html").read_text(encoding="utf-8")
+    assert "COM111" in com106[:com106.index('id="review"')]                        # the code-change note stays at the top
+    assert "习题仅保留题目" in com106[com106.index('id="details"'):]
+
+
 def test_prog_and_qa_pages():
     _, out = _build()
     eee = (out / "EEE/index.html").read_text(encoding="utf-8")
@@ -124,6 +155,12 @@ def test_prog_and_qa_pages():
     n_eee = sum(1 for d in (ROOT / "EEE").glob("*_*") if d.is_dir())
     assert len(set(re.findall(r'href="/XMUM-SAIR-Survival-Guide/EEE/[^"/]+_[^"/]+/"', eee))) == n_eee
     assert "暂无课程" in (out / "AIT/index.html").read_text(encoding="utf-8")
+    # the README's instructions for contributors stay on GitHub; the timeline folds away, one link per row
+    assert "update_index.py" not in eee and "还没有你的表" not in eee and "文件命名" not in eee
+    assert '<details class="timeline">' in eee and "修课时间表" in eee
+    assert not re.search(r"<td><a [^>]*>COM106</a></td>", eee)
+    ge = (out / "GE/index.html").read_text(encoding="utf-8")
+    assert "G0191" in ge and "MPU1.1" in ge and ge.index("G0191") < ge.index("MPU1.1") and "MPU" in ge and "选修" in ge
     qa = (out / "qa/index.html").read_text(encoding="utf-8")
     assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa
 
@@ -138,6 +175,8 @@ def test_search_index():
     assert any(f["preview"] is None for f in idx["files"] if f["name"].endswith(".docx"))
     c = next(c for c in idx["courses"] if c["code"] == "COM107")
     assert c["lecturers"] == ["Chua Ming Yam"] and c["url"] == P + "EEE/COM107_Circuits_and_Devices/"
+    ng = next(l for l in idx["lecturers"] if l["name"] == "Ng Zi Neng")            # lecturers are searchable on /reviews/
+    assert ng["slug"] == "ng-zi-neng" and "COM111" in ng["codes"]
 
 
 def test_root_prefix_preview():
@@ -243,31 +282,46 @@ def test_forbidden_words_checked_in_generator_not_content():
 UPLOAD_URL = "https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml"
 
 
-def test_upload_button_everywhere():
+def test_upload_page_suggests_courses_and_lecturers():
+    """GitHub forms cannot suggest values, so /upload/ does: known courses and lecturers as you type, anything new is
+    taken as new, and the answers ride along to the GitHub form, where only the files are left to add."""
     _, out = _build()
-    for p in ["index.html", "EEE/index.html", "contributing/index.html"]:
-        assert UPLOAD_URL in (out / p).read_text(encoding="utf-8"), p
-    assert "上传 | Upload" in (out / "index.html").read_text(encoding="utf-8")
-    assert "上传表单" in (out / "contributing/index.html").read_text(encoding="utf-8")
+    up = (out / "upload/index.html").read_text(encoding="utf-8")
+    assert f'data-form="{UPLOAD_URL}"' in up and 'list="up-codes"' in up and 'list="up-lects"' in up
+    assert '<option value="COM107">Circuits and Devices</option>' in up and '<option value="Wong Shen Yuong">' in up
+    assert 'id="up-year"' in up and 'id="up-term"' in up and all(f'<option value="{t}">' in up for t in ("02", "04", "09"))
+    data = json.loads(re.search(r'<script type="application/json" id="up-data">(.*?)</script>', up, flags=re.S).group(1))
+    assert data["courses"]["COM106"]["lecturers"] == ["Wong Shen Yuong"] and data["courses"]["G0191"]["prog"] == "GE"
+    assert "Wong Shen Yuong" in data["lecturers"]
+    js = (out / "static/site.js").read_text(encoding="utf-8")
+    assert "up-data" in js and "URLSearchParams" in js and "up-name-row" in js
+    for p in ["index.html", "EEE/index.html", "contributing/index.html", "wanted/index.html"]:
+        assert f'href="{P}upload/"' in (out / p).read_text(encoding="utf-8"), p
 
 
-def test_nav_is_blocks_with_icons():
-    """The header is a row of blocks (icon + bilingual label), not a line of bare links; hover motion respects reduced-motion."""
+def test_nav_is_blocks_with_courses_menu():
+    """Blocks with icons; one Courses block opens a row with the programmes and GE instead of three separate blocks;
+    Lecturers and Contributors are folded into Reviews and About."""
     _, out = _build()
     html = (out / "index.html").read_text(encoding="utf-8")
     nav = re.search(r'<nav class="nav-blocks"[^>]*>(.*?)</nav>', html, flags=re.S)
     assert nav, "nav.nav-blocks missing"
     blocks = re.findall(r'<a class="nb[^"]*"[^>]*>', nav.group(1))
-    assert len(blocks) == len(build.NAV) + 2, blocks                     # every NAV entry + GitHub + Upload
-    order = [re.search(r'href="([^"]*)"', b).group(1) for b in blocks]   # importance: programmes, Q&A, Upload, ...; GitHub last
-    assert [o.rsplit("/", 2)[-2] for o in order[:4]] == ["EEE", "AIT", "ROBO", "qa"] and order[4] == UPLOAD_URL and order[-1] == build.GH
+    assert len(blocks) == len(build.NAV) + 1, blocks                     # every NAV entry + GitHub
+    order = [re.search(r'href="([^"]*)"', b).group(1) for b in blocks]
+    assert order[:3] == [P + "courses/", P + "qa/", P + "upload/"] and order[-1] == build.GH
+    assert P + "lecturers/" not in nav.group(1) and P + "contributors/" not in nav.group(1) and P + "EEE/" not in nav.group(1)
+    assert 'aria-controls="nav-courses"' in blocks[0] and 'aria-expanded="false"' in blocks[0]
+    sub = re.search(r'<div class="nav-sub" id="nav-courses" hidden>(.*?)</div>', html, flags=re.S)
+    assert sub and all(f'href="{P}{p}/"' in sub.group(1) for p in ("EEE", "AIT", "ROBO", "GE")) and f'href="{P}courses/"' in sub.group(1)
     assert nav.group(1).count('class="nb-ic"') == len(blocks) and nav.group(1).count('class="nb-t"') == len(blocks)
-    assert 'aria-label="上传 | Upload"' in nav.group(1) and 'href="' + UPLOAD_URL + '"' in nav.group(1)
-    assert "<small>Q&amp;A</small>" in nav.group(1) and "问答" in nav.group(1)       # bilingual label split into two lines
+    assert "<small>Q&amp;A</small>" in nav.group(1) and "问答" in nav.group(1) and 'class="nb upload"' in nav.group(1)
     css = (out / "static/style.css").read_text(encoding="utf-8")
-    assert ".nb:hover" in css and "transition" in css and "prefers-reduced-motion" in css
+    assert ".nb:hover" in css and "transition" in css and "prefers-reduced-motion" in css and ".nav-sub" in css
     js = (out / "static/site.js").read_text(encoding="utf-8")
-    assert "aria-current" in js                                            # the current page's block is marked at load
+    assert "aria-current" in js and "aria-expanded" in js and "Escape" in js
+    courses = (out / "courses/index.html").read_text(encoding="utf-8")
+    assert all(f'href="{P}{p}/"' in courses for p in ("EEE", "AIT", "ROBO", "GE"))
 
 
 # ---- phase 3
@@ -333,7 +387,7 @@ def test_ratings_hooks_and_reviews_page():
     lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
     assert 'class="ratings"' not in lect and "giscus" not in lect              # lecturer pages carry no scores and no threads
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
-    assert 'class="ratings" data-all' in table and "click a header of the table below to sort" in table
+    assert 'class="ratings" data-all' in table and "Click a header to sort" in table
     assert "ratings.json" in (out / "static/ratings.js").read_text(encoding="utf-8") and f"{build.SITE_URL}reviews/" in (out / "sitemap.xml").read_text(encoding="utf-8")
 
 
@@ -343,16 +397,15 @@ def test_ratings_hooks_and_reviews_page():
 
 def test_lecturer_pages_are_a_directory():
     """Lecturer pages list courses taught and link to the course review sections. No comment threads, no per-lecturer
-    scores, no written reviews of lecturers anywhere (maintainer's decision, 2026-11-05)."""
+    scores, no written reviews of lecturers anywhere (maintainer's decision, 2026-11-05). The directory sits on /reviews/."""
     site, out = _build()
     assert build.lecturer_slug("Lohgheswary A/P Nagarethinam") == "lohgheswary-a-p-nagarethinam"
     lects = build.lecturers(site)
     assert "Nurul Hafeeza Jumaah" in lects and "Maryani Ahmad" in lects and "Lohgheswary A/P Nagarethinam" in lects
     assert ("COM111", "2025-09") in lects["Ng Zi Neng"]
-    idx = (out / "lecturers/index.html").read_text(encoding="utf-8")
-    assert "不收关于老师的文字评价" in idx and 'id="lect-q"' in idx and f'href="{P}lecturers/ng-zi-neng/"' in idx
-    cards = re.findall(r'<a class="card lect"[^>]*>', idx)
-    assert len(cards) == len(lects) and all(" hidden" not in c for c in cards)   # everyone listed, nothing hidden
+    idx = (out / "reviews/index.html").read_text(encoding="utf-8")
+    assert 'id="lecturers"' in idx and "不收关于老师的文字评价" in idx and f'href="{P}lecturers/ng-zi-neng/"' in idx
+    assert len(set(re.findall(rf'href="{P}lecturers/([^"/]+)/"', idx))) == len({build.lecturer_slug(n) for n in lects})
     pg = (out / "lecturers/ng-zi-neng/index.html").read_text(encoding="utf-8")
     assert "<h1>Ng Zi Neng</h1>" in pg and f'href="{P}EEE/COM111_Electrical_Engineering/#2025-09"' in pg
     assert f'href="{P}EEE/COM111_Electrical_Engineering/#review"' in pg          # scores live on the course page
@@ -360,7 +413,7 @@ def test_lecturer_pages_are_a_directory():
     course = (out / "EEE/COM111_Electrical_Engineering/index.html").read_text(encoding="utf-8")
     assert f'href="{P}lecturers/ng-zi-neng/"' in course                          # click the lecturer → their courses
     js = (out / "static/site.js").read_text(encoding="utf-8")
-    assert "lect-q" in js and "rate-q" in js and "#profile" not in js and "Describe" not in js and "ratings-loaded" not in js
+    assert "rate-q" in js and "#profile" not in js and "Describe" not in js and "ratings-loaded" not in js
     rate = (out / "rate/index.html").read_text(encoding="utf-8")
     assert 'id="rate-q"' in rate and "写描述" not in rate and build.REVIEW_FORM in rate
     for word in ("教师 | Lecturer:", "Lecturer Profiles", "教师档案"):
@@ -368,15 +421,33 @@ def test_lecturer_pages_are_a_directory():
 
 
 def test_reviews_page_search_and_course_panel():
-    """One add-review button, a search box, and a course panel (tiles + per-lecturer table) that ratings.js fills."""
+    """One add-review button, a search box for courses and lecturers, and a course panel (tiles + per-lecturer table)."""
     _, out = _build()
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
     assert table.count("添加评价 | Add a review") == 1 and "评价这门课" not in table         # no second button for the same thing
     assert 'id="rv-q"' in table and 'id="rv-panel"' in table and 'data-courses="' + P + 'search.json"' in table
+    assert f'data-form="{build.REVIEW_FORM}"' in table                               # the panel's Rate button has a form to open
     js = (out / "static/ratings.js").read_text(encoding="utf-8")
-    assert "rv-panel" in js and "tile" in js and "data.courses[" in js and ".all" in js
+    assert "rv-panel" in js and "tile" in js and "data.courses[" in js and ".all" in js and "lecturers/" in js
+    assert "box.dataset.form" in js and "formUrl" not in js
     css = (out / "static/style.css").read_text(encoding="utf-8")
     assert ".tile {" in css and "--v" in css.split(".tile {")[1][:300]
+
+
+def test_about_page_holds_contributors():
+    _, out = _build()
+    about = (out / "about/index.html").read_text(encoding="utf-8")
+    assert 'id="contributors"' in about and "niconiconi-nico" in about and "XHZ" in about and "MXZ" in about
+    assert "[Name]" not in about and "[贡献 / Contribution]" not in about                # template rows stay on GitHub
+    assert about.count("贡献者 | Contributors") == 1
+
+
+def test_added_dates_follow_renames():
+    """Moving a course folder (EEE/ → GE/) must not make its files look newly uploaded."""
+    raw = ("2026-11-06\n\nR100\tEEE/G0103_X/2021-09/Syllabus/a.pdf\tGE/G0103_X/2021-09/Syllabus/a.pdf\n"
+           "A\tGE/G0103_X/2021-09/Notes/new.pdf\n2026-11-04\n\nA\tEEE/G0103_X/2021-09/Syllabus/a.pdf\n")
+    d = build.parse_added(raw)
+    assert d["GE/G0103_X/2021-09/Syllabus/a.pdf"] == "2026-11-04" and d["GE/G0103_X/2021-09/Notes/new.pdf"] == "2026-11-06"
 
 
 def test_goatcounter_snippet_on_every_page():

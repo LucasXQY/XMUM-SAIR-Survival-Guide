@@ -18,7 +18,8 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 PROGS = ("EEE", "AIT", "ROBO")
-SUBS = ("Past-Papers", "Syllabus", "Assignments", "Labs", "Tutorials",
+SHARED = "GE"   # university-wide courses: G electives and MPU compulsory subjects, whichever programme uploads them
+SUBS =("Past-Papers", "Syllabus", "Assignments", "Labs", "Tutorials",
         "Handbooks", "Notes", "Exam-Review", "Tips")
 CODE_RE = re.compile(r"^[A-Z]{1,4}(?:\d{3,4}|\d\.\d)$")
 SESSION_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -444,9 +445,14 @@ def credit_name(f: Form, login: str) -> str:
     return f"[{login}](https://github.com/{login})"
 
 
+def is_shared(code: str) -> bool:
+    """G electives and MPU subjects are taken by every programme, so they live under GE/."""
+    return code.upper().startswith(("G", "MPU"))
+
+
 def find_course_dir(root: Path, code: str) -> Path | None:
-    """The existing course folder for a code, whichever programme it sits under."""
-    for prog in PROGS:
+    """The existing course folder for a code, whichever programme (or GE/) it sits under."""
+    for prog in (*PROGS, SHARED):
         hits = sorted(d for d in (root / prog).glob(f"{code}_*") if d.is_dir())
         if hits:
             return hits[0]
@@ -540,10 +546,12 @@ def update_course_readme(text: str, f: Form, credit: str) -> str:
     return eol.join(lines)
 
 
-def update_timeline(text: str, f: Form, credit: str, dir_name: str) -> str:
+def update_timeline(text: str, f: Form, credit: str, dir_name: str, link: str | None = None) -> str:
+    """Add the uploader's row to a programme's timeline; `link` is the folder relative to that README (../GE/… for GE courses)."""
     lines, eol = _split_lines(text)
     name = dir_name.split("_", 1)[1].replace("_", " ") if "_" in dir_name else dir_name
-    row = f"| {f.taken} | [{f.code}]({dir_name}/) | [{name}]({dir_name}/) | {credit} |"
+    link = link or dir_name
+    row = f"| {f.taken} | [{f.code}]({link}/) | [{name}]({link}/) | {credit} |"
     if row in lines:
         return text
     try:
@@ -612,11 +620,11 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
     course = find_course_dir(root, f.code)
     created = False
     if course is None:
-        course = root / f.prog / course_dir_name(f.code, f.name)
+        course = root / (SHARED if is_shared(f.code) else f.prog) / course_dir_name(f.code, f.name)
         course.mkdir(parents=True, exist_ok=True)
     else:
         prog = course.parent.name
-        if prog != f.prog:
+        if prog != f.prog and prog != SHARED:
             notes.append(f"{f.code} 的课程目录已在 {prog}/ 下，文件归入那里而不是 {f.prog}/ "
                          f"| the {f.code} folder already lives under {prog}/, so the files went there rather than {f.prog}/")
         existing = course.name.split("_", 1)[1].replace("_", " ") if "_" in course.name else ""
@@ -629,6 +637,9 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
         notes.append(f"新建了课程目录和 README：{course.parent.name}/{course.name}/ "
                      f"| created the course folder and README: {course.parent.name}/{course.name}/")
     prog = course.parent.name
+    if prog == SHARED:
+        notes.append(f"{f.code} 是全校公共课（G 选修或 MPU），放在 {SHARED}/ 下，修课记录写进 {f.prog} 的时间表 "
+                     f"| {f.code} is a university-wide course (G elective or MPU): filed under {SHARED}/, timeline row in {f.prog}")
     target = course / f.session / f.type
     target.mkdir(parents=True, exist_ok=True)
     taken = {p.name for p in target.iterdir()}
@@ -646,10 +657,12 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
         registered.append("课程 README 的学期表：已更新 | course README session table: updated")
     else:
         registered.append("课程 README 的学期表：无需改动 | course README session table: nothing to change")
-    if _edit(root / prog / "README.md", lambda t: update_timeline(t, f, credit, course.name)):
-        registered.append(f"`{prog}/README.md` 修课时间表：加了一行 | timeline: row added")
+    # GE/ has no timeline: a G or MPU course goes into the timeline of the uploader's own programme, linked across
+    timeline_prog, link = (f.prog, f"../{SHARED}/{course.name}") if prog == SHARED else (prog, course.name)
+    if _edit(root / timeline_prog / "README.md", lambda t: update_timeline(t, f, credit, course.name, link)):
+        registered.append(f"`{timeline_prog}/README.md` 修课时间表：加了一行 | timeline: row added")
     else:
-        registered.append(f"`{prog}/README.md` 修课时间表：已有相同行 | timeline: identical row already there")
+        registered.append(f"`{timeline_prog}/README.md` 修课时间表：已有相同行 | timeline: identical row already there")
     if _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, f, credit, len(files))):
         registered.append("`CONTRIBUTORS.md`：加了一行 | row added")
     else:

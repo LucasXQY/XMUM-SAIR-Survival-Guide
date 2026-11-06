@@ -15,7 +15,7 @@ root = pathlib.Path(__file__).resolve().parents[1]
 out = root / (sys.argv[1] if len(sys.argv) > 1 else "_zips")
 out.mkdir(exist_ok=True)
 n = 0
-for prog in ("EEE", "AIT", "ROBO"):
+for prog in ("EEE", "AIT", "ROBO", "GE"):
     for course in sorted((root / prog).glob("*_*")):
         if not course.is_dir():
             continue

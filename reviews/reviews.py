@@ -3,16 +3,19 @@ Course-review bot: records the scores from a "course review" issue form anonymou
 repository and publishes aggregates only.
 
 流程 | Flow: 解析表单 → 校验 → 投票写入私有仓库（投票人 = 加盐哈希）→ 汇总（少于 MIN_N 人只给人数）→ 推到公开仓库的 data 分支
-（ratings.json，网站读取）→ 给作者留一句 → 关闭并锁定 Issue（维护者定期手动删除）。设计见 site/DESIGN.md §15。
+（ratings.json，网站读取）→ 给作者留一句 → 一分钟后删除 Issue（没有删除用的 token 时退回关闭并锁定）。没登记成功的表单保留一周让作者看到原因，
+之后由每次运行顺带清理。设计见 site/DESIGN.md §15。
 Parse → validate → upsert the vote in the private data repo (voter = salted hash) → aggregate (count only below MIN_N) →
-push ratings.json to the public repo's `data` branch (read by the site) → one reply → close and lock the issue
-(the maintainer deletes them by hand from time to time). Design: site/DESIGN.md §15.
+push ratings.json to the public repo's `data` branch (read by the site) → one reply → delete the issue a minute later
+(close and lock instead when there is no delete token). A form that failed stays a week so its author can read why; every run
+sweeps up the ones past that. Design: site/DESIGN.md §15.
 
 用法 | Usage:
   python reviews/reviews.py --issue N                 # one issue (the workflow)
   python reviews/reviews.py --rebuild                 # sweep open review issues, rebuild and publish ratings.json
   python reviews/reviews.py --dry-run --form FILE --data DIR --voter X --out ratings.json   # no network (tests)
-环境 | Env: GH_TOKEN (public repo), REVIEWS_TOKEN (read/write on the private data repo only), REVIEWS_SALT, REVIEWS_DATA_REPO (owner/name)
+环境 | Env: GH_TOKEN (public repo), REVIEWS_TOKEN (read/write on the private data repo only), REVIEWS_SALT, REVIEWS_DATA_REPO (owner/name),
+           REVIEWS_DELETE_TOKEN (the maintainer's token with Issues read/write on the public repo; deleting an issue needs a repo admin)
 """
 from __future__ import annotations
 
@@ -23,9 +26,10 @@ import os
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -49,6 +53,9 @@ NO_RESPONSE = "_No response_"
 HEADING_RE = re.compile(r"^### (.*?)\s*$", re.M)
 TITLE_RE = re.compile(r"^(?:dr|prof|professor|assoc|associate|asst|assistant|puan|encik|en|cik|mr|mrs|ms|ir|ts)\.?\s+", re.I)
 LABEL_REVIEW, LABEL_NEEDS_INFO = "review", "needs-info"
+RECORDED, NOT_RECORDED = "已登记（匿名）", "表单还差一点"   # first words of the bot's two replies; the sweep keys on them
+DELETE_DELAY = 60                     # seconds between the reply and deleting the issue, so the author's notification goes out first
+KEEP_FAILED = timedelta(days=7)       # a form that was not recorded stays this long so its author can read why
 BOT_IDENT = ["-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com"]
 
 
@@ -231,9 +238,70 @@ def publish(agg: dict, work: Path, repo: str, token: str) -> None:
 
 
 def finish_issue(number: int, repo: str) -> None:
-    """Close and lock: the scores stay visible until the maintainer deletes the issue by hand (their choice, 2026-11-05)."""
+    """Close and lock: what happens to a failed form, and to a recorded one when it cannot be deleted."""
     gh("issue", "close", str(number), "--repo", repo)
     gh("issue", "lock", str(number), "--repo", repo)
+
+
+def delete_issue(node_id: str, token: str) -> None:
+    gh("api", "graphql", "-f", "query=mutation($id: ID!) { deleteIssue(input: {issueId: $id}) { clientMutationId } }",
+       "-f", f"id={node_id}", token=token)
+
+
+def remove_source(number: int, repo: str, node_id: str, token: str, wait: int = DELETE_DELAY) -> bool:
+    """Delete the issue so no public trace links an account to its scores (maintainer's decision, 2026-11-06).
+    Without the delete token, or if GitHub refuses, close and lock it instead; True when it was deleted."""
+    if token:
+        time.sleep(wait)
+        try:
+            delete_issue(node_id, token)
+            return True
+        except Exception as e:  # e.g. the token lacks the right; the issue must not stay open either way
+            print(f"#{number}: could not delete, closing and locking instead: {e}", file=sys.stderr)
+    finish_issue(number, repo)
+    return False
+
+
+def sweep_decision(closed_at: str, bot_replies: list[str], now: datetime) -> bool:
+    """Should this closed review issue be deleted now?"""
+    if any(r.startswith(RECORDED) for r in bot_replies):
+        return True
+    if any(r.startswith(NOT_RECORDED) for r in bot_replies):
+        return now - datetime.fromisoformat(closed_at.replace("Z", "+00:00")) >= KEEP_FAILED
+    return False
+
+
+def sweep(repo: str, token: str) -> int:
+    """Delete closed review issues whose time is up; returns how many went."""
+    if not token:
+        return 0
+    found = json.loads(gh("issue", "list", "--repo", repo, "--label", LABEL_REVIEW, "--state", "closed", "--limit", "100",
+                          "--json", "number,id,closedAt"))
+    now, gone = datetime.now(timezone.utc), 0
+    for iss in found:
+        replies = json.loads(gh("api", f"repos/{repo}/issues/{iss['number']}/comments", "--jq",
+                                '[.[] | select(.user.login == "github-actions[bot]") | .body]') or "[]")
+        if sweep_decision(iss["closedAt"], replies, now):
+            try:
+                delete_issue(iss["id"], token)
+                gone += 1
+            except Exception as e:
+                print(f"#{iss['number']}: could not delete: {e}", file=sys.stderr)
+                break   # the same refusal would repeat for every issue
+    return gone
+
+
+def recorded_reply(code: str, lecturer: str, deleting: bool) -> str:
+    what = f"{code} · {display_name(lecturer)}"
+    if deleting:
+        zh = "一分钟后这个 Issue 会被自动删除，分数只以匿名编号留在维护者的私有仓库里"
+        en = "this issue is deleted automatically in a minute; the scores stay only in the maintainer's private repository, under an anonymous id"
+    else:
+        zh = "这个 Issue 现在关闭锁定，维护者会定期删除"
+        en = "this issue is now closed and locked and the maintainer deletes these periodically"
+    return (f"{RECORDED}：{what}。同一门课同一位老师每人只算一票，想改分数就再提交一次。{zh}；网站上的平均分在至少 {MIN_N} 人评价后显示。\n\n"
+            f"Recorded anonymously: {what}. One vote per person per course and lecturer; submit again to change it. "
+            f"{en[0].upper() + en[1:]}; averages appear once at least {MIN_N} people have rated.")
 
 
 def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | None, salt: str, publish_after: bool = True) -> None:
@@ -246,8 +314,8 @@ def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | No
     problems = validate(r)
     if problems:
         gh("issue", "comment", str(n), "--repo", repo, "--body-file", "-", input=(
-            "表单还差一点，这次没有登记 | Not recorded yet, a few things to fix:\n\n" + "\n".join(f"- {p}" for p in problems)
-            + "\n\n这个 Issue 会被关闭，改好后请重新提交一份。| This issue is closed; please submit a new one."))
+            f"{NOT_RECORDED}，这次没有登记 | Not recorded yet, a few things to fix:\n\n" + "\n".join(f"- {p}" for p in problems)
+            + "\n\n这个 Issue 会被关闭，一周后删除，改好后请重新提交一份。| This issue is closed and deleted in a week; please submit a new one."))
         finish_issue(n, repo)
         print(f"#{n}: {len(problems)} problem(s)")
         return
@@ -258,13 +326,10 @@ def process_issue(n: int, repo: str, work: Path, data_repo: str, token: str | No
     commit_and_push(data, f"vote: {r.code} {lecturer_key(r.lecturer)}", "main")
     if publish_after:
         publish(aggregate(data), work, repo, os.environ.get("GH_TOKEN", ""))
-    gh("issue", "comment", str(n), "--repo", repo, "--body-file", "-", input=(
-        f"已登记（匿名）：{r.code} · {display_name(r.lecturer)}。同一门课同一位老师每人只算一票，想改分数就再提交一次。"
-        f"这个 Issue 现在关闭锁定，维护者会定期删除；网站上的平均分在至少 {MIN_N} 人评价后显示。\n\n"
-        f"Recorded anonymously: {r.code} · {display_name(r.lecturer)}. One vote per person per course and lecturer; submit again to change it. "
-        f"This issue is now closed and locked and the maintainer deletes these periodically; averages appear once at least {MIN_N} people have rated."))
-    finish_issue(n, repo)
-    print(f"#{n}: recorded {r.code} {lecturer_key(r.lecturer)}")
+    delete_token = os.environ.get("REVIEWS_DELETE_TOKEN", "")
+    gh("issue", "comment", str(n), "--repo", repo, "--body-file", "-", input=recorded_reply(r.code, r.lecturer, bool(delete_token)))
+    deleted = remove_source(n, repo, iss["node_id"], delete_token)
+    print(f"#{n}: recorded {r.code} {lecturer_key(r.lecturer)}, issue {'deleted' if deleted else 'closed and locked'}")
 
 
 def open_review_issues(repo: str) -> list[int]:
@@ -307,8 +372,17 @@ def main(argv: list[str] | None = None) -> int:
         print("WARNING: REVIEWS_SALT is empty; voter hashes are weaker", file=sys.stderr)
     work = Path(args.work).resolve()
     work.mkdir(parents=True, exist_ok=True)
+    delete_token = os.environ.get("REVIEWS_DELETE_TOKEN", "")
+
+    def tidy() -> None:   # every run also clears closed review issues whose time is up
+        try:
+            print(f"swept {sweep(args.repo, delete_token)} closed review issue(s)")
+        except Exception as e:
+            print(f"sweep failed: {e}", file=sys.stderr)
+
     if args.issue:
         process_issue(args.issue, args.repo, work, args.data_repo, token, salt)
+        tidy()
         return 0
     if args.rebuild:
         failed = 0
@@ -323,6 +397,7 @@ def main(argv: list[str] | None = None) -> int:
         data = open_data_repo(work, args.data_repo, token)
         publish(aggregate(data), work, args.repo, os.environ.get("GH_TOKEN", ""))
         print("ratings.json rebuilt")
+        tidy()
         return 1 if failed else 0
     print("nothing to do: pass --issue N, --rebuild or --dry-run")
     return 0

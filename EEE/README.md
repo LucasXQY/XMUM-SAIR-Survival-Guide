@@ -1,8 +1,8 @@
 # EEE | 电子信息工程
 
-资料按**课程 → 学期**分目录：`EEE/<课程代码>_<课程名>/<YYYY-MM>/`，每门课一个文件夹，里面每个学期一个子文件夹，所有年份的试卷、大纲、作业都在同一门课下面。想知道某门课大概什么时候修，看下面的「修课时间表」。不同届课程代码可能变（例如 Engineering Graphics：2021 入学是大一的 COM204，2025 入学是大二的 EEE220），课程 README 里会互相注明。
+资料按**课程 → 学期**分目录：`EEE/<课程代码>_<课程名>/<YYYY-MM>/`，每门课一个文件夹，里面每个学期一个子文件夹，所有年份的试卷、大纲、作业都在同一门课下面。想知道某门课大概什么时候修，看下面的「修课时间表」。不同届课程代码可能变（例如 Engineering Graphics：2021 入学是大一的 COM204，2025 入学是大二的 EEE220），课程 README 里会互相注明。G 和 MPU 开头的全校公共课（选修和马来西亚必修通识课）在 [GE/](../GE/README.md)。
 
-Material is organised **per course, then per session**: `EEE/<CODE>_<Course_Name>/<YYYY-MM>/`, one folder per course with one subfolder per session, so papers, syllabi and assignments from every year sit under the same course. To see roughly when a course is taken, use the course timeline below. Course codes can change between cohorts (e.g. Engineering Graphics was COM204 in Year 1 for the 2021 intake and EEE220 in Year 2 for the 2025 intake); the course READMEs cross-reference each other.
+Material is organised **per course, then per session**: `EEE/<CODE>_<Course_Name>/<YYYY-MM>/`, one folder per course with one subfolder per session, so papers, syllabi and assignments from every year sit under the same course. To see roughly when a course is taken, use the course timeline below. Course codes can change between cohorts (e.g. Engineering Graphics was COM204 in Year 1 for the 2021 intake and EEE220 in Year 2 for the 2025 intake); the course READMEs cross-reference each other. University-wide courses (codes starting with G or MPU: electives and Malaysia's compulsory subjects) live in [GE/](../GE/README.md).
 
 ## 课程索引 | Course index
 
@@ -57,21 +57,6 @@ Material is organised **per course, then per session**: `EEE/<CODE>_<Course_Name
 | EEE411 | [Communication System](EEE411_Communication_System/) | 2024-09、2025-09 | [2024-09](EEE411_Communication_System/2024-09) · [2025-04](EEE411_Communication_System/2025-04) · [2025-09](EEE411_Communication_System/2025-09) | [README](EEE411_Communication_System/README.md)<br>2024-09: [Assignments (2)](EEE411_Communication_System/2024-09/Assignments)<br>2025-04: [Assignments (1)](EEE411_Communication_System/2025-04/Assignments)<br>2025-09: [Assignments (2)](EEE411_Communication_System/2025-09/Assignments) |
 | EEE418 | [Renewable Energy](EEE418_Renewable_Energy/) | 2025-04、2025-09 | [2025-04](EEE418_Renewable_Energy/2025-04) · [2025-09](EEE418_Renewable_Energy/2025-09) | [README](EEE418_Renewable_Energy/README.md)<br>2025-04: [Handbooks (2)](EEE418_Renewable_Energy/2025-04/Handbooks)<br>2025-09: [Past-Papers (1)](EEE418_Renewable_Energy/2025-09/Past-Papers) · [Assignments (1)](EEE418_Renewable_Energy/2025-09/Assignments) |
 | EEE423 | [Power System Protection](EEE423_Power_System_Protection/) | 2025-04 | [2025-04](EEE423_Power_System_Protection/2025-04) | [README](EEE423_Power_System_Protection/README.md)<br>[Assignments (2)](EEE423_Power_System_Protection/2025-04/Assignments) |
-| G0103 | [Psychology in Interpersonal Communication](G0103_Psychology_in_Interpersonal_Communication/) | 2021-09 | [2021-09](G0103_Psychology_in_Interpersonal_Communication/2021-09) | [README](G0103_Psychology_in_Interpersonal_Communication/README.md)<br>[Syllabus (1)](G0103_Psychology_in_Interpersonal_Communication/2021-09/Syllabus) · [Assignments (2)](G0103_Psychology_in_Interpersonal_Communication/2021-09/Assignments) |
-| G0123 | [Mathematical Graphics](G0123_Mathematical_Graphics/) | 2025-02 | [2025-02](G0123_Mathematical_Graphics/2025-02) | [README](G0123_Mathematical_Graphics/README.md)<br>[Past-Papers (3)](G0123_Mathematical_Graphics/2025-02/Past-Papers) · [Assignments (1)](G0123_Mathematical_Graphics/2025-02/Assignments) |
-| G0125 | [Introduction to Global Mandarin](G0125_Introduction_to_Global_Mandarin/) | 2022-02 | [2022-02](G0125_Introduction_to_Global_Mandarin/2022-02) | [README](G0125_Introduction_to_Global_Mandarin/README.md)<br>[Assignments (1)](G0125_Introduction_to_Global_Mandarin/2022-02/Assignments) |
-| G0150 | [Principles of Public Relations](G0150_Principles_of_Public_Relations/) | 2021-09 | [2021-09](G0150_Principles_of_Public_Relations/2021-09) | [README](G0150_Principles_of_Public_Relations/README.md)<br>[Syllabus (1)](G0150_Principles_of_Public_Relations/2021-09/Syllabus) · [Assignments (5)](G0150_Principles_of_Public_Relations/2021-09/Assignments) · [Handbooks (1)](G0150_Principles_of_Public_Relations/2021-09/Handbooks) |
-| G0191 | [Face Recognition with Machine Learning](G0191_Face_Recognition_with_Machine_Learning/) | 2023-02 | [2023-02](G0191_Face_Recognition_with_Machine_Learning/2023-02) | [README](G0191_Face_Recognition_with_Machine_Learning/README.md)<br>[Syllabus (1)](G0191_Face_Recognition_with_Machine_Learning/2023-02/Syllabus) · [Assignments (1)](G0191_Face_Recognition_with_Machine_Learning/2023-02/Assignments) · [Tutorials (3)](G0191_Face_Recognition_with_Machine_Learning/2023-02/Tutorials) |
-| G0209 | [Introduction to Entrepreneurship](G0209_Introduction_to_Entrepreneurship/) | 2022-09 | [2022-09](G0209_Introduction_to_Entrepreneurship/2022-09) | [README](G0209_Introduction_to_Entrepreneurship/README.md)<br>[Syllabus (2)](G0209_Introduction_to_Entrepreneurship/2022-09/Syllabus) · [Assignments (1)](G0209_Introduction_to_Entrepreneurship/2022-09/Assignments) |
-| G0236 | [Introduction to Enterprise Risk Management](G0236_Introduction_to_Enterprise_Risk_Management/) | 2021-09 | [2021-09](G0236_Introduction_to_Enterprise_Risk_Management/2021-09) | [README](G0236_Introduction_to_Enterprise_Risk_Management/README.md)<br>[Past-Papers (1)](G0236_Introduction_to_Enterprise_Risk_Management/2021-09/Past-Papers) · [Syllabus (1)](G0236_Introduction_to_Enterprise_Risk_Management/2021-09/Syllabus) · [Assignments (1)](G0236_Introduction_to_Enterprise_Risk_Management/2021-09/Assignments) · [Handbooks (1)](G0236_Introduction_to_Enterprise_Risk_Management/2021-09/Handbooks) |
-| G0241 | [Economics and Society](G0241_Economics_and_Society/) | 2025-02 | [2025-02](G0241_Economics_and_Society/2025-02) | [README](G0241_Economics_and_Society/README.md)<br>[Assignments (1)](G0241_Economics_and_Society/2025-02/Assignments) |
-| G0251 | [Foundations of Business Analytics](G0251_Foundations_of_Business_Analytics/) | 2025-02 | [2025-02](G0251_Foundations_of_Business_Analytics/2025-02) | [README](G0251_Foundations_of_Business_Analytics/README.md)<br>[Syllabus (1)](G0251_Foundations_of_Business_Analytics/2025-02/Syllabus) · [Assignments (1)](G0251_Foundations_of_Business_Analytics/2025-02/Assignments) · [Tutorials (6)](G0251_Foundations_of_Business_Analytics/2025-02/Tutorials) · [Handbooks (1)](G0251_Foundations_of_Business_Analytics/2025-02/Handbooks) |
-| GE0227 | [Introduction to FinTech](GE0227_Introduction_to_FinTech/) | 2021-09 | [2021-09](GE0227_Introduction_to_FinTech/2021-09) | [README](GE0227_Introduction_to_FinTech/README.md)<br>[Syllabus (2)](GE0227_Introduction_to_FinTech/2021-09/Syllabus) · [Handbooks (1)](GE0227_Introduction_to_FinTech/2021-09/Handbooks) |
-| MPU1.1 | [Bahasa Melayu Komunikasi 2](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | 2021-09、2025-09、2026-09 | [2021-09](MPU1.1_Bahasa_Melayu_Komunikasi_2/2021-09) · [2024-09](MPU1.1_Bahasa_Melayu_Komunikasi_2/2024-09) · [2025-09](MPU1.1_Bahasa_Melayu_Komunikasi_2/2025-09) · [2026-09](MPU1.1_Bahasa_Melayu_Komunikasi_2/2026-09) | [README](MPU1.1_Bahasa_Melayu_Komunikasi_2/README.md)<br>2021-09: [Syllabus (1)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2021-09/Syllabus) · [Assignments (2)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2021-09/Assignments) · [Handbooks (2)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2021-09/Handbooks)<br>2024-09: [Past-Papers (1)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2024-09/Past-Papers)<br>2025-09: [Assignments (3)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2025-09/Assignments) · [Notes (1)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2025-09/Notes)<br>2026-09: [Exam-Review (1)](MPU1.1_Bahasa_Melayu_Komunikasi_2/2026-09/Exam-Review) |
-| MPU1.2 | [Pengajian Malaysia 3](MPU1.2_Pengajian_Malaysia_3/) | 2022-02 | [2022-02](MPU1.2_Pengajian_Malaysia_3/2022-02) | [README](MPU1.2_Pengajian_Malaysia_3/README.md)<br>[Assignments (1)](MPU1.2_Pengajian_Malaysia_3/2022-02/Assignments) · [Notes (1)](MPU1.2_Pengajian_Malaysia_3/2022-02/Notes) |
-| MPU2.2 | [Writing for Professional Purposes](MPU2.2_Writing_for_Professional_Purposes/) | 2021-09 | [2021-09](MPU2.2_Writing_for_Professional_Purposes/2021-09) | [README](MPU2.2_Writing_for_Professional_Purposes/README.md)<br>[Syllabus (2)](MPU2.2_Writing_for_Professional_Purposes/2021-09/Syllabus) · [Assignments (3)](MPU2.2_Writing_for_Professional_Purposes/2021-09/Assignments) · [Tutorials (3)](MPU2.2_Writing_for_Professional_Purposes/2021-09/Tutorials) · [Handbooks (1)](MPU2.2_Writing_for_Professional_Purposes/2021-09/Handbooks) · [Notes (1)](MPU2.2_Writing_for_Professional_Purposes/2021-09/Notes) |
-| MPU3.1 | [Introduction to the Constitution of Malaysia](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | 2022-04 | [2022-04](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/2022-04) | [README](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/README.md)<br>[Syllabus (1)](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/2022-04/Syllabus) · [Assignments (2)](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/2022-04/Assignments) · [Handbooks (2)](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/2022-04/Handbooks) |
-| MPU4.1 | [Community Service](MPU4.1_Community_Service/) | 2022-04 | [2022-04](MPU4.1_Community_Service/2022-04) | [README](MPU4.1_Community_Service/README.md)<br>[Handbooks (6)](MPU4.1_Community_Service/2022-04/Handbooks) |
 | TBD | [Numerical Methods and Statistics](TBD_Numerical_Methods_and_Statistics/) | 2024-04 | [2024-04](TBD_Numerical_Methods_and_Statistics/2024-04) | [README](TBD_Numerical_Methods_and_Statistics/README.md)<br>[Tutorials (10)](TBD_Numerical_Methods_and_Statistics/2024-04/Tutorials) · [Notes (1)](TBD_Numerical_Methods_and_Statistics/2024-04/Notes) |
 <!-- /COURSE-INDEX -->
 
@@ -88,22 +73,22 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2021-09 | [COM106](COM106_Electrical_Engineering/) | [Electrical Engineering](COM106_Electrical_Engineering/) |
 | 2021-09 | [COM108](COM108_Engineering_Mathematics_I/) | [Engineering Mathematics I](COM108_Engineering_Mathematics_I/) |
 | 2021-09 | [COM102](COM102_Programming_Language_C/) | [Programming Language C](COM102_Programming_Language_C/) |
-| 2021-09 | [G0236](G0236_Introduction_to_Enterprise_Risk_Management/) | [Introduction to Enterprise Risk Management (elective)](G0236_Introduction_to_Enterprise_Risk_Management/) |
-| 2021-09 | [GE0227](GE0227_Introduction_to_FinTech/) | [Introduction to FinTech (elective)](GE0227_Introduction_to_FinTech/) |
-| 2021-09 | [G0103](G0103_Psychology_in_Interpersonal_Communication/) | [Psychology in Interpersonal Communication (elective)](G0103_Psychology_in_Interpersonal_Communication/) |
-| 2021-09 | [MPU2.2](MPU2.2_Writing_for_Professional_Purposes/) | [Writing for Professional Purposes](MPU2.2_Writing_for_Professional_Purposes/) |
-| 2021-09 | [MPU1.1](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](MPU1.1_Bahasa_Melayu_Komunikasi_2/) |
+| 2021-09 | [G0236](../GE/G0236_Introduction_to_Enterprise_Risk_Management/) | [Introduction to Enterprise Risk Management (elective)](../GE/G0236_Introduction_to_Enterprise_Risk_Management/) |
+| 2021-09 | [GE0227](../GE/GE0227_Introduction_to_FinTech/) | [Introduction to FinTech (elective)](../GE/GE0227_Introduction_to_FinTech/) |
+| 2021-09 | [G0103](../GE/G0103_Psychology_in_Interpersonal_Communication/) | [Psychology in Interpersonal Communication (elective)](../GE/G0103_Psychology_in_Interpersonal_Communication/) |
+| 2021-09 | [MPU2.2](../GE/MPU2.2_Writing_for_Professional_Purposes/) | [Writing for Professional Purposes](../GE/MPU2.2_Writing_for_Professional_Purposes/) |
+| 2021-09 | [MPU1.1](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) |
 | 2023-04 | [COM105](COM105_Engineering_Physics_I/) | [Engineering Physics I](COM105_Engineering_Physics_I/) | [hongdou20031220-bit](https://github.com/hongdou20031220-bit) |
-| 2022-02 | [MPU1.2](MPU1.2_Pengajian_Malaysia_3/) | [Pengajian Malaysia 3](MPU1.2_Pengajian_Malaysia_3/) |
-| 2022-02 | [G0125](G0125_Introduction_to_Global_Mandarin/) | [Introduction to Global Mandarin (elective)](G0125_Introduction_to_Global_Mandarin/) |
+| 2022-02 | [MPU1.2](../GE/MPU1.2_Pengajian_Malaysia_3/) | [Pengajian Malaysia 3](../GE/MPU1.2_Pengajian_Malaysia_3/) |
+| 2022-02 | [G0125](../GE/G0125_Introduction_to_Global_Mandarin/) | [Introduction to Global Mandarin (elective)](../GE/G0125_Introduction_to_Global_Mandarin/) |
 | 2022-02 | G0190 | GIS (elective) |
 | 2022-04 | [COM107](COM107_Circuits_and_Devices/) | [Circuits and Devices](COM107_Circuits_and_Devices/) |
 | 2022-04 | [COM103](COM103_Electronic_Engineering/) | [Electronic Engineering](COM103_Electronic_Engineering/) |
 | 2022-04 | [COM204](COM204_Engineering_Graphics/) | [Engineering Graphics](COM204_Engineering_Graphics/) |
 | 2022-04 | [COM104](COM104_Engineering_Mathematics_II/) | [Engineering Mathematics II](COM104_Engineering_Mathematics_II/) |
 | 2022-04 | [COM105](COM105_Engineering_Physics_I/) | [Engineering Physics I](COM105_Engineering_Physics_I/) |
-| 2022-04 | [MPU3.1](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | [Introduction to the Constitution of Malaysia](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) |
-| 2022-04 | [MPU4.1](MPU4.1_Community_Service/) | [Community Service](MPU4.1_Community_Service/) |
+| 2022-04 | [MPU3.1](../GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | [Introduction to the Constitution of Malaysia](../GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) |
+| 2022-04 | [MPU4.1](../GE/MPU4.1_Community_Service/) | [Community Service](../GE/MPU4.1_Community_Service/) |
 | 2022-04 | — | Internet+ |
 | 2022-09 | [COM210](COM210_Engineering_Mathematics_III/) | [Engineering Mathematics III](COM210_Engineering_Mathematics_III/) |
 | 2022-09 | [COM202](COM202_Engineering_Physics_II/) | [Engineering Physics II](COM202_Engineering_Physics_II/) |
@@ -113,7 +98,7 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2022-09 | [EEE212](EEE212_Laboratory_on_Circuit_Analysis/) | [Laboratory on Circuit Analysis](EEE212_Laboratory_on_Circuit_Analysis/) |
 | 2022-09 | [EEE215](EEE215_Artificial_Intelligence/) | [Artificial Intelligence](EEE215_Artificial_Intelligence/) |
 | 2022-09 | [EEE312](EEE312_Programming_Practice/) | [Programming Practice](EEE312_Programming_Practice/) |
-| 2023-02 | [G0191](G0191_Face_Recognition_with_Machine_Learning/) | [Face Recognition with Machine Learning (elective)](G0191_Face_Recognition_with_Machine_Learning/) |
+| 2023-02 | [G0191](../GE/G0191_Face_Recognition_with_Machine_Learning/) | [Face Recognition with Machine Learning (elective)](../GE/G0191_Face_Recognition_with_Machine_Learning/) |
 | 2023-04 | [COM208](COM208_Engineering_Mathematics_IV/) | [Engineering Mathematics IV](COM208_Engineering_Mathematics_IV/) |
 | 2023-04 | [COM209](COM209_Engineering_Mathematics_V/) | [Engineering Mathematics V](COM209_Engineering_Mathematics_V/) |
 | 2023-04 | [EEE313](EEE313_Semiconductor_Physics_and_Device_Processes/) | [Semiconductor Physics and Device Processes](EEE313_Semiconductor_Physics_and_Device_Processes/) |
@@ -140,8 +125,8 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2024-09 | [EEE406](EEE406_Power_Systems_Analysis/) | [Power Systems Analysis](EEE406_Power_Systems_Analysis/) |
 | 2024-09 | [EEE407](EEE407_Electrical_Energy_Utilization/) | [Electrical Energy Utilization](EEE407_Electrical_Energy_Utilization/) |
 | 2024-09 | [EEE411](EEE411_Communication_System/) | [Communication System](EEE411_Communication_System/) |
-| 2025-02 | [G0123](G0123_Mathematical_Graphics/) | [Mathematical Graphics (elective)](G0123_Mathematical_Graphics/) |
-| 2025-02 | [G0241](G0241_Economics_and_Society/) | [Economics and Society (elective)](G0241_Economics_and_Society/) |
+| 2025-02 | [G0123](../GE/G0123_Mathematical_Graphics/) | [Mathematical Graphics (elective)](../GE/G0123_Mathematical_Graphics/) |
+| 2025-02 | [G0241](../GE/G0241_Economics_and_Society/) | [Economics and Society (elective)](../GE/G0241_Economics_and_Society/) |
 | 2025-04 | [EEE418](EEE418_Renewable_Energy/) | [Renewable Energy](EEE418_Renewable_Energy/) |
 | 2025-04 | [EEE423](EEE423_Power_System_Protection/) | [Power System Protection](EEE423_Power_System_Protection/) |
 | 2025-04 | — | Final Year Project II |
@@ -156,12 +141,12 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2026-09 | [EEE322](EEE322_Power_Electronics/) | [Power Electronics](EEE322_Power_Electronics/) | yuningwuyn-lgtm |
 | 2026-09 | [COM104](COM104_Engineering_Mathematics_II/) | [Engineering Mathematics II](COM104_Engineering_Mathematics_II/) | Joyce |
 | 2026-09 | [COM110](COM110_Engineering_Mathematics_I/) | [Engineering Mathematics I](COM110_Engineering_Mathematics_I/) | Joyce |
-| 2026-09 | [MPU1.1](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | Joyce |
-| 2021-09 | [G0150](G0150_Principles_of_Public_Relations/) | [Principles of Public Relations](G0150_Principles_of_Public_Relations/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2026-09 | [MPU1.1](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | Joyce |
+| 2021-09 | [G0150](../GE/G0150_Principles_of_Public_Relations/) | [Principles of Public Relations](../GE/G0150_Principles_of_Public_Relations/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-04 | [COM106](COM106_Electrical_Engineering/) | [Electrical Engineering](COM106_Electrical_Engineering/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-09 | [COM108](COM108_Engineering_Mathematics_I/) | [Engineering Mathematics I](COM108_Engineering_Mathematics_I/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-09 | [COM205](COM205_Microelectronic_Devices_and_Circuits/) | [Microelectronic Devices and Circuits](COM205_Microelectronic_Devices_and_Circuits/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2022-09 | [G0209](G0209_Introduction_to_Entrepreneurship/) | [Introduction to Entrepreneurship](G0209_Introduction_to_Entrepreneurship/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2022-09 | [G0209](../GE/G0209_Introduction_to_Entrepreneurship/) | [Introduction to Entrepreneurship](../GE/G0209_Introduction_to_Entrepreneurship/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-04 | [COM210](COM210_Engineering_Mathematics_III/) | [Engineering Mathematics III](COM210_Engineering_Mathematics_III/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-09 | [COM205](COM205_Microelectronic_Devices_and_Circuits/) | [Microelectronic Devices and Circuits](COM205_Microelectronic_Devices_and_Circuits/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-09 | [EEE314](EEE314_Digital_System_Design/) | [Digital System Design](EEE314_Digital_System_Design/) | [nsd-chen](https://github.com/nsd-chen) |
@@ -170,7 +155,7 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2024-04 | [EEE305](EEE305_Embedded_Systems/) | [Embedded Systems](EEE305_Embedded_Systems/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2024-09 | [EEE301](EEE301_Signals_and_Systems/) | [Signals and Systems](EEE301_Signals_and_Systems/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2024-09 | [EEE302](EEE302_Electromagnetic_Field_Theory_and_Waves/) | [Electromagnetic Field Theory and Waves](EEE302_Electromagnetic_Field_Theory_and_Waves/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2025-02 | [G0251](G0251_Foundations_of_Business_Analytics/) | [Foundations of Business Analytics](G0251_Foundations_of_Business_Analytics/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2025-02 | [G0251](../GE/G0251_Foundations_of_Business_Analytics/) | [Foundations of Business Analytics](../GE/G0251_Foundations_of_Business_Analytics/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2025-04 | [EEE202](EEE202_Engineers_and_Society/) | [Engineers and Society](EEE202_Engineers_and_Society/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2025-04 | [EEE308](EEE308_RF_and_Microwave_Circuits/) | [RF and Microwave Circuits](EEE308_RF_and_Microwave_Circuits/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2025-04 | [EEE319](EEE319_Control_System/) | [Control System](EEE319_Control_System/) | [nsd-chen](https://github.com/nsd-chen) |
@@ -183,16 +168,16 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2021-09 | [COM102](COM102_Programming_Language_C/) | [Programming Language C](COM102_Programming_Language_C/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2021-09 | [COM106](COM106_Electrical_Engineering/) | [Electrical Engineering](COM106_Electrical_Engineering/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2021-09 | [COM108](COM108_Engineering_Mathematics_I/) | [Engineering Mathematics I](COM108_Engineering_Mathematics_I/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2021-09 | [MPU2.2](MPU2.2_Writing_for_Professional_Purposes/) | [Writing for Professional Purposes](MPU2.2_Writing_for_Professional_Purposes/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2021-09 | [MPU2.2](../GE/MPU2.2_Writing_for_Professional_Purposes/) | [Writing for Professional Purposes](../GE/MPU2.2_Writing_for_Professional_Purposes/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-04 | [COM103](COM103_Electronic_Engineering/) | [Electronic Engineering](COM103_Electronic_Engineering/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-04 | [COM105](COM105_Engineering_Physics_I/) | [Engineering Physics I](COM105_Engineering_Physics_I/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-04 | [COM107](COM107_Circuits_and_Devices/) | [Circuits and Devices](COM107_Circuits_and_Devices/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-04 | [COM204](COM204_Engineering_Graphics/) | [Engineering Graphics](COM204_Engineering_Graphics/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2022-04 | [MPU3.1](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | [Introduction to the Constitution of Malaysia](MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2022-04 | [MPU4.1](MPU4.1_Community_Service/) | [Community Service](MPU4.1_Community_Service/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2022-04 | [MPU3.1](../GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | [Introduction to the Constitution of Malaysia](../GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2022-04 | [MPU4.1](../GE/MPU4.1_Community_Service/) | [Community Service](../GE/MPU4.1_Community_Service/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-09 | [COM202](COM202_Engineering_Physics_II/) | [Engineering Physics II](COM202_Engineering_Physics_II/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2022-09 | [EEE212](EEE212_Laboratory_on_Circuit_Analysis/) | [Laboratory on Circuit Analysis](EEE212_Laboratory_on_Circuit_Analysis/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2023-02 | [G0191](G0191_Face_Recognition_with_Machine_Learning/) | [Face Recognition with Machine Learning](G0191_Face_Recognition_with_Machine_Learning/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2023-02 | [G0191](../GE/G0191_Face_Recognition_with_Machine_Learning/) | [Face Recognition with Machine Learning](../GE/G0191_Face_Recognition_with_Machine_Learning/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-04 | [COM203](COM203_Computer_Architecture/) | [Computer Architecture](COM203_Computer_Architecture/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-04 | [COM207](COM207_Digital_Electronics/) | [Digital Electronics](COM207_Digital_Electronics/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-04 | [COM208](COM208_Engineering_Mathematics_IV/) | [Engineering Mathematics IV](COM208_Engineering_Mathematics_IV/) | [nsd-chen](https://github.com/nsd-chen) |
@@ -202,11 +187,11 @@ Each contributor's courses are listed by the session they actually took them in 
 | 2023-09 | [EEE316](EEE316_Engineering_Management/) | [Engineering Management](EEE316_Engineering_Management/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2023-09 | [EEE326](EEE326_Laboratory_on_Electrical_Power_Engineering/) | [Laboratory on Electrical Power Engineering](EEE326_Laboratory_on_Electrical_Power_Engineering/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2024-09 | [EEE407](EEE407_Electrical_Energy_Utilization/) | [Electrical Energy Utilization](EEE407_Electrical_Energy_Utilization/) | [nsd-chen](https://github.com/nsd-chen) |
-| 2021-09 | [MPU1.1](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [nsd-chen](https://github.com/nsd-chen) |
+| 2021-09 | [MPU1.1](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [nsd-chen](https://github.com/nsd-chen) |
 | 2025-09 | [COM111](COM111_Electrical_Engineering/) | [Electrical Engineering](COM111_Electrical_Engineering/) | XHZ |
 | 2025-09 | [COM110](COM110_Engineering_Mathematics_I/) | [Engineering Mathematics I](COM110_Engineering_Mathematics_I/) | XHZ |
 | 2025-09 | [COM102](COM102_Programming_Language_C/) | [Programming Language C](COM102_Programming_Language_C/) | XHZ |
-| 2025-09 | [MPU1.1](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](MPU1.1_Bahasa_Melayu_Komunikasi_2/) | XHZ |
+| 2025-09 | [MPU1.1](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | [Bahasa Melayu Komunikasi 2](../GE/MPU1.1_Bahasa_Melayu_Komunikasi_2/) | XHZ |
 | 2023-09 | [EEE308](EEE308_RF_and_Microwave_Circuits/) | [RF and Microwave Circuits](EEE308_RF_and_Microwave_Circuits/) | MXZ |
 | 2024-04 | [EEE305](EEE305_Embedded_Systems/) | [Embedded Systems](EEE305_Embedded_Systems/) | MXZ |
 
