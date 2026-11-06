@@ -33,8 +33,14 @@ def chunks(items: list, n: int) -> list[list]:
     return [items[i:i + n] for i in range(0, len(items), n)]
 
 
+# Cloudflare blocks Python's default client name ("Python-urllib", 403 error 1010), so the bots name themselves.
+USER_AGENT = "xmum-sair-bot (+https://github.com/xmum-sair/xmum-sair.github.io)"
+
+
 def post(url: str, body: dict) -> dict:
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}, method="POST")
+    """POST JSON to the Worker and return its JSON reply. remind.py and lecturers.py use this too."""
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read().decode("utf-8"))
 

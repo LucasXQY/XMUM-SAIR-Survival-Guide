@@ -12,6 +12,12 @@ def test_issue_text_lists_what_waits_and_links_the_admin_page():
     assert remind.issue_text({"total": 40, "unreviewed": 0, "dropped": 0, "by_flag": {}}, "https://w.example/admin") is None
 
 
+def test_worker_calls_go_through_the_shared_post():
+    """The Worker sits behind Cloudflare, which blocks Python's default client name; export_legacy.post names the client."""
+    import export_legacy
+    assert remind.post is export_legacy.post
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
