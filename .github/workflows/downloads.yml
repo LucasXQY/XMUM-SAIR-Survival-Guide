@@ -5,7 +5,7 @@ name: downloads
 on:
   push:
     branches: [main]
-    paths: ["EEE/**", "AIT/**", "ROBO/**", "scripts/make_zips.py", ".github/workflows/downloads.yml"]
+    paths: ["EEE/**", "AIT/**", "ROBO/**", "GE/**", "scripts/make_zips.py", ".github/workflows/downloads.yml"]
   workflow_dispatch:
 
 permissions:
