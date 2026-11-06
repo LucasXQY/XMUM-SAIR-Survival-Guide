@@ -32,8 +32,8 @@
     var courses = index.courses.filter(function (c) {
       return hay([c.code, c.name, c.lecturers.join(' ')]).indexOf(q) !== -1;
     }).slice(0, 20);
-    var files = index.files.filter(function (f) {
-      return hay([f.code, f.course, f.session, f.type, f.name]).indexOf(q) !== -1;
+    var files = index.files.filter(function (f) {   // file contents count too, through the topic index
+      return hay([f.code, f.course, f.session, f.type, f.name, (f.topics || []).join(' '), f.about || '']).indexOf(q) !== -1;
     }).slice(0, 50);
     if (!courses.length && !files.length) {
       results.append(el('p', 'empty', '没有找到 | No results'));
@@ -59,6 +59,8 @@
         var li = el('li');
         li.append(el('span', 'hit-title', f.name));
         li.append(el('span', 'hit-meta', f.code + ' · ' + f.session + ' · ' + f.type));
+        var hitTopics = (f.topics || []).filter(function (t) { return t.toLowerCase().indexOf(q) !== -1; });
+        if (hitTopics.length) li.append(el('span', 'hit-topics', '知识点 | Topics: ' + hitTopics.join('、')));
         if (f.preview) li.append(link(f.preview, '预览 | Preview', 'btn'));
         li.append(link(f.download, '下载 | Download', 'btn'));
         ful.append(li);

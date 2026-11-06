@@ -235,3 +235,4 @@ ul.posts li { display: flex; justify-content: space-between; align-items: baseli
 ul.posts li a { overflow-wrap: anywhere; }
 ul.posts small { white-space: nowrap; }
 .board-links { font-size: .85rem; margin: 8px 0 0; }
+.hit-topics { flex-basis: 100%; font-size: .82rem; color: var(--accent); }

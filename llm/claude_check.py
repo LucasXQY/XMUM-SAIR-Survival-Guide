@@ -42,61 +42,80 @@ def _gh(*args: str, input: str | None = None) -> str:
     return r.stdout.strip()
 
 
-class Budget:
-    """Today's call count per task. take() says whether n more calls fit under the limit and records them if so;
-    anything unexpected counts as no (a broken counter must not mean unlimited calls)."""
+class Conflict(RuntimeError):
+    """Someone else changed the file since it was read; read again."""
 
-    def __init__(self, repo: str, gh=_gh, today: str | None = None):
-        self.repo, self.gh = repo, gh
-        self.today = today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
 
-    def _read(self) -> tuple[dict, str | None]:
+class StateFile:
+    """One JSON file on the bot-state branch (an orphan branch: it never touches main or the data branch), read and
+    written through the contents API with the file's sha, so a stale write fails instead of overwriting."""
+
+    def __init__(self, repo: str, name: str, gh=_gh):
+        self.repo, self.name, self.gh = repo, name, gh
+
+    def read(self) -> tuple[dict, str | None]:
         try:
-            d = json.loads(self.gh("api", f"repos/{self.repo}/contents/{STATE_FILE}?ref={STATE_BRANCH}"))
+            d = json.loads(self.gh("api", f"repos/{self.repo}/contents/{self.name}?ref={STATE_BRANCH}"))
         except RuntimeError as e:
             if "404" in str(e):
                 return {}, None
             raise
-        return json.loads(base64.b64decode(d["content"]).decode("utf-8") or "{}"), d["sha"]
+        raw = base64.b64decode(d.get("content") or "").decode("utf-8")
+        if not raw and d.get("size"):   # over 1 MB the contents API leaves the content out: fetch it raw
+            raw = self.gh("api", "-H", "Accept: application/vnd.github.raw", f"repos/{self.repo}/contents/{self.name}?ref={STATE_BRANCH}")
+        return json.loads(raw or "{}"), d["sha"]
 
-    def _write(self, data: dict, sha: str | None) -> None:
-        body = {"message": f"claude usage {self.today}", "branch": STATE_BRANCH,
-                "content": base64.b64encode(json.dumps(data, sort_keys=True).encode()).decode()}
+    def write(self, data: dict, sha: str | None, message: str) -> None:
+        body = {"message": message, "branch": STATE_BRANCH,
+                "content": base64.b64encode(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).decode()}
         if sha:
             body["sha"] = sha
-        self.gh("api", "-X", "PUT", f"repos/{self.repo}/contents/{STATE_FILE}", "--input", "-", input=json.dumps(body))
+        for attempt in range(2):
+            try:
+                self.gh("api", "-X", "PUT", f"repos/{self.repo}/contents/{self.name}", "--input", "-", input=json.dumps(body))
+                return
+            except RuntimeError as e:
+                if "409" in str(e) or "does not match" in str(e):
+                    raise Conflict(str(e))
+                if attempt == 0 and ("404" in str(e) or "not found" in str(e).lower()):
+                    self._create_branch()
+                    continue
+                raise
 
     def _create_branch(self) -> None:
-        """An orphan branch holding only the counter, so it never touches main or the data branch."""
         tree = {"tree": [{"path": "README.md", "mode": "100644", "type": "blob",
-                          "content": "机器人状态（Claude 调用计数），勿手改 | Bot state (Claude call counts); do not edit.\n"}]}
+                          "content": "机器人状态（Claude 调用计数、知识点索引），勿手改 | Bot state (Claude call counts, topic index); do not edit.\n"}]}
         t = json.loads(self.gh("api", "-X", "POST", f"repos/{self.repo}/git/trees", "--input", "-", input=json.dumps(tree)))["sha"]
         c = json.loads(self.gh("api", "-X", "POST", f"repos/{self.repo}/git/commits", "--input", "-",
                                input=json.dumps({"message": "bot-state: start", "tree": t, "parents": []})))["sha"]
         self.gh("api", "-X", "POST", f"repos/{self.repo}/git/refs", "--input", "-",
                 input=json.dumps({"ref": f"refs/heads/{STATE_BRANCH}", "sha": c}))
 
+
+class Budget:
+    """Today's call count per task. take() says whether n more calls fit under the limit and records them if so;
+    anything unexpected counts as no (a broken counter must not mean unlimited calls)."""
+
+    def __init__(self, repo: str, gh=_gh, today: str | None = None):
+        self.file = StateFile(repo, STATE_FILE, gh)
+        self.today = today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+
     def take(self, task: str, n: int, limit: int) -> bool:
         if n <= 0:
             return True
         try:
             for _ in range(5):
-                data, sha = self._read()
+                data, sha = self.file.read()
                 day = dict(data.get(self.today, {}))
                 if day.get(task, 0) + n > limit:
                     print(f"claude ({task}): daily limit {limit} reached", file=sys.stderr)
                     return False
                 day[task] = day.get(task, 0) + n
                 try:
-                    self._write({self.today: day}, sha)   # only today is kept: the file stays tiny
+                    self.file.write({self.today: day}, sha, f"claude usage {self.today}")   # only today is kept: tiny file
                     return True
-                except RuntimeError as e:
-                    if "409" in str(e) or "does not match" in str(e):
-                        continue                          # someone else wrote first: read again
-                    if "404" in str(e) or "not found" in str(e).lower():
-                        self._create_branch()
-                        continue
-                    raise
+                except Conflict:
+                    continue                                  # someone else wrote first: read again
         except Exception as e:
             print(f"claude ({task}): usage counter unavailable, not calling Claude: {e}", file=sys.stderr)
         return False

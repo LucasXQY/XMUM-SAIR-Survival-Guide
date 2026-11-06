@@ -39,6 +39,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python site/fetch_discussions.py _data/discussions.json
+      - if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # the topic index (topics.yml); without it the search covers file names only
+        run: |
+          mkdir -p _data
+          gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/topics.json?ref=bot-state" > _data/topics.json || rm -f _data/topics.json
       - run: python site/build.py
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3

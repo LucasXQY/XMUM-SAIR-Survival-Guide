@@ -205,6 +205,7 @@ class Site:
         self.courses = scan(self.root)
         self.by_path = {c.path: c for c in self.courses}
         self.discussions: list[dict] | None = None   # posts from site/fetch_discussions.py; None = not available
+        self.topics: dict[str, dict] = {}            # repo path → {topics, about} from topics/topics.py
 
 
 def posts_with(site: Site, label: str) -> list[dict]:
@@ -1009,13 +1010,16 @@ def search_index(site: Site) -> dict:
     files = [{"prog": f.prog, "code": f.code, "course": f.course, "session": f.session, "type": f.type,
               "name": f.name, "path": f.path,
               "preview": f"{GH}/blob/main/{url_path(f.path)}" if f.name.lower().endswith(".pdf") else None,
-              "download": f"{RAW}/{url_path(f.path)}"} for f in all_files(site.courses)]
+              "download": f"{RAW}/{url_path(f.path)}",
+              **({"topics": site.topics[f.path]["topics"], "about": site.topics[f.path].get("about", "")}
+                 if f.path in site.topics else {})} for f in all_files(site.courses)]
     return {"courses": courses, "lecturers": people, "files": files}
 
 
-def build(root: Path, out: Path, prefix: str, discussions: list[dict] | None = None) -> Site:
+def build(root: Path, out: Path, prefix: str, discussions: list[dict] | None = None, topics: dict | None = None) -> Site:
     site = Site(root, prefix)
     site.discussions = discussions
+    site.topics = topics or {}
     out = Path(out)
     if out.exists():
         if not (out / "search.json").is_file():   # only wipe a directory a previous build wrote
@@ -1123,11 +1127,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prefix", default="/", help="URL path the site is served under")
     ap.add_argument("--root", default=str(HERE.parent), help="repository tree to build from")
     ap.add_argument("--discussions", help="posts written by site/fetch_discussions.py (default: <root>/_data/discussions.json)")
+    ap.add_argument("--topics", help="the topic index from topics/topics.py (default: <root>/_data/topics.json)")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
     dpath = Path(args.discussions) if args.discussions else root / "_data" / "discussions.json"
     discussions = json.loads(dpath.read_text(encoding="utf-8")) if dpath.is_file() else None
-    site = build(root, Path(args.out), args.prefix, discussions)
+    tpath = Path(args.topics) if args.topics else root / "_data" / "topics.json"
+    topics = json.loads(tpath.read_text(encoding="utf-8")) if tpath.is_file() else {}
+    site = build(root, Path(args.out), args.prefix, discussions, topics)
     try:
         check(site, Path(args.out))
     except AssertionError as e:
