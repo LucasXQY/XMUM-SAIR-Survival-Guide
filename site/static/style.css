@@ -40,17 +40,17 @@ main, .site-header, .site-footer { max-width: 960px; margin: 0 auto; padding: 0 
 .theme-toggle:hover { transform: translateY(-1px) rotate(-12deg); background: var(--accent-bg); }
 
 /* header navigation: one block per destination, icon + Chinese over English */
-.nav-blocks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.nav-blocks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .nb {
-  display: flex; align-items: center; gap: 8px; padding: 7px 12px 7px 10px;
+  display: flex; align-items: center; gap: 7px; padding: 6px 11px 6px 8px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg);
   text-decoration: none; line-height: 1.15;
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
   animation: nb-in .35s ease both; animation-delay: calc(var(--i, 0) * 35ms);
 }
-.nb-ic { font-size: 1.2rem; width: 1.4em; text-align: center; transition: transform .18s ease; display: inline-flex; justify-content: center; }
-.nb-t { display: flex; flex-direction: column; font-weight: 600; font-size: .92rem; }
-.nb-t small { font-weight: 400; font-size: .74rem; color: var(--muted); }
+.nb-ic { font-size: 1.15rem; width: 1.3em; text-align: center; transition: transform .18s ease; display: inline-flex; justify-content: center; }
+.nb-t { display: flex; flex-direction: column; font-weight: 600; font-size: .9rem; white-space: nowrap; }
+.nb-t small { font-weight: 400; font-size: .72rem; color: var(--muted); }
 .nb:hover, .nb:focus-visible {
   transform: translateY(-2px); border-color: var(--accent); background: var(--accent-bg);
   box-shadow: 0 6px 16px rgba(0, 0, 0, .10);
@@ -166,14 +166,17 @@ details.timeline[open] summary { border-bottom: 1px solid var(--line); margin-bo
 .notice ul { margin: 0; padding-left: 1.2em; }
 
 /* course ratings (filled by ratings.js) */
-.ratings table { font-size: .92rem; }
-.ratings th[data-sort] { cursor: pointer; user-select: none; }
-.ratings th[data-sort]:hover { color: var(--accent); }
 .ratings .muted, .rate small { color: var(--muted); }
-.score { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.score .bar { display: inline-block; width: 56px; height: 6px; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
-.score .bar::after { content: ""; position: absolute; inset: 0; width: calc(var(--v, 0) * 100%); background: var(--accent); border-radius: 3px; }
-.ratings .n { color: var(--muted); font-size: .85rem; }
+.lcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; margin: 12px 0; }
+.lcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--card); }
+.rv-panel .lcard { background: var(--bg); }
+.lcard-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.lcard-name { font-weight: 600; }
+.lcard .extras { margin: 8px 0 0; font-size: .8rem; color: var(--muted); }
+.tiles.mini { gap: 6px; }
+.tiles.mini .tile { width: 54px; height: 54px; border-radius: 8px; }
+.tiles.mini .tile b { font-size: 1.05rem; }
+.tiles.mini .tile span { font-size: .58rem; }
 
 /* lecturer finder and the add-a-review page */
 .lect-find { margin: 22px 0 26px; }

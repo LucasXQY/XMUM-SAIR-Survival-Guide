@@ -424,7 +424,8 @@ def reviews_page(site: Site) -> str:
                '<form class="lect-find" role="search"><label for="rv-q">搜课程或老师 | Search a course or lecturer</label>'
                '<input id="rv-q" type="search" autocomplete="off" placeholder="课程代码、课名或老师 | code, course name or lecturer"></form>'
                '<div id="rv-list"></div><section id="rv-panel" class="rv-panel" hidden></section>'
-               '<section id="rv-all"><h2 id="all">全部评分 | All ratings</h2><p class="muted">点表头排序 | Click a header to sort.</p>'
+               '<section id="rv-all"><h2 id="rated">已有评价的课程 | Rated courses</h2>'
+               '<p class="muted">点一门课，看它的总平均和每位老师的分数。| Open a course for its overall scores and each lecturer\'s.</p>'
                + ratings_html(f'data-all data-courses="{site.prefix}search.json" data-form="{REVIEW_FORM}"') + "</section>"
                + lecturer_directory_html(site))
     return page(site, "课程评价 | Course review", content, "匿名课程评分：课程质量、老师、难度、作业量 | anonymous course ratings")
@@ -704,17 +705,18 @@ GISCUS_NOTICE = ("发言需登录 GitHub，用户名公开。请勿张贴答案�
                  "Sign in with GitHub to post; your username is public. Do not post answers, marking schemes, "
                  "other people's personal data or lecturers' private contact details. Comments live in this repo's "
                  "GitHub Discussions and may be removed by the maintainers.")
-# header order = importance. Courses opens a row with the programmes and GE (nav-sub) instead of three separate blocks;
-# lecturers live on the Reviews page, contributors on About
-NAV = [("课程 | Courses", "courses/", "📚"), ("问答 | Q&A", "qa/", "💬"), ("上传 | Upload", "upload/", "📤"),
-       ("如何贡献 | Contribute", "contributing/", "🤝"), ("评价 | Reviews", "reviews/", "📊"),
-       ("研究机会 | Research", "research/", "🔬"), ("关于 | About", "about/", "ℹ️")]
-UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md); /upload/ fills it in for the visitor
 GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 '
                '6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
                '1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 '
                '.67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 '
                '3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>')
+# header blocks in the maintainer's order (2026-11-06): reading first, contributing last. Courses opens a row with the
+# programmes and GE (nav-sub) instead of three separate blocks; lecturers live on Reviews, contributors on About.
+# (Chinese, English, site path or absolute URL, icon); kept short so the row fits one line at the page width
+NAV = [("课程", "Courses", "courses/", "📚"), ("讨论", "Discussion", "qa/", "💬"), ("评价", "Reviews", "reviews/", "📊"),
+       ("科研机会", "Research", "research/", "🔬"), ("关于", "About", "about/", "ℹ️"), ("GitHub", "仓库", GH, GITHUB_MARK),
+       ("如何贡献", "Contribute", "contributing/", "🤝"), ("上传", "Upload", "upload/", "📤")]
+UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md); /upload/ fills it in for the visitor
 
 
 def template() -> Template:
@@ -730,12 +732,11 @@ def nav_block(i: int, href: str, icon: str, main: str, sub: str, cls: str = "", 
 
 def nav_html(site: Site) -> str:
     blocks = []
-    for i, (title, path, icon) in enumerate(NAV):
-        main, sub = title.split(" | ")
+    for i, (main, sub, path, icon) in enumerate(NAV):
+        href = path if path.startswith("http") else f"{site.prefix}{path}"
         cls = "upload" if path == "upload/" else ""
         attrs = ' data-menu="nav-courses" aria-controls="nav-courses" aria-expanded="false"' if path == "courses/" else ""
-        blocks.append(nav_block(i, f"{site.prefix}{path}", icon, main, sub, cls, attrs))
-    blocks.append(nav_block(len(blocks), GH, GITHUB_MARK, "GitHub", "仓库 Repository"))
+        blocks.append(nav_block(i, href, icon, main, sub, cls, attrs))
     # the Courses block opens this row (site.js); without script the link goes to the overview page
     subs = [nav_block(i, f"{site.prefix}{p}/", PROG_ICONS[p], *((p, PROGS[p].split(" | ")[0]) if p != "GE" else ("公共课", "G 选修 · MPU")))
             for i, p in enumerate(PROGS)]
@@ -819,9 +820,9 @@ def course_page(site: Site, c: Course) -> str:
             f'<p class="meta">修课学期 | Taken in: {"、".join(c.taken_in) or "—"}</p>']
     if details:
         info.append(render_md(site, details, src))
-    qa = '<h2 id="qa">问答 | Q&A</h2>' + giscus_html(*GISCUS_COURSE, title)
+    qa = '<h2 id="qa">讨论 | Discussion</h2>' + giscus_html(*GISCUS_COURSE, title)
     return page(site, title, top + review + "".join(parts) + "".join(info) + qa,
-                f"{title}：{PROGS[c.prog]} 课程资料与问答 | course material and Q&A")
+                f"{title}：{PROGS[c.prog]} 课程资料与讨论 | course material and discussion")
 
 
 def prog_page(site: Site, prog: str) -> str:
@@ -879,7 +880,7 @@ def root_page(site: Site, md: str) -> str:
 def home_page(site: Site) -> str:
     links = [("上传资料 | Upload material", f"{site.prefix}upload/"), ("征集榜 | Wanted", f"{site.prefix}wanted/"),
              ("最近上传 | Recent uploads", f"{site.prefix}recent/"), ("课程评价 | Course review", f"{site.prefix}reviews/"),
-             ("添加评价 | Add a review", f"{site.prefix}rate/"), ("问答 | Q&A", f"{site.prefix}qa/"),
+             ("添加评价 | Add a review", f"{site.prefix}rate/"), ("讨论 | Discussion", f"{site.prefix}qa/"),
              ("研究机会 | Research", f"{site.prefix}research/"), ("如何贡献 | How to contribute", f"{site.prefix}contributing/"),
              ("关于与贡献者 | About & contributors", f"{site.prefix}about/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
              ("GitHub 仓库 | Repository", GH)]
@@ -901,12 +902,12 @@ def home_page(site: Site) -> str:
 
 
 def qa_page(site: Site) -> str:
-    content = ("<h1>综合问答 | General Q&amp;A</h1>"
+    content = ("<h1>综合讨论 | General discussion</h1>"
                "<p>不属于某一门课的问题放这里：新生适应、选课顺序、科研与实习、学习方法。某门课的具体问题请到那门课的页面底部提问，方便后来人按课查找。</p>"
                "<p>Questions that do not belong to one course go here: settling in as a fresher, course selection, research and "
                "internships, study habits. For a specific course, ask at the bottom of that course's page so later students can find it.</p>"
                + giscus_html(*GISCUS_GENERAL, "综合问答 | General Q&A"))
-    return page(site, "综合问答 | General Q&A", content)
+    return page(site, "综合讨论 | General discussion", content)
 
 
 def not_found_page(site: Site) -> str:

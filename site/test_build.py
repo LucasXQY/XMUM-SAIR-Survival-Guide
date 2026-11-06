@@ -144,7 +144,7 @@ def test_course_page_order_and_cleanup():
     assert "考核 / Assessment" not in details and "备注 / Notes" not in details      # columns empty in every row are hidden
     assert ">Past-Papers</a>" not in details and ">2021-09</a>" not in details        # no folder links; the files section has them
     com106 = (out / "EEE/COM106_Electrical_Engineering/index.html").read_text(encoding="utf-8")
-    assert "COM111" in com106[:com106.index('id="review"')]                        # the code-change note stays at the top
+    assert "COM111" in com106[:com106.index('id="review"')] and '<h2 id="qa">讨论 | Discussion</h2>' in com106                        # the code-change note stays at the top
     assert "习题仅保留题目" in com106[com106.index('id="details"'):]
 
 
@@ -161,8 +161,8 @@ def test_prog_and_qa_pages():
     assert not re.search(r"<td><a [^>]*>COM106</a></td>", eee)
     ge = (out / "GE/index.html").read_text(encoding="utf-8")
     assert "G0191" in ge and "MPU1.1" in ge and ge.index("G0191") < ge.index("MPU1.1") and "MPU" in ge and "选修" in ge
-    qa = (out / "qa/index.html").read_text(encoding="utf-8")
-    assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa
+    qa = (out / "qa/index.html").read_text(encoding="utf-8")   # renamed 讨论 on the page; the giscus term stays, or the thread is lost
+    assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa and "综合讨论" in qa
 
 
 def test_search_index():
@@ -307,15 +307,17 @@ def test_nav_is_blocks_with_courses_menu():
     nav = re.search(r'<nav class="nav-blocks"[^>]*>(.*?)</nav>', html, flags=re.S)
     assert nav, "nav.nav-blocks missing"
     blocks = re.findall(r'<a class="nb[^"]*"[^>]*>', nav.group(1))
-    assert len(blocks) == len(build.NAV) + 1, blocks                     # every NAV entry + GitHub
-    order = [re.search(r'href="([^"]*)"', b).group(1) for b in blocks]
-    assert order[:3] == [P + "courses/", P + "qa/", P + "upload/"] and order[-1] == build.GH
+    assert len(blocks) == len(build.NAV), blocks
+    order = [re.search(r'href="([^"]*)"', b).group(1) for b in blocks]     # maintainer's order, 2026-11-06: contribute and upload last
+    assert order == [P + "courses/", P + "qa/", P + "reviews/", P + "research/", P + "about/", build.GH,
+                     P + "contributing/", P + "upload/"], order
     assert P + "lecturers/" not in nav.group(1) and P + "contributors/" not in nav.group(1) and P + "EEE/" not in nav.group(1)
     assert 'aria-controls="nav-courses"' in blocks[0] and 'aria-expanded="false"' in blocks[0]
     sub = re.search(r'<div class="nav-sub" id="nav-courses" hidden>(.*?)</div>', html, flags=re.S)
     assert sub and all(f'href="{P}{p}/"' in sub.group(1) for p in ("EEE", "AIT", "ROBO", "GE")) and f'href="{P}courses/"' in sub.group(1)
     assert nav.group(1).count('class="nb-ic"') == len(blocks) and nav.group(1).count('class="nb-t"') == len(blocks)
-    assert "<small>Q&amp;A</small>" in nav.group(1) and "问答" in nav.group(1) and 'class="nb upload"' in nav.group(1)
+    assert "<small>Discussion</small>" in nav.group(1) and "讨论" in nav.group(1) and "问答" not in nav.group(1)
+    assert "科研机会" in nav.group(1) and 'class="nb upload"' in nav.group(1) and "<small>仓库</small>" in nav.group(1)
     css = (out / "static/style.css").read_text(encoding="utf-8")
     assert ".nb:hover" in css and "transition" in css and "prefers-reduced-motion" in css and ".nav-sub" in css
     js = (out / "static/site.js").read_text(encoding="utf-8")
@@ -387,7 +389,7 @@ def test_ratings_hooks_and_reviews_page():
     lect = (out / "lecturers/chua-ming-yam/index.html").read_text(encoding="utf-8")
     assert 'class="ratings"' not in lect and "giscus" not in lect              # lecturer pages carry no scores and no threads
     table = (out / "reviews/index.html").read_text(encoding="utf-8")
-    assert 'class="ratings" data-all' in table and "Click a header to sort" in table
+    assert 'class="ratings" data-all' in table and 'id="rated"' in table and "已有评价的课程" in table
     assert "ratings.json" in (out / "static/ratings.js").read_text(encoding="utf-8") and f"{build.SITE_URL}reviews/" in (out / "sitemap.xml").read_text(encoding="utf-8")
 
 
@@ -430,8 +432,11 @@ def test_reviews_page_search_and_course_panel():
     js = (out / "static/ratings.js").read_text(encoding="utf-8")
     assert "rv-panel" in js and "tile" in js and "data.courses[" in js and ".all" in js and "lecturers/" in js
     assert "box.dataset.form" in js and "formUrl" not in js
+    assert "lcard" in js and "data-sort" not in js and "chips" in js       # rated courses as chips, lecturers as score cards
+    assert "全部评分" not in table and "Click a header" not in table
     css = (out / "static/style.css").read_text(encoding="utf-8")
-    assert ".tile {" in css and "--v" in css.split(".tile {")[1][:300]
+    base_tile = css.split("\n.tile {")[1][:300]                              # the full-size tile, not .tiles.mini .tile
+    assert "--v" in base_tile and ".lcard {" in css and ".tiles.mini" in css
 
 
 def test_about_page_holds_contributors():
