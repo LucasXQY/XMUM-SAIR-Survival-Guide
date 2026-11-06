@@ -1,0 +1,54 @@
+name: assistant
+
+# 部署小帮手（Cloudflare Worker）。需要的设置见 assistant/README.md；没配好 Cloudflare 的 secrets 时什么都不做。
+# Deploys the helper (a Cloudflare Worker). Settings: assistant/README.md; does nothing until the Cloudflare secrets exist.
+on:
+  push:
+    branches: [main]
+    paths: ["assistant/**", ".github/workflows/assistant.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assistant
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: ready
+        env:
+          CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TS: ${{ secrets.TURNSTILE_SECRET }}
+        run: |
+          if [ -n "$CF" ] && [ -n "$TS" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "Cloudflare secrets not set yet: nothing to deploy"; fi
+      - if: steps.ready.outputs.go == 'true'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: assistant
+      - if: steps.ready.outputs.go == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - if: steps.ready.outputs.go == 'true'
+        working-directory: assistant
+        run: npm ci && npm test
+      - if: steps.ready.outputs.go == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: assistant
+          wranglerVersion: "4.152.0"
+          # BOTS_PAUSED=1 deploys the helper paused: it answers "paused" and calls no model
+          command: deploy --var PAUSED:${{ vars.BOTS_PAUSED == '1' && '1' || '0' }}
+          secrets: |
+            ANTHROPIC_API_KEY
+            TURNSTILE_SECRET
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}

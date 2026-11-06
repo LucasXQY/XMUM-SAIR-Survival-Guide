@@ -1,0 +1,16 @@
+{
+  "name": "xmum-sair-assistant",
+  "private": true,
+  "type": "module",
+  "description": "小帮手：XMUM SAIR 生存指南的站内问答，部署在 Cloudflare Workers | The site helper, deployed on Cloudflare Workers",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.152.0"
+  }
+}

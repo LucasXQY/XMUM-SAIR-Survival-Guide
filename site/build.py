@@ -800,9 +800,19 @@ def nav_html(site: Site) -> str:
             f'<div class="nav-sub" id="nav-courses" hidden>{"".join(subs)}</div>')
 
 
+def assistant_html(site: Site) -> str:
+    """The helper's chat window (static/assistant.js), when its service is deployed (assistant/README.md): pages.yml passes
+    the repository variables ASSISTANT_URL and TURNSTILE_SITE_KEY. BOTS_PAUSED=1 hides it."""
+    url, key = os.environ.get("ASSISTANT_URL", "").strip(), os.environ.get("TURNSTILE_SITE_KEY", "").strip()
+    if not (url and key) or os.environ.get("BOTS_PAUSED", "").strip() == "1":
+        return ""
+    return (f'<div id="helper" data-url="{esc(url)}" data-sitekey="{esc(key)}"></div>'
+            f'<script src="{site.prefix}static/assistant.js" defer></script>')
+
+
 def page(site: Site, title: str, content: str, description: str = "") -> str:
     return template().substitute(title=esc(title), description=esc(description or DEFAULT_DESC),
-                                 base=site.prefix, nav=nav_html(site), content=content)
+                                 base=site.prefix, nav=nav_html(site), content=content, assistant=assistant_html(site))
 
 
 def giscus_html(category: str, category_id: str, term: str) -> str:
