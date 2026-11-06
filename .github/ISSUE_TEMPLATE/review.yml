@@ -10,11 +10,11 @@ body:
       value: |
         每人对同一门课、同一位老师只算一票，再提交一次就是改分。只填分数，网站只显示平均分，不收文字评价。
 
-        **匿名说明**：原始投票只存在维护者的私有仓库里（记录的是你账号的加盐哈希，不是用户名），网站上只显示平均分和人数，少于 3 人不显示平均分。机器人登记后会关闭并锁定这个 Issue，维护者会定期删除；在删除之前，这个 Issue 和你的分数在 GitHub 上是公开的，这一点请知悉。
+        **匿名说明**：原始投票只存在维护者的私有仓库里（记录的是你账号的加盐哈希，不是用户名），网站上只显示平均分和人数，少于 3 人不显示平均分。机器人登记后约一分钟会删除这个 Issue；在那之前（以及登记失败、保留一周让你看原因的期间），这个 Issue 和你的分数在 GitHub 上是公开的，这一点请知悉。
 
         One vote per person per course and lecturer; submitting again changes it. Scores only: the site shows averages and takes no written reviews.
 
-        **Anonymity**: raw votes live only in the maintainer's private repository (keyed by a salted hash of your account, not your username), and the site shows averages and counts only, with no average below 3 voters. After recording, the bot closes and locks this issue and the maintainer deletes these periodically; until then this issue and your scores are public on GitHub.
+        **Anonymity**: raw votes live only in the maintainer's private repository (keyed by a salted hash of your account, not your username), and the site shows averages and counts only, with no average below 3 voters. About a minute after recording, the bot deletes this issue; until then (and for the week a failed form is kept so you can read why) this issue and your scores are public on GitHub.
 
   - type: input
     id: code

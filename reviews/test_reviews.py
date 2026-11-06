@@ -144,6 +144,43 @@ def test_cli_dry_run_records_and_writes_ratings():
     assert r.returncode == 0 and "Confirm" in r.stdout
 
 
+def test_remove_source_deletes_or_falls_back():
+    """A recorded issue is deleted with the delete token; without it, or when GitHub refuses, it is closed and locked."""
+    calls = []
+
+    def fake_gh(*args, token=None, input=None):
+        calls.append((args, token))
+        if "graphql" in args and token == "weak":
+            raise RuntimeError("github-actions does not have the correct permissions to execute `DeleteIssue`")
+        return ""
+    real, rv.gh = rv.gh, fake_gh
+    try:
+        assert rv.remove_source(5, "o/r", "I_kwabc", "strong", wait=0) is True
+        args, token = calls[-1]
+        assert token == "strong" and "deleteIssue" in " ".join(args) and "id=I_kwabc" in args and len(calls) == 1
+        calls.clear()
+        assert rv.remove_source(5, "o/r", "I_kwabc", "", wait=0) is False
+        assert [a[:2] for a, _ in calls] == [("issue", "close"), ("issue", "lock")]
+        calls.clear()
+        assert rv.remove_source(5, "o/r", "I_kwabc", "weak", wait=0) is False
+        assert [a[:2] for a, _ in calls][-2:] == [("issue", "close"), ("issue", "lock")]
+    finally:
+        rv.gh = real
+
+
+def test_sweep_decision():
+    """Closed review issues: recorded ones go at once (the vote is safe in the private repo); a form that failed stays
+    a week so its author can read why; anything the bot never answered is left alone."""
+    from datetime import datetime, timezone
+    now = datetime(2026, 11, 20, tzinfo=timezone.utc)
+    recorded = [rv.RECORDED + "：COM107 · Chua Ming Yam。…"]
+    failed = [rv.NOT_RECORDED + "，这次没有登记 | Not recorded yet …"]
+    assert rv.sweep_decision("2026-11-19T23:00:00Z", recorded, now)
+    assert not rv.sweep_decision("2026-11-19T23:00:00Z", failed, now) and rv.sweep_decision("2026-11-12T00:00:00Z", failed, now)
+    assert not rv.sweep_decision("2026-11-01T00:00:00Z", [], now) and not rv.sweep_decision("2026-11-01T00:00:00Z", ["thanks!"], now)
+    assert rv.recorded_reply("COM107", "Dr. Chua Ming Yam", True).startswith(rv.RECORDED) and "删除" in rv.recorded_reply("COM107", "X", True)
+
+
 def test_issue_form_matches_parser():
     yml = (pathlib.Path(__file__).resolve().parents[1] / ".github/ISSUE_TEMPLATE/review.yml").read_text(encoding="utf-8")
     for title in list(rv.FIELDS.values()) + [t for _, t in rv.DIMS]:
