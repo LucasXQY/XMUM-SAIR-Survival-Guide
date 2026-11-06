@@ -181,6 +181,27 @@ def test_sweep_decision():
     assert rv.recorded_reply("COM107", "Dr. Chua Ming Yam", True).startswith(rv.RECORDED) and "删除" in rv.recorded_reply("COM107", "X", True)
 
 
+def test_new_lecturers_are_noted_with_their_session():
+    """A lecturer the site does not list for this course goes on the pending list (reviews/lecturers.py turns it into a PR)."""
+    class State:
+        def __init__(self):
+            self.data, self.writes = {}, 0
+        def read(self):
+            return self.data, "sha"
+        def write(self, data, sha, message):
+            self.data, self.writes = data, self.writes + 1
+    st = State()
+    r = rv.parse_review(_body())                                   # COM107, Dr. Chua Ming Yam, 2022-04
+    assert rv.note_new_lecturer(r, known={("COM107", "chua-ming-yam")}, state=st) is False and st.writes == 0
+    other = rv.parse_review(_body().replace("Dr. Chua Ming Yam", "Prof. New Person"))
+    assert rv.note_new_lecturer(other, known={("COM107", "chua-ming-yam")}, state=st) is True
+    assert st.data == {"items": [{"code": "COM107", "name": "New Person", "session": "2022-04"}]}
+    assert rv.note_new_lecturer(other, known=set(), state=st) is False and st.writes == 1      # noted once
+    nosess = rv.parse_review(_body().replace("Dr. Chua Ming Yam", "Third One").replace("\n2022\n", "\n_No response_\n"))
+    rv.note_new_lecturer(nosess, known=set(), state=st)
+    assert st.data["items"][-1]["session"] == "unknown"
+
+
 def test_issue_form_matches_parser():
     yml = (pathlib.Path(__file__).resolve().parents[1] / ".github/ISSUE_TEMPLATE/review.yml").read_text(encoding="utf-8")
     for title in list(rv.FIELDS.values()) + [t for _, t in rv.DIMS]:

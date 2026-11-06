@@ -1,0 +1,28 @@
+name: links
+
+# 每周查坏链接：站内链接、打包下载、外部链接；有问题开（或更新）「坏链接」Issue，修好后自动关闭。见 scripts/check_links.py
+# Weekly link check: internal links, per-session zips, external links; opens or updates a "Broken links" issue and
+# closes it once everything works. See scripts/check_links.py
+on:
+  schedule:
+    - cron: "0 1 * * 1"     # Mondays 01:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    if: vars.BOTS_PAUSED != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install markdown
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/check_links.py
