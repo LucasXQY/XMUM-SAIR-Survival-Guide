@@ -1,0 +1,18 @@
+{
+  "_comment": "讨论区板块。机器人 discussions/boards.py 和网站 site/build.py 都读这个文件；label 是 GitHub Discussions 上的标签名，改名要同时处理已有帖子。 | Discussion boards, read by discussions/boards.py and site/build.py; `label` is the GitHub label on each post.",
+  "boards": [
+    {"key": "freshers", "zh": "新生入门", "en": "Freshers", "icon": "🌱", "label": "板块:新生入门",
+     "hint": "settling in as a new student: registration, housing, first weeks, what to bring"},
+    {"key": "study", "zh": "选课与学业", "en": "Courses & study", "icon": "📚", "label": "板块:选课与学业",
+     "hint": "choosing courses, prerequisites, workload, exams, study methods, a question about one course"},
+    {"key": "career", "zh": "科研与实习", "en": "Research & internships", "icon": "🔬", "label": "板块:科研与实习",
+     "hint": "research with lecturers, final year projects, internships, jobs, graduate school"},
+    {"key": "life", "zh": "校园生活", "en": "Campus life", "icon": "🏠", "label": "板块:校园生活",
+     "hint": "life on campus: clubs, transport, food, accommodation after the first weeks"},
+    {"key": "requests", "zh": "资料求助", "en": "Material requests", "icon": "📂", "label": "板块:资料求助",
+     "hint": "asking for past papers, notes, syllabi or other material for a course"},
+    {"key": "other", "zh": "其他", "en": "Other", "icon": "💬", "label": "板块:其他",
+     "hint": "anything else about the site or university life that fits no board above"}
+  ],
+  "course_label_prefix": "课程:"
+}
