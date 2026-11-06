@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_MODELS = {"moderation": "claude-haiku-5-5"}   # maintainer's choice (2026-11-06): short comments, many of them
+DEFAULT_MODELS = {"moderation": "claude-haiku-5-5", "classify": "claude-haiku-5-5", "topics": "claude-haiku-5-5"}   # maintainer: Haiku for bulk sorting (2026-11-06)
 # models that take the server-side refusal fallback ("default" routes a declined request to Anthropic's recommended model)
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 STATE_BRANCH, STATE_FILE = "bot-state", "claude-usage.json"
