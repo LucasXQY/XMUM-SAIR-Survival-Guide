@@ -4,6 +4,14 @@ name = "xmum-sair-assistant"
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 
+# Smart Placement：Cloudflare 测出更快时，把 Worker 挪到离它调用的服务（Claude API 等）更近的机房运行；同学仍然连离自己最近的机房。
+# 也让在 Claude 不服务的地区（如香港）的同学，请求不从当地机房发往 Claude。部署后最多 15 分钟生效，流量少时可能不挪。
+# Smart Placement: when Cloudflare measures it is faster, the Worker runs nearer the services it calls (the Claude API and
+# others); visitors still connect to their nearest data center. It also keeps calls to Claude from leaving a data center in a
+# region Claude does not serve (e.g. Hong Kong). Takes up to 15 minutes after a deploy; with little traffic it may not move.
+[placement]
+mode = "smart"
+
 [vars]
 ALLOWED_ORIGINS = "https://xmum-sair.github.io,http://localhost:8767"
 PER_VISITOR_DAILY = "15"   # questions per visitor per day
