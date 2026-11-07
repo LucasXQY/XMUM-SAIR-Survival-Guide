@@ -326,6 +326,62 @@ def test_check_schema_prompt_and_ask():
     assert seen == [("upload", ai.CHECK_SYSTEM, ai.CHECK_SCHEMA, 8000)] and ai.cc.model_for("upload") == "claude-opus-5-5"
 
 
+# ---- verification (Opus): the redacted pages as images, one question
+
+def test_verify_needs_a_clear_no():
+    assert ai.verify_pages([b"png"], fake_ask([], {"readable": "no"}), ai.Meter(FakeBudget(ok=True))) == "no"
+    assert ai.verify_pages([b"png"], fake_ask([], {"readable": "unsure"}), ai.Meter(FakeBudget(ok=True))) == "unsure"
+    assert ai.verify_pages([b"png"], lambda *a, **k: None, ai.Meter(FakeBudget(ok=True))) == "unsure"
+
+
+def test_verify_sends_every_page_in_one_call_and_reserves_per_page():
+    pngs = [b"\x89PNG one", b"\x89PNG two", b"\x89PNG three"]
+    asked, b = [], FakeBudget(ok=True)
+    meter = ai.Meter(b)
+    assert ai.verify_pages(pngs, fake_ask(asked, {"readable": "no"}), meter) == "no"
+    (content,) = asked
+    assert [x["type"] for x in content] == ["image", "image", "image", "text"]
+    assert [x["source"] for x in content[:3]] == [{"type": "base64", "media_type": "image/png", "data": base64.b64encode(p).decode()}
+                                                  for p in pngs]
+    assert content[3]["text"] == ("Can any student name, student ID, signature or other personal data still be read on these "
+                                  "pages? Black boxes are deliberate redactions.")
+    assert len(b.reserved) == 1 and b.reserved[0][0] == "upload" and abs(b.reserved[0][1] - 0.06) < 1e-9
+    assert abs(meter.spent - 0.01) < 1e-9                                 # the call's cost goes on the meter
+
+
+def test_verify_is_unsure_without_budget_pages_or_a_plain_no():
+    import contextlib, io
+    asked = []
+    assert ai.verify_pages([b"png"], fake_ask(asked, {"readable": "no"}), ai.Meter(FakeBudget(ok=False))) == "unsure"
+    assert ai.verify_pages([b"png"] * 500, fake_ask(asked, {"readable": "no"}), ai.Meter(FakeBudget(ok=True))) == "unsure"  # over the run cap
+    assert ai.verify_pages([], fake_ask(asked, {"readable": "no"}), ai.Meter(FakeBudget(ok=True))) == "unsure"
+    assert ai.verify_pages([b"png"], None, ai.Meter(FakeBudget(ok=True))) == "unsure" and asked == []
+    for answer in ({"readable": "yes"}, {"readable": "No"}, {"readable": " no"}, {"readable": None}, {}, "no", ["no"]):
+        assert ai.verify_pages([b"png"], fake_ask([], answer), ai.Meter(FakeBudget(ok=True))) == "unsure", answer
+
+    def boom(content, on_cost=None):
+        raise RuntimeError("EEE2109300 is still visible")
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        assert ai.verify_pages([b"png"], boom, ai.Meter(FakeBudget(ok=True))) == "unsure"
+    assert "EEE2109300" not in err.getvalue()
+
+
+def test_verify_schema_prompt_and_ask():
+    assert ai.VERIFY_SCHEMA == {"type": "object", "properties": {"readable": {"type": "string", "enum": ["no", "yes", "unsure"]}},
+                                "required": ["readable"], "additionalProperties": False}
+    for need in ("Black boxes are deliberate redactions", "untrusted", "@xmu.edu.my", "signature", "student ID"):
+        assert need in ai.VERIFY_SYSTEM, need
+    seen = []
+    real = ai.cc.ask
+    ai.cc.ask = lambda task, system, content, schema, max_tokens=0, on_cost=None: seen.append((task, system, schema, max_tokens)) or {}
+    try:
+        ai.make_asks()["verify"]([{"type": "text", "text": "x"}])
+    finally:
+        ai.cc.ask = real
+    assert seen == [("upload", ai.VERIFY_SYSTEM, ai.VERIFY_SCHEMA, 1000)] and ai.cc.model_for("upload") == "claude-opus-5-5"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests: t()
