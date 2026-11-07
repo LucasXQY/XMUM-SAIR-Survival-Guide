@@ -81,9 +81,11 @@ def test_overrides():
     assert (d.outcome, d.blocking) == ("inbox", True)
     assert decide.decide(ITEM, S(keep=False, skip_reason="textbook"), None, FORM, {"approved_by": "x"}, None).outcome == "skip"
     # keep re-enters the normal path
-    skipped = S(keep=False, confident=False, skip_reason="textbook")
+    skipped = S(keep=False, skip_reason="textbook")
     assert decide.decide(ITEM, skipped, CLEAN, FORM, {"keep": True}, None).outcome == "commit"
-    assert decide.decide(ITEM, replace(skipped, course_code=""), CLEAN, FORM, {"keep": True}, None).outcome == "inbox"
+    unsure = replace(skipped, confident=False)
+    assert decide.decide(ITEM, unsure, CLEAN, FORM, {"keep": True}, None).outcome == "inbox"
+    assert decide.decide(ITEM, unsure, CLEAN, replace(FORM, code="COM107", type="Notes"), {"keep": True}, None).outcome == "commit"
 
 
 def test_hostile_fields_never_shape_a_path():
