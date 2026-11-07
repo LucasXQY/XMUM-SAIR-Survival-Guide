@@ -6,9 +6,9 @@
 
 For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-> **2026-11-07 起，文件怎么落地以 [AI-PIPELINE.md](AI-PIPELINE.md) 为准**：每个文件由 Claude 分拣（课程、学期、类型）、检查后各自归位；拿不准的进「需要你看」或 `_待整理/issue-<n>/`，这时 PR 是草稿、状态 `intake/待整理` 不通过；维护者用 `/place`、`/skip`、`/keep`、`/approve`、`/retry` 留言指令处理；AI 结果缓存在 `bot-state` 的 `intake-cache/issue-<n>.json`。表单的课程代码、课程名称、学期、资料类型改为选填。本文 §4–§6 里"一次上传只放一门课、一个学期、一种类型"的做法和末尾「Claude 预检」一节已被取代，其余（下载、解包、清元数据、登记、作者规则、分支即纯函数）照旧。
+> **2026-11-07 起，文件怎么落地以 [AI-PIPELINE.md](AI-PIPELINE.md) 为准**：每个文件由 Claude 分拣（课程、学期、类型）、全文检查、自动打码并核验、查近似重复后各自归位；拿不准的进「需要你看」或 `_待整理/issue-<n>/`，这时 PR 是草稿、状态 `intake/待整理` 不通过；维护者用 `/place`、`/skip`、`/keep`、`/approve`、`/retry` 留言指令处理；AI 结果缓存在 `bot-state` 的 `intake-cache/issue-<n>.json`。表单的课程代码、课程名称、学期、资料类型改为选填。本文 §4–§6 里"一次上传只放一门课、一个学期、一种类型"的做法已被取代（原来末尾的「Claude 预检」也已拿掉，末尾一节改为现在的 AI 步骤概要），其余（下载、解包、清元数据、登记、作者规则、分支即纯函数）照旧。
 >
-> **Since 2026-11-07, [AI-PIPELINE.md](AI-PIPELINE.md) governs where files go**: Claude sorts (course, session, type) and checks each file, which is then filed on its own; doubtful ones go under "Needs you" or into `_待整理/issue-<n>/`, and the PR is then a draft with a failing `intake/待整理` status; maintainers answer with `/place`, `/skip`, `/keep`, `/approve` and `/retry` comments; AI results are cached on `bot-state` in `intake-cache/issue-<n>.json`. The form's course code, name, session and type are optional. The one-course-one-session-one-type placement of §4–§6 and the closing "Claude pre-check" section are superseded; the rest (download, unpacking, metadata, registration, author rules, the branch as a pure function) stands.
+> **Since 2026-11-07, [AI-PIPELINE.md](AI-PIPELINE.md) governs where files go**: Claude sorts (course, session, type) and fully checks each file, personal data is blacked out and re-checked, near-duplicates are looked for, and each file is then filed on its own; doubtful ones go under "Needs you" or into `_待整理/issue-<n>/`, and the PR is then a draft with a failing `intake/待整理` status; maintainers answer with `/place`, `/skip`, `/keep`, `/approve` and `/retry` comments; AI results are cached on `bot-state` in `intake-cache/issue-<n>.json`. The form's course code, name, session and type are optional. The one-course-one-session-one-type placement of §4–§6 is superseded (the old "Claude pre-check" is gone; the closing section now summarises the AI steps); the rest (download, unpacking, metadata, registration, author rules, the branch as a pure function) stands.
 
 ## 1. 目的 | Intent
 
@@ -109,7 +109,7 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
    - 署名方式为匿名：以上三处都写 `匿名 / anonymous`，CONTRIBUTORS 不加行；提交作者用 `github-actions[bot]`，PR 正文和 Issue 评论里不重复提上传者的用户名（GitHub 本身仍会显示 Issue 作者，表单已说明）。
    - 署名、备注等用户文本写进表格前把 `|` 换成 `\|`、去掉换行。
    - 运行 `python scripts/update_index.py <PROG>`。
-9. **检查**（结果写进 PR 正文，不阻断）：每份文件一行：大小、页数（PDF）、清理后的元数据是否为空、可疑文本命中（学号 `[A-Z]{3}\d{7,10}`、`Student ID`、非 `@xmu.edu.my` 邮箱、电话号码、enrolment key / passcode / password / zoom / meeting id / wechat / whatsapp）、答案关键词（marking scheme / answer scheme / model answer / suggested answer / solution / answer key / 答案 / 评分标准 / 参考解答）、低文字量（可能是扫描件，提醒肉眼看）。PDF 首页和第二页渲染成缩略图拼成一张图，作为 workflow artifact 上传，PR 正文给出本次运行的链接。最后运行 `python site/build.py --out /tmp/site`，把 `WARNING` 行和是否成功写进报告。
+9. **检查**（结果写进 PR 正文，不阻断）：每份文件一行：大小、页数（PDF）、清理后的元数据是否为空、可疑文本命中（学号 `[A-Z]{3}\d{7,10}`、`Student ID`、非 `@xmu.edu.my` 邮箱、电话号码、enrolment key / passcode / password / zoom / meeting id / wechat / whatsapp）、答案关键词（marking scheme / answer scheme / model answer / suggested answer / solution / answer key / 答案 / 评分标准 / 参考解答）、低文字量（可能是扫描件，提醒肉眼看）。PDF 首页和第二页渲染成缩略图拼成一张图（只用提交了的文件，有个人信息的是打码后的副本），作为 workflow artifact 上传，PR 正文给出本次运行的链接。最后运行 `python site/build.py --out /tmp/site`，把 `WARNING` 行和是否成功写进报告。
 10. **提交与开 PR**：从当前 main 新建（或重置）分支 `upload/issue-<n>`；一次提交，`--author "<login> <<id>+<login>@users.noreply.github.com>"`（Issue 作者的 login 与数字 id 通过 API 取得；匿名时作者为 `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>`），提交信息 `content: add <CODE> <session> <Type> from #<n>`；`git push --force`；没有 PR 则 `gh pr create`，有则 `gh pr edit` 更新标题正文。标题 `[上传 | Upload] <CODE> <session> <Type>（#<n>）`，正文含：文件清单（原名 → 新路径，每个新路径链到 PR 分支上的文件页，GitHub 可直接预览 PDF）、未收录清单及原因、登记了哪些 README/时间表/CONTRIBUTORS 行、检查报告、维护者勾选清单（看过缩略图 / 没有答案 / 没有个人信息）、重建时间与所基于的 main 提交、`Closes #<n>`。首次开 PR 时在 Issue 下评论 PR 链接并打 `pr-opened`；重建时不另外评论，PR 正文脚注写明重建时间和所基于的 main 提交。
 11. **部分失败**：有文件收不了但至少一份成功 → 仍然开 PR，失败的在 PR 正文和 Issue 评论里列明；一份都没成功 → 只评论，不开 PR。脚本任何未预料的异常 → 在 Issue 下评论"机器人出错了，维护者会手动处理"并让工作流失败（红叉能让维护者注意到）。
 
@@ -161,12 +161,22 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 3. 标签 `upload` 必须在上线前手动建好（表单要打这个标签，工作流只认这个标签，脚本自己没机会创建它）；`needs-info`、`pr-opened` 脚本缺失时自动创建。
 4. 分支保护已开；本通道的代码将以 PR 方式提交。
 
-## Claude 预检 | Claude pre-check（2026-11-06）
+## Claude 检查 | Claude checks（2026-11-07）
 
-每个上传文件交给 Claude 读一遍（PDF 原样发送，最多前 40 页；其他格式发文字，最多 6 万字符；doc/ppt/xls 旧格式不发），判断有没有答案或学生作答、个人信息（姓名、学号、签名、私人联系方式、Moodle 密钥、二维码）、评分标准，再加一句内容概述。（2026-11-07 起它决定去向，见 [AI-PIPELINE.md](AI-PIPELINE.md) §6：只检查分拣说要收的文件；有个人信息或拿不准、没检查成、只检查了一部分的文件不提交，列在 PR 的「需要你看」里。）
+细节以 [AI-PIPELINE.md](AI-PIPELINE.md) 为准，这里只是概要 | AI-PIPELINE.md has the details; this is a summary.
 
-- 结果按上传文件字节的 sha256 缓存在 `bot-state` 分支的 `intake-cache/issue-<n>.json`（PR 关闭后删除）；main 每次更新都会重建所有上传 PR，缓存保证同一个文件只付一次钱。
-- 按美元限额，不按文件个数：每个文件先预留 0.04 美元加每页 0.025 美元（PDF 最多按 40 页算），查完按实际花费结算。上传池每天 15、每月 60、每次运行 8 美元（仓库变量 `CLAUDE_USD_DAY_UPLOAD`、`CLAUDE_USD_MONTH_UPLOAD`、`CLAUDE_USD_RUN_UPLOAD` 可改，留空用默认值），记账在 `bot-state` 分支的 `claude-usage.json`；设计细节见 [AI-PIPELINE.md](AI-PIPELINE.md)。额度用完、没有 `ANTHROPIC_API_KEY`、调用失败时，文件不提交，「需要你看」里写明原因，之后的重建或 `/retry` 再试。
-- 模型默认 Claude Opus 5.5，仓库变量 `CLAUDE_MODEL_UPLOAD` 可改。Claude 不复述个人信息，只说在哪一页。文件内容视为不可信输入。
-- 代码：`intake.py` 的 `precheck_input`、`precheck`、`make_prechecker`；调用与计数在 `llm/claude_check.py`。
+- **分拣**（Haiku 5.5，`CLAUDE_MODEL_SORT`）：每个文件看前 3 页，定课程、学期、类型、标签，以及收不收。
+- **全文检查**（Opus 5.5，`CLAUDE_MODEL_UPLOAD`）：只查会收的文件，读全部页（最多 100 页，更长的不查、不提交）；Office 文件用 LibreOffice 转成 PDF 再看。回答有没有答案、评分标准、个人信息，以及每处要涂黑的地方（页码、原文或框、类型），从不复述个人信息。
+- **打码与核验**：PDF 按检查结果涂黑（`redact.py`），涂掉的字串全文件都不能再抽到；有框的页和带图片的打码页交给 Opus 再看一遍，回答 `no` 才算通过。提交、`_待整理/`、缩略图用的都是打码后的副本；Office 文件有个人信息就交给维护者，不打码。打码失败或核验没通过的文件不提交，列在「需要你看」。
+- **近似重复**：和同一课程文件夹里的 PDF 比第一页（`dedupe.py`），几乎一样的不收，拿不准的交给 Haiku 判断是同一份、另一套还是新版本；扫描件跳过并注明。
+- **花钱**：按美元限额，不按文件个数；分拣、检查、核验、比较都记在同一个每次运行的计费表里（上传池每天 15、每月 60、每次运行 8 美元，仓库变量 `CLAUDE_USD_DAY_UPLOAD`、`CLAUDE_USD_MONTH_UPLOAD`、`CLAUDE_USD_RUN_UPLOAD` 可改），账本在 `bot-state` 的 `claude-usage.json`。额度用完、没有 `ANTHROPIC_API_KEY`、调用失败的文件不提交，「需要你看」里写明原因，之后的重建或 `/retry` 再试。
+- **缓存**：结果按文件字节的 sha256 存在 `bot-state` 的 `intake-cache/issue-<n>.json`（PR 关闭后删除）；打码只存页码和矩形，不存字串，概述和备注过一遍个人信息正则；重建时有结果的文件不再花钱。
+- 代码：`ai.py`（计费表、分拣、检查、核验、比较的提示词）、`redact.py`、`dedupe.py`、`decide.py`（每个文件的去向）、`cache.py`、`commands.py`，由 `intake.py` 串起来；调用与记账在 `llm/claude_check.py`。
 
+- **Sorting** (Haiku 5.5, `CLAUDE_MODEL_SORT`) reads the first 3 pages and names the course, session, type and label, and whether the file is taken.
+- **The full check** (Opus 5.5, `CLAUDE_MODEL_UPLOAD`) reads every page of the files that will be taken (at most 100 pages; longer ones are not checked and not committed); Office files are read as a LibreOffice PDF. It answers whether there are answers, a marking scheme or personal data, and where each thing to black out is (page, text or box, kind), never repeating personal data.
+- **Redaction and re-check**: PDFs are blacked out as the check says (`redact.py`) and no blacked-out string may be found anywhere in the file afterwards; box pages and redacted pages with pictures go back to Opus, and only a `no` passes. Commits, `_待整理/` and the thumbnails use the redacted copy; an Office file with personal data goes to a maintainer unredacted. A failed redaction or re-check is not committed and waits under Needs you.
+- **Near-duplicates**: the first page is compared with the PDFs in the same course folder (`dedupe.py`); near-identical files are skipped, doubtful ones go to Haiku (same file, another set, or a new version); scans are skipped and noted.
+- **Spending** is capped in dollars, not files; sorting, the check, the re-check and comparisons share one per-run meter (upload pool 15 a day, 60 a month, 8 per run; repository variables `CLAUDE_USD_DAY_UPLOAD`, `CLAUDE_USD_MONTH_UPLOAD`, `CLAUDE_USD_RUN_UPLOAD`), booked in `claude-usage.json` on `bot-state`. Files left without a check (budget, no `ANTHROPIC_API_KEY`, a failed call) are not committed, say why under Needs you, and are tried again by a later rebuild or `/retry`.
+- **Cache**: results by the sha256 of the file's bytes in `intake-cache/issue-<n>.json` on `bot-state` (deleted when the PR closes); redactions keep pages and rectangles only, never the text, and summaries and notes pass the personal-data patterns first; a rebuild pays nothing for files with results.
+- Code: `ai.py` (meter and the sort, check, re-check and comparison prompts), `redact.py`, `dedupe.py`, `decide.py` (where each file goes), `cache.py`, `commands.py`, wired together in `intake.py`; calls and bookkeeping in `llm/claude_check.py`.

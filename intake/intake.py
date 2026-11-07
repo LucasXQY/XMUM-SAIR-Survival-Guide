@@ -854,6 +854,23 @@ FLAG_TEXT = {
     "answers_unsure": "可能含答案，请看一眼 | may contain answers, take a look",
     "marking_unsure": "可能是评分标准，请看一眼 | may be a marking scheme, take a look",
     "placed_by_maintainer": "维护者用 /place 放的 | placed with /place",
+    "redacted": "已打码，请看一眼打码后的文件 | redacted: glance at the redacted copy",
+    "new_set": "和仓库里的一份很像但题目不同，按另一套收 | like a file in the archive with other questions: filed as another set",
+    "new_version": "像仓库里一份文件的新版本，加了版本号 | looks like a newer version of a file in the archive: filed with a version number",
+    "dedupe_skipped": "扫描件，没有查近似重复 | scanned: not checked for near-duplicates",
+}
+FLAGS_NOT_LISTED = ("placed_by_maintainer", "dedupe_skipped")   # shown in the table only, not under "worth a look"
+BLACKOUT_TEXT = {
+    "ok": "已打码 | blacked out",
+    "failed": "打码没完成 | redaction incomplete",
+    "verify_unsure": "已打码 | blacked out",
+}
+VERIFIED_TEXT = {
+    "passed": "复查通过 | re-check passed",
+    "failed": "复查没通过 | re-check did not pass",
+    "not_needed": "只涂了文字、页上没有图片：已确认文字抽不到，不用复查 | text only, on pages without pictures: "
+                  "confirmed gone, no re-check needed",
+    "not_run": "没有复查 | not re-checked",
 }
 COMMAND_HELP = (
     "留言指令 | Commands：在这个 PR 或原 Issue 下留言，只认仓库 OWNER / MEMBER / COLLABORATOR；`#k` 是上面的文件编号 "
@@ -862,7 +879,7 @@ COMMAND_HELP = (
     "- `/place #k <课程代码 | CODE> <YYYY-MM|unknown> <类型 | Type> [标签 | Label]`：只改位置和名字，不等于批准 "
     "| moves and renames; not an approval",
     "- `/skip #k`：不收 | leave it out",
-    "- `/keep #k`：把不收的文件捞回来，重新检查 | take a skipped file back and check it",
+    "- `/keep #k`：把不收的文件（包括近似重复）捞回来，重新检查 | take a skipped file (near-duplicates too) back and check it",
     "- `/approve #k`：我看过了，提交；风险由批准人承担，PR 里会写明 | I looked at it, commit it; on the approver's "
     "responsibility, named in the PR",
     "- `/retry`：只重跑没检查过或失败的文件，已有结果的不重复花钱，不提高额度 | reruns only unchecked or failed files; "
@@ -890,6 +907,7 @@ class Report:
     spend: list[str]
     run_url: str | None = None
     branch: str = ""
+    redactions: dict = field(default_factory=dict)   # k -> Blackout, for the files whose redactions were applied
 
 
 @dataclass
@@ -923,6 +941,20 @@ def _pages(notes: str, redactions=()) -> list[str]:
     return [str(n) for n in sorted(found) if n > 0]
 
 
+def _kinds(redactions) -> str:
+    """What was blacked out, by kind and count ("`学号 | student ID` ×2"): the check's `what` labels, through the same
+    filter the bot-state cache uses (cache._what: nothing that looks personal, capped) and then _ai_text. Never the
+    text itself; labels that do not survive the filter count as "other"."""
+    from cache import _what
+    counts: dict[str, int] = {}
+    for x in redactions or ():
+        w = x.get("what") if isinstance(x, dict) else None
+        label = _ai_text(_what(w)) if isinstance(w, str) else ""
+        label = label or "其他 | other"
+        counts[label] = counts.get(label, 0) + 1
+    return "、".join(f"{label} ×{n}" for label, n in counts.items())
+
+
 def committed_paths(pl: Placement, issue: int, ext: dict[int, str]) -> list[str]:
     """Every repo path the commit adds: filed items, then the waiting folder (inbox, then parked)."""
     return [p for _, p in pl.placed] + pl.inbox + [wait_path(issue, k, ext[k]) for k, _ in pl.parked]
@@ -954,6 +986,10 @@ def report_sections(r: Report, linked: bool) -> list[str]:
         for k, p in pl.placed:
             c, s, d = r.verdicts.get(k), r.sorts.get(k), dec[k]
             notes = [_ai_text(c.summary if c else "") or _ai_text(s.note if s else "")]
+            b = r.redactions.get(k)
+            if b is not None and b.out is not None and c is not None:     # the committed file is the redacted copy
+                n = len(c.redactions)
+                notes.append(f"打码 {n} 处 | {n} redaction{'' if n == 1 else 's'}")
             notes += [FLAG_TEXT[x] for x in d.flags if x in FLAG_TEXT]
             notes += [f"由 {_code(x.split(':', 1)[1])} 批准 | approved by {_code(x.split(':', 1)[1])}"
                       for x in d.flags if x.startswith("approved_by:")]
@@ -993,7 +1029,7 @@ def report_sections(r: Report, linked: bool) -> list[str]:
             lines.append(f"- #{d.k} {src(d.k)}：{parked[d.k]} → {path(wait_path(r.issue, d.k, ext[d.k]))}")
     out += listed(lines)
     placed = dict(pl.placed)
-    flagged = [(d, [FLAG_TEXT[x] for x in d.flags if x in FLAG_TEXT and x != "placed_by_maintainer"])
+    flagged = [(d, [FLAG_TEXT[x] for x in d.flags if x in FLAG_TEXT and x not in FLAGS_NOT_LISTED])
                for d in ordered if d.k in placed]
     flagged = [(d, notes) for d, notes in flagged if notes]
     if flagged:
@@ -1001,15 +1037,27 @@ def report_sections(r: Report, linked: bool) -> list[str]:
         out += [f"- #{d.k} {src(d.k)} → {path(placed[d.k])}：{'；'.join(notes)}" for d, notes in flagged]
 
     out += ["", "## 打码记录 | Redactions", "",
-            "- 本期还没有自动打码：有个人信息或拿不准的文件不提交，列在「需要你看」 "
-            "| no automatic redaction yet: files with personal data, or unsure, are held back under Needs you"]
+            "- PDF 里的个人信息自动涂黑，提交的是涂黑后的副本；这里只写页码和类型，从不写内容；Office 文件不自动打码 "
+            "| personal data in PDFs is blacked out and the blacked-out copy is what gets committed; only pages and kinds "
+            "are listed here, never the content; Office files are not redacted automatically"]
     for k in sorted(r.verdicts):
-        c = r.verdicts[k]
-        if c.personal_data in ("yes", "unsure"):
-            pages = _pages(c.notes, c.redactions)
+        d = dec.get(k)
+        if d is None or d.outcome not in ("commit", "inbox", "review"):     # committed or held files only
+            continue
+        c, b = r.verdicts[k], r.redactions.get(k)
+        if b is None and c.personal_data not in ("yes", "unsure"):
+            continue
+        pages = [str(p) for p in b.pages] if b is not None else _pages(c.notes, c.redactions)
+        where = f"第 {'、'.join(pages)} 页 | page {', '.join(pages)}" if pages else "页码不详 | page not given"
+        kinds = [_kinds(c.redactions)] if c.redactions else []
+        if b is not None:
+            parts = [BLACKOUT_TEXT.get(b.status, BLACKOUT_TEXT["failed"]), where, *kinds, VERIFIED_TEXT[b.verified]]
+        else:
             what = "个人信息：有 | personal data: found" if c.personal_data == "yes" else "个人信息：拿不准 | personal data: unsure"
-            where = f"第 {'、'.join(pages)} 页 | page {', '.join(pages)}" if pages else "页码不详 | page not given"
-            out.append(f"- #{k}：{what} · {where}")
+            parts = [what, where, *kinds]
+            if ext[k] != "pdf" and c.personal_data == "yes":
+                parts.append("Office 文件，没有打码 | an Office file, not redacted")
+        out.append(f"- #{k}：" + " · ".join(parts))
 
     out += ["", "## 登记 | Registered", ""]
     lines = [f"- 课程目录 | Course folders: " + "、".join(f"`{c}/`" for c in pl.courses)] if pl.courses else []
@@ -1091,11 +1139,15 @@ def _cc():
     return cc
 
 
-def spend_lines(sort_usd: float, check_usd: float, budget, asked: bool) -> list[str]:
+SPEND_STEPS = ("分拣 | Sorting", "检查 | Checks", "打码复查 | Redaction re-checks", "查重比较 | Duplicate comparisons")
+
+
+def spend_lines(costs: list[float], budget, asked: bool) -> list[str]:
+    """`costs`: this run's dollars for each of SPEND_STEPS, in order (all from the run's Meter)."""
     if not asked:
         return ["- 这次没有调用 Claude（没有 ANTHROPIC_API_KEY）| Claude was not called this run (no ANTHROPIC_API_KEY)"]
-    lines = [f"- 分拣 | Sorting: ${sort_usd:.4f} · 检查 | Checks: ${check_usd:.4f} · 合计 | Total: ${sort_usd + check_usd:.4f}"
-             "（已有结果的文件不再花钱 | files with earlier results cost nothing）"]
+    steps = " · ".join(f"{name}: ${usd:.4f}" for name, usd in zip(SPEND_STEPS, costs))
+    lines = [f"- {steps} · 合计 | Total: ${sum(costs):.4f}（已有结果的文件不再花钱 | files with earlier results cost nothing）"]
     if budget is None:
         return lines + ["- 上传池：干跑，没有记账 | Upload pool: dry run, nothing booked"]
     day, month = budget.spent("upload")
@@ -1179,14 +1231,188 @@ def _kept(sort, override: dict | None) -> bool:
     return bool(o.get("keep") or o.get("place") or (sort is not None and sort.keep))
 
 
+# ---------------------------------------------------------------- redaction, its re-check, near-duplicates (§5 steps 3–5)
+
+VERIFY_BATCH = 8                 # page images per re-check call
+VERIFY_PNG_MAX = 4_500_000       # bytes per page image; a bigger one is rendered again at a lower resolution
+VERIFY_CALL_MAX = 20_000_000     # bytes of page images per call (base64 adds a third; one request may be 32 MB)
+VERIFY_DPI, VERIFY_MIN_DPI = 150, 30
+
+
+@dataclass
+class Blackout:
+    """What blacking out one PDF's redactions gave. `status` is decide()'s `redaction`: "ok", "failed" or
+    "verify_unsure". `out` is the redacted copy, kept when the status is not "ok" too (an /approve commits it, spec §7);
+    None when no copy could be made. `pages`: the pages the check named. `verified`: "passed" (the re-check said nothing
+    personal is left), "failed", "not_needed" (text only, on pages without pictures: the text check is enough) or
+    "not_run". `look`: the pages the re-check has to see (every box page and every redacted page with a picture)."""
+    status: str
+    out: Path | None
+    pages: list[int]
+    verified: str = "not_run"
+    look: list[int] = field(default_factory=list)
+
+
+def _store(cache: dict, key: str) -> dict:
+    """cache[key] as a dict to write into (a broken one is replaced)."""
+    if not isinstance(cache.get(key), dict):
+        cache[key] = {}
+    return cache[key]
+
+
+def _found(cache: dict, key: str) -> dict:
+    """cache[key] to read from: {} when missing or broken (nothing is added to the cache)."""
+    return cache[key] if isinstance(cache.get(key), dict) else {}
+
+
+def _forget(cache: dict, sha: str) -> None:
+    """No redacted copy can be rebuilt from this check: drop it (and any verdict), so the next run or /retry asks again
+    (failures are never cached)."""
+    _found(cache, "check").pop(sha, None)
+    _found(cache, "verify").pop(sha, None)
+
+
+def _picture_pages(pdf: Path, pages) -> set[int]:
+    """Those of `pages` (from 1) that show a picture of any kind, inline images included; all of them when the PDF
+    cannot be read (then every one is re-checked)."""
+    import fitz
+    try:
+        with fitz.open(pdf) as doc:
+            return {p for p in pages if 1 <= p <= doc.page_count and doc[p - 1].get_image_info()}
+    except Exception:
+        return set(pages)
+
+
+def _redact_one(it, c, raw, cache: dict, out_dir: Path) -> Blackout:
+    """Black out check `c`'s redactions in a copy of the PDF Claude read (`it.view`) at out_dir/item-<k>.pdf.
+    A fresh answer (its text still in memory) is applied as given, and the rectangles that gave are written into the raw
+    cached answer `raw` (`redactions_rects`, plus `redactions_ok`): the bot-state cache keeps them, as they hold no text.
+    A rebuild, whose cached answer lost the text, applies exactly those rectangles and keeps the first run's verdict.
+    Fails closed ("failed", no copy, the check forgotten) on a redaction page outside 1..it.pages (checked here too, as
+    redact.apply does), when there is neither text nor rectangles, or when redact.apply writes nothing. Single-threaded:
+    redact is not thread-safe."""
+    import redact
+    pages = sorted({x["page"] for x in c.redactions if isinstance(x, dict) and type(x.get("page")) is int})
+    if not all(isinstance(x, dict) and type(x.get("page")) is int and 1 <= x["page"] <= it.pages for x in c.redactions):
+        _forget(cache, it.sha)
+        return Blackout("failed", None, pages)
+    raw = raw if isinstance(raw, dict) else {}
+    rects = raw.get("redactions_rects")
+    texts = all(isinstance(x.get("text"), str) for x in c.redactions if x.get("kind") == "text")
+    out = Path(out_dir) / f"item-{it.k}.pdf"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    r = None
+    if isinstance(rects, list):                     # a rebuild: what the first run applied, nothing else
+        r = redact.apply(it.view, out, [], cached_rects=rects)
+        ok = r.ok and raw.get("redactions_ok") is True
+    elif texts:                                     # the check's own answer, this run
+        r = redact.apply(it.view, out, c.redactions)
+        ok = r.ok
+        if r.out is not None:
+            raw["redactions_rects"], raw["redactions_ok"] = r.rects, r.ok
+            _found(cache, "verify").pop(it.sha, None)       # a verdict belongs to the rectangles it saw
+    if r is None or r.out is None:
+        _forget(cache, it.sha)
+        return Blackout("failed", None, pages)
+    boxes = {x["page"] for x in c.redactions if x.get("kind") == "box"}
+    done = sorted({x["page"] for x in r.rects})
+    look = sorted(set(done) & boxes | _picture_pages(r.out, done))
+    return Blackout("ok" if ok else "failed", r.out, pages, "not_needed" if ok and not look else "not_run", look)
+
+
+def _page_png(pdf: Path, page: int) -> bytes | None:
+    """One page as a PNG of at most VERIFY_PNG_MAX bytes: at VERIFY_DPI, or rendered again lower until it fits; None
+    when it does not fit even at VERIFY_MIN_DPI."""
+    import redact
+    dpi = VERIFY_DPI
+    while True:
+        png = redact.render(pdf, [page], dpi)[0]
+        if len(png) <= VERIFY_PNG_MAX:
+            return png
+        if dpi <= VERIFY_MIN_DPI:
+            return None
+        dpi = max(VERIFY_MIN_DPI, min(dpi - 10, int(dpi * math.sqrt(VERIFY_PNG_MAX / len(png)) * 0.9)))
+
+
+def _verify(pdf: Path, pages: list[int], ask, meter) -> str:
+    """The re-check of a redacted copy (spec §5 step 4): "no" only when every call answers "no". The pages go in calls of
+    at most VERIFY_BATCH images and VERIFY_CALL_MAX bytes, each image at most VERIFY_PNG_MAX bytes (see _page_png);
+    the first call that is not "no" ends it (the rest is not sent). "unsure" too without pages, `ask` or `meter`, or
+    when a page cannot be rendered small enough. Every call reserves on `meter` (ai.verify_pages)."""
+    import ai
+    if not pages or ask is None or meter is None:
+        return "unsure"
+    batch, size = [], 0
+    try:
+        for p in pages:
+            png = _page_png(pdf, p)
+            if png is None:
+                return "unsure"
+            if batch and (len(batch) >= VERIFY_BATCH or size + len(png) > VERIFY_CALL_MAX):
+                if ai.verify_pages(batch, ask, meter) != "no":
+                    return "unsure"
+                batch, size = [], 0
+            batch.append(png)
+            size += len(png)
+    except Exception as e:                          # never print e: it may quote the file
+        print(f"verify: a page could not be rendered ({type(e).__name__})", file=sys.stderr)
+        return "unsure"
+    return ai.verify_pages(batch, ask, meter)
+
+
+def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | None, dict | None]:
+    """(repo path it duplicates, None), or (None, variant), for a file about to be committed as decision `d` (spec §5
+    step 5). It is compared with the PDFs in d's course folder (none when the course has no folder yet); the best match
+    decides: SAME_AT or more is the same file; from ASK_AT the two first pages go to the comparison (`ask`, on `meter`),
+    whose "same" is a duplicate, "different_set" the next free set letter, "different_version" the next version number,
+    anything else nothing. `seen` holds the repo's first pages for the whole run."""
+    import ai
+    import dedupe
+    from decide import stem_label
+    course = find_course_dir(repo, d.code)
+    found = dedupe.candidates(it, course, repo, cache=seen)
+    if not found:
+        return None, None
+    path, score = found[0]
+    if score >= dedupe.SAME_AT:
+        return path, None
+    if ask is None or meter is None:
+        return None, None
+    rel = ai.compare_pair(it.page_text[0], dedupe.first_page_text(repo / path) or "", ask, meter)
+    label = stem_label(d.type, d.label)
+    if rel == "same":
+        return path, None
+    if rel == "different_set":
+        return None, {"set": dedupe.next_set(course, d.code, d.session, label)}
+    if rel == "different_version":
+        return None, {"version": dedupe.next_version(course, d.code, d.session, label)}
+    return None, None
+
+
+def _guarded(d, c, b):
+    """The anti-goal, once more: a file the check found personal data in (or something to black out) is committed only
+    as a redacted copy that was confirmed (re-checked, or text only), or when a maintainer approved it."""
+    from decide import Decision
+    if d.outcome not in ("commit", "inbox") or c is None or (c.personal_data == "no" and not c.redactions):
+        return d
+    if any(str(x).startswith("approved_by:") for x in d.flags):
+        return d
+    if b is not None and b.status == "ok" and b.out is not None and b.verified in ("passed", "not_needed"):
+        return d
+    return Decision(d.k, "review", d.code, d.name, d.session, d.type, d.label, d.set,
+                    "需要你看：打码没完成 | needs a look: redaction incomplete", d.flags, True)
+
+
 def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list[Path] | None = None,
             base_sha: str = "dry-run", run_url: str | None = None, branch: str = "",
             asks: dict | None = None, meter=None, cache: dict | None = None, budget=None) -> Result:
     """Download (unless files are given), unpack, number the files, drop exact duplicates, sort (`asks["sort"]`), check
-    every page of the files that will be kept (`asks["check"]`; both within `meter`), decide each file, place them,
-    inspect and thumbnail what is committed, build the site, write the report. `cache` is the upload's bot-state cache:
-    read and updated in place (items, sort, check, check_skipped); overrides are only read; the caller adds the meter's
-    spend. `budget` gives the pool totals."""
+    every page of the files that will be kept (`asks["check"]`), black out what the check names in a copy of each PDF,
+    re-check the redacted pages that need it (`asks["verify"]`), look for near-duplicates in the course folder
+    (`asks["compare"]` for the doubtful ones), decide each file, place them (redacted copies, never their originals),
+    inspect and thumbnail what is committed, build the site, write the report. Every call is within `meter`. `cache` is
+    the upload's bot-state cache: read and updated in place (items, sort, check with the rectangles applied, check_skipped,
+    verify); overrides are only read; the caller adds the meter's spend. `budget` gives the pool totals."""
     import ai
     from decide import decide, validate_sort
     from items import exact_duplicates, make_items
@@ -1222,14 +1448,17 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
     dups = exact_duplicates(items, repo)
     live = [it for it in items if it.k not in dups and not (overrides.get(it.sha) or {}).get("skip")]
 
+    def spent() -> float:
+        return meter.spent if meter is not None else 0.0
+
     cat = ai.catalogue(repo)
     raw = _sort(live, f, cat, asks.get("sort"), meter, cache)
     cat_codes = {c["code"] for c in cat}
     sorts = {it.k: validate_sort(raw.get(it.k), cat_codes) for it in live}
     keep = {it.k for it in live if _kept(sorts.get(it.k), overrides.get(it.sha))}
-    sort_usd = meter.spent if meter is not None else 0.0
+    sort_usd = spent()
     answers = _check(live, keep, asks.get("check"), meter, cache)
-    check_usd = (meter.spent - sort_usd) if meter is not None else 0.0
+    check_usd = spent() - sort_usd
     checks, why = {}, {}
     for it in live:
         if it.k in keep:
@@ -1241,8 +1470,55 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
         elif raw.get(it.k) is None:
             why[it.k] = "unsorted"
 
-    decisions = [decide(it, sorts.get(it.k), checks.get(it.k), f, overrides.get(it.sha), dups.get(it.k)) for it in items]
-    pl = apply_decisions(repo, f, decisions, {it.k: it for it in items}, login, issue, checks=checks)
+    # Per kept file: check → redact → re-check → near-duplicates → decide (spec §5 steps 3–6). Office files are never
+    # redacted: with personal data they wait under Needs you (decide). Everything here runs on this thread.
+    red: dict[int, Blackout] = {}
+    out_dir = work / "redacted"
+    shutil.rmtree(out_dir, ignore_errors=True)
+    for it in live:
+        c = checks.get(it.k)
+        if c is not None and c.redactions and it.ext == "pdf" and it.view is not None:
+            red[it.k] = _redact_one(it, c, answers.get(it.k), cache, out_dir)
+
+    def decided(it, dup=None, variant=None, redaction=None):
+        b = red.get(it.k)
+        return decide(it, sorts.get(it.k), checks.get(it.k), f, overrides.get(it.sha), dups.get(it.k) or dup, variant,
+                      redaction if redaction is not None else b.status if b else None)
+
+    before = spent()
+    for it in live:
+        b = red.get(it.k)
+        if b is None or b.status != "ok" or not b.look:
+            continue
+        if decided(it, redaction="ok").outcome not in ("commit", "inbox"):
+            continue                       # it is not going in even with a good redaction: no money on a re-check
+        if _found(cache, "verify").get(it.sha) == "no":     # a rebuild with the same rectangles
+            b.verified = "passed"
+        elif _verify(b.out, b.look, asks.get("verify"), meter) == "no":
+            _store(cache, "verify")[it.sha] = "no"          # only a clear "no" is kept
+            b.verified = "passed"
+        else:
+            b.status, b.verified = "verify_unsure", "failed"
+    verify_usd = spent() - before
+
+    before = spent()
+    near: dict[int, str] = {}
+    variants: dict[int, dict] = {}
+    seen: dict = {}                        # the repo's first pages, read once per run
+    for it in live:
+        d = decided(it)
+        if d.outcome != "commit" or it.scanned or (overrides.get(it.sha) or {}).get("keep"):
+            continue                       # /keep: a maintainer took it back, near-duplicate or not
+        dup, variant = _near_duplicate(it, d, repo, asks.get("compare"), meter, seen)
+        if dup:
+            near[it.k] = dup
+        if variant:
+            variants[it.k] = variant
+    compare_usd = spent() - before
+
+    decisions = [_guarded(decided(it, near.get(it.k), variants.get(it.k)), checks.get(it.k), red.get(it.k)) for it in items]
+    copies = {k: b.out for k, b in red.items() if b.out is not None}   # never the original of a file that was redacted
+    pl = apply_decisions(repo, f, decisions, {it.k: it for it in items}, login, issue, files=copies, checks=checks)
     committed = committed_paths(pl, issue, {it.k: it.ext for it in items})
     held = sum(1 for d in decisions if d.blocking) + len(pl.parked)
     inspections = {p: inspect_file(repo / p) for p in committed}
@@ -1255,9 +1531,10 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
         build = (r.returncode == 0, list(dict.fromkeys(l.strip() for l in (r.stderr + r.stdout).splitlines()
                                                        if "WARNING" in l or "ERROR" in l)))
-    spend = spend_lines(sort_usd, check_usd, budget, asked=bool(asks.get("sort") or asks.get("check")))
+    spend = spend_lines([sort_usd, check_usd, verify_usd, compare_usd], budget,
+                        asked=any(asks.get(x) for x in ("sort", "check", "verify", "compare")))
     report = Report(f, issue, items, decisions, pl, rejected, checks, sorts, why, inspections, build, spend,
-                    run_url, branch or f"upload/issue-{issue}")
+                    run_url, branch or f"upload/issue-{issue}", red)
     return Result(pl, pr_body(report, base_sha, held), decisions, rejected, held > 0, len(committed), held,
                   "" if committed else issue_comment(report))
 

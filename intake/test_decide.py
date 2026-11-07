@@ -183,6 +183,51 @@ def test_past_papers_label_prefers_assessment():
     assert d.label == "Week3"
 
 
+PD_YES = replace(CLEAN, personal_data="yes", redactions=[{"page": 1, "kind": "box", "box": [0, 0, 9, 9], "what": "签名"}])
+
+
+def test_a_good_redaction_lets_personal_data_through():
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, None, "ok")              # positional, like the run
+    assert (d.outcome, d.blocking, "redacted" in d.flags) == ("commit", False, True)
+    d = decide.decide(ITEM, S(confident=False), PD_YES, FORM, None, None, redaction="ok")
+    assert (d.outcome, "redacted" in d.flags) == ("inbox", True)                    # the inbox gets the redacted copy too
+    assert decide.decide(ITEM, S(), PD_YES, FORM, None, None).outcome == "review"   # no redaction: held back
+    for bad in ("", "yes", "OK", None):
+        assert decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction=bad).outcome == "review", bad
+
+
+def test_a_failed_or_unconfirmed_redaction_is_held_back_with_its_reason():
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="failed")
+    assert (d.outcome, d.blocking) == ("review", True) and "打码没完成 | " in d.reason and "redaction incomplete" in d.reason
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="verify_unsure")
+    assert d.outcome == "review" and "打码后复查没通过" in d.reason and "redaction not confirmed by the re-check" in d.reason
+    for r in ("failed", "verify_unsure"):
+        assert decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction=r).reason.count(" | ") == 1
+        d = decide.decide(ITEM, S(), PD_YES, FORM, {"approved_by": "m-1"}, None, redaction=r)   # /approve: committed
+        assert d.outcome == "commit" and "approved_by:m-1" in d.flags and "redacted" not in d.flags
+    unsure = replace(PD_YES, personal_data="unsure")                                 # unsure stays unsure
+    assert decide.decide(ITEM, S(), unsure, FORM, None, None, redaction="ok").outcome == "review"
+
+
+def test_office_files_with_personal_data_are_never_redacted():
+    docx = replace(ITEM, ext="docx")
+    d = decide.decide(docx, S(), replace(CLEAN, personal_data="yes"), FORM, None, None)
+    assert d.outcome == "review" and "Office" in d.reason and d.reason.count(" | ") == 1
+    assert decide.decide(docx, S(), PD_YES, FORM, None, None, redaction="ok").outcome == "review"   # never "redacted"
+
+
+def test_scanned_files_are_noted_as_not_compared():
+    scan = replace(ITEM, scanned=True)
+    assert "dedupe_skipped" in decide.decide(scan, S(), CLEAN, FORM, None, None).flags
+    assert "dedupe_skipped" not in decide.decide(ITEM, S(), CLEAN, FORM, None, None).flags
+    assert "dedupe_skipped" not in decide.decide(scan, S(), None, FORM, None, None).flags      # held back: no note
+
+
+def test_stem_label_matches_the_file_name():
+    assert decide.stem_label("Past-Papers", "Final_Question") == "Final" and decide.stem_label("Past-Papers", "") == "PastPaper"
+    assert decide.stem_label("Exam-Review", "") == "ExamReview" and decide.stem_label("Labs", "Lab2_Manual") == "Lab2_Manual"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

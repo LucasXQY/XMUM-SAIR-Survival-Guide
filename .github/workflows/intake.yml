@@ -64,8 +64,9 @@ jobs:
       - name: Rebuild the upload pull request
         env:
           GH_TOKEN: ${{ github.token }}
-          # Claude sorts (CLAUDE_MODEL_SORT) and pre-checks (CLAUDE_MODEL_UPLOAD) each file; without the key nothing is
-          # committed and every file waits under "Needs you"
+          # Claude sorts each file and compares near-duplicates (CLAUDE_MODEL_SORT), checks every page and re-checks the
+          # blacked-out pages (CLAUDE_MODEL_UPLOAD); without the key only cached results count, and every other file
+          # waits under "Needs you"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL_SORT: ${{ vars.CLAUDE_MODEL_SORT }}
           CLAUDE_MODEL_UPLOAD: ${{ vars.CLAUDE_MODEL_UPLOAD }}

@@ -521,15 +521,40 @@ TEXTS = {1: "COM107 Final Examination April 2022", 2: "Quiz on resistors", 3: "C
 _BYTES = {}
 
 
-def _pdf_bytes(k, pages=1):
-    """One fixed PDF per number (PyMuPDF output is not byte-stable, so each is made once)."""
-    if (k, pages) not in _BYTES:
+def _picture(text, dpi=60):
+    """A grey page image of typed text: what a scanner makes of a cover sheet."""
+    import fitz
+    with fitz.open() as src:
+        pg = src.new_page(width=595, height=842)
+        pg.insert_text((60, 80), text, fontsize=14)
+        pg.insert_text((60, 200), "COM107 Final Examination April 2022 - Question 1", fontsize=14)
+        return pg.get_pixmap(dpi=dpi, colorspace=fitz.csGRAY)
+
+
+def _wrapped(text_):
+    """Long text as lines that fit on the page (text off the page cannot be read back)."""
+    import textwrap
+    return "\n".join(textwrap.wrap(text_, 70)) if len(text_) > 70 else text_
+
+
+def _pdf_bytes(k, pages=1, text=None, kind="text"):
+    """One fixed PDF per number (PyMuPDF output is not byte-stable, so each is made once). kind "text": a text line per
+    page; "scan": every page one picture of the text, no text layer; "image": the text line and a picture beside it."""
+    key = (k, pages, text, kind)
+    if key not in _BYTES:
         import fitz
+        line = _wrapped(text or TEXTS.get(k, f"file {k}"))
         d = fitz.open()
         for _ in range(pages):
-            d.new_page().insert_text((72, 72), TEXTS.get(k, f"file {k}"))
-        _BYTES[k, pages] = d.tobytes(); d.close()
-    return _BYTES[k, pages]
+            pg = d.new_page(width=595, height=842)
+            if kind == "scan":
+                pg.insert_image(pg.rect, pixmap=_picture(line))
+                continue
+            pg.insert_text((72, 72), line)
+            if kind == "image":
+                pg.insert_image(fitz.Rect(72, 300, 272, 500), pixmap=_picture(line, dpi=20))
+        _BYTES[key] = d.tobytes(); d.close()
+    return _BYTES[key]
 
 
 SHA1 = __import__("hashlib").sha256(_pdf_bytes(1)).hexdigest()
@@ -605,11 +630,14 @@ class FakeBudget:
     def spent(self, pool): return 1.25, 4.5
 
 
-def fake_claude(gh, sorts, checks, during=None):
-    """asks {"sort", "check"} answering from the tables by file number (read from the "File: <zip> › <n>" line); every
-    question is logged in gh.ai_calls. `during()` runs once, on the first question: something that happens while the
-    rebuild is under way."""
+def fake_claude(gh, sorts, checks, during=None, verify="no", compare="different"):
+    """asks {"sort", "check", "verify", "compare"}: sort and check answer from the tables by file number (read from the
+    "File: <zip> › <n>" line); verify answers `verify` (a list: one answer per call, in order) and logs the number of
+    page images and their sizes; compare answers `compare`. Every question is logged in gh.ai_calls. `during()` runs
+    once, on the first question: something that happens while the rebuild is under way."""
     hooks = [during] if during else []
+    verdicts = list(verify) if isinstance(verify, list) else None
+    gh.verify_sizes = []
 
     def text(content):
         while hooks:
@@ -631,29 +659,59 @@ def fake_claude(gh, sorts, checks, during=None):
         gh.ai_calls.append(("check", k)); gh.ai_text.append(text(content))
         if on_cost: on_cost(0.02)
         return __import__("copy").deepcopy(checks.get(k))
-    return {"sort": sort, "check": check}
+
+    def verify_(content, on_cost=None):
+        images = [b for b in content if isinstance(b, dict) and b.get("type") == "image"]
+        gh.ai_calls.append(("verify", len(images))); gh.ai_text.append(text(content))
+        gh.verify_sizes.append([len(b["source"]["data"]) for b in images])
+        if on_cost: on_cost(0.01)
+        return {"readable": verdicts.pop(0) if verdicts else verify if verdicts is None else "unsure"}
+
+    def compare_(content, on_cost=None):
+        gh.ai_calls.append(("compare", 0)); gh.ai_text.append(text(content))
+        if on_cost: on_cost(0.003)
+        return {"relation": compare}
+    return {"sort": sort, "check": check, "verify": verify_, "compare": compare_}
 
 
-def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=(), during=None, pages=None):
+_THUMBS = []        # (path, bytes) of every PDF intake.thumbnails was given, at the time it was given
+_BEFORE = {}        # repo copy -> its files before the run
+
+
+def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=(), during=None, pages=None,
+                   pdf_text=None, scanned=False, image=False, verify="no", compare="different", prepare=None):
     """Issue #5 with one attachment, a zip holding files 1..n (n = the highest number in the tables, at least 1);
-    `pages` gives some of them more than one page. The run's ledger is gh.budget."""
+    `pages` gives some of them more than one page. `pdf_text` is file 1's text (or {k: text}); `scanned` makes file 1 a
+    scan (pictures, no text layer), `image` gives file 1's pages a picture beside the text. `verify` and `compare` are
+    the fake re-check's and comparison's answers; `prepare(repo)` runs on the repo copy before the run. The run's
+    ledger is gh.budget; the PDFs the thumbnail sheet was made from are kept for thumbnail_sources."""
     import zipfile
     tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    if prepare:
+        prepare(tmp)
+    _BEFORE[str(tmp)] = set(files_in(tmp))
+    texts = pdf_text if isinstance(pdf_text, dict) else {1: pdf_text} if pdf_text else {}
     z = w / "upload.zip"
     with zipfile.ZipFile(z, "w") as zf:
         for k in range(1, max([*sorts, *checks, *(pages or {}), 1]) + 1):
-            zf.writestr(f"d{k}/{member}" if member else f"orig_{k}.pdf", _pdf_bytes(k, (pages or {}).get(k, 1)))
+            kind = ("scan" if scanned else "image" if image else "text") if k == 1 else "text"
+            zf.writestr(f"d{k}/{member}" if member else f"orig_{k}.pdf", _pdf_bytes(k, (pages or {}).get(k, 1), texts.get(k), kind))
     gh = gh or FakeGH()
     gh.body = gh.body or FORM_BODY
     gh.budget = FakeBudget()
     git = FakeGit()
-    asks = fake_claude(gh, sorts, checks, during)
-    real = intake.download
+    asks = fake_claude(gh, sorts, checks, during, verify, compare)
+    real, real_thumbs = intake.download, intake.thumbnails
+
+    def thumbs(pdfs, out_png, *a, **kw):
+        _THUMBS.extend((pathlib.Path(p), pathlib.Path(p).read_bytes()) for p in pdfs)
+        return real_thumbs(pdfs, out_png, *a, **kw)
     intake.download = lambda links, work: ([(zip_name, z)], list(failed))
+    intake.thumbnails = thumbs
     try:
         intake.run_issue(5, tmp, gh, git, "https://run", w / "work", asks=asks, budget=gh.budget)
     finally:
-        intake.download = real
+        intake.download, intake.thumbnails = real, real_thumbs
     return git, gh, tmp
 
 
@@ -663,6 +721,47 @@ def files_in(root):
 
 def pr_body_of(gh):
     return next(c[2] for c in reversed(gh.calls) if c[0] == "pr")
+
+
+def issue_comment_or_body(gh):
+    """The last thing the run wrote for people: the issue comment that stands in for the PR, else the PR body."""
+    return next((c[2] for c in reversed(gh.calls) if c[0] in ("upsert_comment", "pr")), "")
+
+
+def text(path, page):
+    import fitz
+    with fitz.open(path) as d: return d[page - 1].get_text()
+
+
+def committed_pdfs(tmp):
+    """The PDFs the run added to the tree (the commit), repo-relative."""
+    return sorted(p for p in files_in(tmp) if p.endswith(".pdf") and p not in _BEFORE[str(tmp)])
+
+
+def thumbnail_sources(tmp):
+    """The repo-relative PDFs the run's thumbnail sheet was made from."""
+    return sorted(p.relative_to(tmp).as_posix() for p, _ in _THUMBS if tmp in p.parents)
+
+
+def _leaks(data: bytes, secret: str) -> bool:
+    """Is `secret` anywhere in a PDF: its raw bytes, every decompressed stream, its text, as plain or hex-encoded text."""
+    import fitz
+    forms = [secret.encode(), secret.encode().hex().encode(), secret.encode().hex().upper().encode()]
+    blobs = [data]
+    with fitz.open(stream=data, filetype="pdf") as d:
+        for x in range(1, d.xref_length()):
+            try:
+                if d.xref_is_stream(x):
+                    blobs.append(d.xref_stream(x) or b"")
+                blobs.append(d.xref_object(x).encode("latin-1", "ignore"))
+            except Exception:
+                continue
+        blobs.append("".join(p.get_text() for p in d).encode())
+    return any(f in b for f in forms for b in blobs)
+
+
+def _section(body, name, after):
+    return body.split(name)[1].split(after)[0]
 
 
 def tmp_repo():
@@ -763,26 +862,39 @@ def test_personal_text_in_lecturers_or_weighting_reaches_no_readme_and_no_cache(
         assert bad not in json.dumps(gh.calls, ensure_ascii=False) and bad not in json.dumps(git.calls, ensure_ascii=False), bad
 
 
-def test_redaction_targets_never_leave_the_run():                           # this task's privacy invariant
+SECRET_PAGE = "Name: Zhang San  ID: EEE2109300  COM107 Final Examination April 2022"
+FOUND = dict(CHECK_OK, personal_data="yes", notes="第 1 页页眉 | page 1 header", redactions=[
+    {"page": 1, "kind": "text", "text": "EEE2109300", "box": [0, 0, 0, 0], "what": "学号 EEE2109300 | student ID EEE2109300"},
+    {"page": 1, "kind": "text", "text": "Zhang San", "box": [0, 0, 0, 0], "what": "姓名 | name"}])
+FINAL = "EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question.pdf"
+
+
+def test_redaction_targets_never_leave_the_run():                           # the privacy invariant, end to end
     import contextlib, io
-    found = dict(CHECK_OK, personal_data="yes", notes="第 1 页页眉 | page 1 header", redactions=[
-        {"page": 1, "kind": "text", "text": "EEE2109300", "box": [0, 0, 0, 0], "what": "学号 EEE2109300 | student ID EEE2109300"},
-        {"page": 1, "kind": "text", "text": "Zhang San", "box": [0, 0, 0, 0], "what": "姓名 | name"}])
     out = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found})
-    assert gh.ai_calls == [("sort", 1), ("check", 1)] and gh.cache_writes
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: FOUND}, pdf_text=SECRET_PAGE)
+    original = _pdf_bytes(1, 1, SECRET_PAGE, "text")
+    assert all(_leaks(original, s) for s in ("EEE2109300", "Zhang San"))              # the upload holds both
+    assert gh.ai_calls == [("sort", 1), ("check", 1)] and gh.cache_writes              # text only: no re-check needed
+    assert committed_pdfs(tmp) == [FINAL] and ("push", "upload/issue-5") in git.calls  # now redacted and committed
+    committed = (tmp / FINAL).read_bytes()
     for secret in ("EEE2109300", "Zhang San"):
+        assert not _leaks(committed, secret), secret                                   # text, raw bytes, streams
+        assert not any(_leaks(b, secret) for p, b in _THUMBS if tmp in p.parents), secret   # nor the thumbnails
         assert secret not in json.dumps(gh.calls, ensure_ascii=False), secret
         assert secret not in json.dumps(git.calls, ensure_ascii=False), secret
         assert secret not in json.dumps(gh.cache_writes, ensure_ascii=False), secret
         assert secret not in out.getvalue(), secret
-    text = next(c[2] for c in gh.calls if c[0] == "upsert_comment")                 # no redaction yet: held back
-    assert "#1" in text.split("## 需要你看")[1].split("## 打码记录")[0] and git.calls == [("reset", "upload/issue-5")]
-    assert "第 1 页" in text.split("## 打码记录")[1].split("## 登记")[0]                # the page, never the text
-    assert not any(p.endswith("COM107_202204_Final_Question.pdf") for p in files_in(tmp))
-    stored = gh.cache["check"][_sha(1)]["redactions"]
-    assert [r.get("text") for r in stored] == [None, None] and [r["page"] for r in stored] == [1, 1]   # pages kept, text never
+    assert "Final Examination" in text(tmp / FINAL, 1)                                 # the rest of the page stays
+    body = pr_body_of(gh)
+    record = _section(body, "## 打码记录", "## 登记")
+    line = next(l for l in record.splitlines() if l.startswith("- #1"))
+    assert "第 1 页" in line and "`姓名 | name` ×1" in line and "学号" not in line      # the page and the kind, never the text
+    assert "#1" not in _section(body, "## 需要你看", "## 打码记录").split("不挡合并")[0]
+    stored = gh.cache["check"][_sha_of(gh, 1)]
+    assert [r.get("text") for r in stored["redactions"]] == [None, None] and [r["page"] for r in stored["redactions"]] == [1, 1]
+    assert stored["redactions_ok"] is True and stored["redactions_rects"] and all(set(r) == {"page", "rect"} for r in stored["redactions_rects"])
 
 
 def test_a_file_over_100_pages_is_held_back_unchecked():
@@ -808,6 +920,286 @@ def test_an_old_pre_check_result_is_checked_again():
     gh = FakeGH(cache={"sort": {SHA1: SORT_OK}, "check": {SHA1: old}})
     git, gh, _ = run_with_fakes({}, {1: CHECK_OK}, gh=gh)
     assert gh.ai_calls == [("check", 1)] and gh.cache["check"][SHA1] == CHECK_OK and "Closes #5" in pr_body_of(gh)
+
+
+# ---- redaction, re-check and near-duplicates in the run (spec §5 steps 3–5)
+
+TEXT_ID = [{"page": 1, "kind": "text", "text": "EEE2109300", "what": "学号"}]
+BOX_SIG = [{"page": 1, "kind": "box", "box": [0, 0, 500, 100], "what": "签名"}]
+
+
+def test_redacted_copy_is_what_gets_committed():
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)},
+                                  pdf_text="ID: EEE2109300 Final Examination COM107")
+    p = next(p for p in files_in(tmp) if p.endswith("COM107_202204_Final_Question.pdf"))
+    assert "EEE2109300" not in text(tmp / p, 1) and "学号" in pr_body_of(gh) and "EEE2109300" not in pr_body_of(gh)
+    assert not any(kind == "verify" for kind, _ in gh.ai_calls)          # text on a page without pictures: no re-check
+    body = pr_body_of(gh)
+    assert "Closes #5" in body and ("status", "HEAD", True) in gh.calls
+    row = next(l for l in body.splitlines() if l.startswith("| #1 "))
+    assert "打码 1 处 \\| 1 redaction" in row and _tables_hold(body)       # a table cell: its pipes are escaped
+    line = next(l for l in _section(body, "## 打码记录", "## 登记").splitlines() if l.startswith("- #1"))
+    assert "第 1 页" in line and "没有图片" in line and "复查通过" not in line
+
+
+def test_failed_verification_holds_the_file_back():
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: dict(CHECK_OK, personal_data="yes", redactions=BOX_SIG)},
+                                  verify="unsure", scanned=True)
+    assert committed_pdfs(tmp) == [] and "需要你看" in issue_comment_or_body(gh)
+    assert ("verify", 1) in gh.ai_calls and git.calls == [("reset", "upload/issue-5")]
+    text_ = issue_comment_or_body(gh)
+    assert "打码后复查没通过" in _section(text_, "## 需要你看", "## 打码记录")
+    assert "复查没通过 | re-check did not pass" in _section(text_, "## 打码记录", "## 登记")
+    assert _sha_of(gh, 1) not in gh.cache.get("verify", {})               # only a clear "no" is cached
+
+
+def test_thumbnails_come_only_from_committed_files():
+    _, _, tmp = run_with_fakes(SORTS, CHECKS)
+    assert thumbnail_sources(tmp) == committed_pdfs(tmp)
+    assert committed_pdfs(tmp) == ["EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question.pdf",
+                                   "_待整理/issue-5/item-2.pdf"]
+    _, _, tmp = run_with_fakes({1: SORT_OK}, {1: FOUND}, pdf_text=SECRET_PAGE)          # a redacted file: its redacted copy
+    assert thumbnail_sources(tmp) == committed_pdfs(tmp) == [FINAL]
+    assert [b for p, b in _THUMBS if tmp in p.parents] == [(tmp / FINAL).read_bytes()]
+    assert not any(_leaks(b, "EEE2109300") for p, b in _THUMBS if tmp in p.parents)
+
+
+def test_a_box_redaction_that_passes_the_re_check_is_committed_and_rebuilt_for_free():
+    import fitz
+    found = dict(CHECK_OK, personal_data="yes", redactions=BOX_SIG)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, scanned=True, verify="no")
+    assert committed_pdfs(tmp) == [FINAL] and gh.ai_calls == [("sort", 1), ("check", 1), ("verify", 1)]
+    with fitz.open(tmp / FINAL) as d:                                         # the top of the page is black now
+        pix = d[0].get_pixmap(colorspace=fitz.csGRAY, dpi=20)
+        top = [pix.samples[y * pix.stride + x] for y in range(2, int(pix.height * 0.1)) for x in range(2, int(pix.width * 0.45))]
+        assert sum(top) / len(top) < 20
+    body = pr_body_of(gh)
+    line = next(l for l in _section(body, "## 打码记录", "## 登记").splitlines() if l.startswith("- #1"))
+    assert "复查通过 | re-check passed" in line and "`签名` ×1" in line
+    assert "已打码" in _section(body, "## 需要你看", "## 打码记录")                       # worth a look, not blocking
+    assert ("draft", 1, False) in gh.calls and gh.cache["verify"] == {_sha_of(gh, 1): "no"}
+    first = (tmp / FINAL).read_bytes()
+    git, gh, tmp = run_with_fakes({}, {}, gh=gh, scanned=True)                # a rebuild: cached rectangles and verdict
+    assert gh.ai_calls == [("sort", 1), ("check", 1), ("verify", 1)] and committed_pdfs(tmp) == [FINAL]
+    with fitz.open(tmp / FINAL) as a, fitz.open(stream=first, filetype="pdf") as b:
+        assert a[0].get_pixmap(dpi=20).samples == b[0].get_pixmap(dpi=20).samples
+
+
+def test_the_re_check_goes_eight_pages_at_a_time_and_every_batch_must_pass():
+    boxes = [{"page": p, "kind": "box", "box": [0, 0, 400, 100], "what": "签名"} for p in range(1, 11)]
+    found = dict(CHECK_OK, personal_data="yes", redactions=boxes)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, scanned=True, pages={1: 10}, verify="no")
+    assert [c for c in gh.ai_calls if c[0] == "verify"] == [("verify", 8), ("verify", 2)] and committed_pdfs(tmp) == [FINAL]
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, scanned=True, pages={1: 10}, verify=["no", "unsure"])
+    assert [c for c in gh.ai_calls if c[0] == "verify"] == [("verify", 8), ("verify", 2)] and committed_pdfs(tmp) == []
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, scanned=True, pages={1: 10}, verify=["unsure"])
+    assert [c for c in gh.ai_calls if c[0] == "verify"] == [("verify", 8)] and committed_pdfs(tmp) == []   # stops at the first
+
+
+def test_page_images_over_the_limit_are_rendered_again_smaller():
+    import ai, redact
+    from test_ai import FakeBudget as Ledger
+    dpis, sent = [], []
+
+    def render(pdf, pages, dpi=150):
+        dpis.append(dpi)
+        return [b"x" * (5_000_000 if dpi >= 150 else 4_000_000 if dpi >= 100 else 1000) for _ in pages]
+
+    def ask(content, on_cost=None):
+        sent.append([len(b["source"]["data"]) for b in content if b.get("type") == "image"])
+        return {"readable": "no"}
+    real = redact.render
+    redact.render = render
+    try:
+        meter = ai.Meter(Ledger(ok=True), run_cap=100)
+        assert intake._verify(pathlib.Path("x.pdf"), [1], ask, meter) == "no"
+        assert dpis[0] == 150 and all(d < 150 for d in dpis[1:]) and len(sent) == 1
+        assert sent[0][0] <= intake.VERIFY_PNG_MAX * 4 // 3 + 4                 # the small image went, base64-encoded
+        dpis.clear(); sent.clear()
+        redact.render = lambda pdf, pages, dpi=150: [b"x" * 3_000_000 for _ in pages]   # 8 pages, 24 MB: over one call's share
+        assert intake._verify(pathlib.Path("x.pdf"), list(range(1, 9)), ask, meter) == "no"
+        assert sum(len(s) for s in sent) == 8 and all(len(s) * 3_000_000 <= intake.VERIFY_CALL_MAX for s in sent)
+        sent.clear()
+        redact.render = lambda pdf, pages, dpi=150: [b"x" * 9_000_000 for _ in pages]   # never small enough: not sent
+        assert intake._verify(pathlib.Path("x.pdf"), [1], ask, meter) == "unsure" and sent == []
+        assert intake._verify(pathlib.Path("x.pdf"), [1], None, meter) == "unsure"
+        assert intake._verify(pathlib.Path("x.pdf"), [1], ask, None) == "unsure"
+    finally:
+        redact.render = real
+
+
+def test_text_blacked_out_on_a_page_with_a_picture_is_re_checked():
+    found = dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, pdf_text="ID: EEE2109300 Final Examination COM107", image=True)
+    assert ("verify", 1) in gh.ai_calls and committed_pdfs(tmp) == [FINAL] and "EEE2109300" not in text(tmp / FINAL, 1)
+
+
+def test_a_rebuild_redacts_from_the_cached_rectangles():
+    import redact
+    found = dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, pdf_text="ID: EEE2109300 Final Examination COM107")
+    saved = gh.cache_writes[-1]["check"][_sha_of(gh, 1)]
+    assert "text" not in saved["redactions"][0] and saved["redactions_rects"][0]["page"] == 1
+    calls, real = [], redact.apply
+    redact.apply = lambda *a, **kw: calls.append(kw.get("cached_rects")) or real(*a, **kw)
+    try:
+        git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
+    finally:
+        redact.apply = real
+    assert calls == [saved["redactions_rects"]] and not any(k == "check" for k, _ in gh.ai_calls[2:])
+    assert committed_pdfs(tmp) == [FINAL] and "EEE2109300" not in text(tmp / FINAL, 1) and "Final Examination" in text(tmp / FINAL, 1)
+
+
+def test_a_cached_check_without_text_or_rectangles_is_held_and_asked_again():
+    sha = __import__("hashlib").sha256(_pdf_bytes(1, 1, "ID: EEE2109300 Final Examination COM107", "text")).hexdigest()
+    scrubbed = dict(CHECK_OK, personal_data="yes", redactions=[{"page": 1, "kind": "text", "box": [0, 0, 0, 0], "what": "学号"}])
+    gh = FakeGH(cache={"sort": {sha: SORT_OK}, "check": {sha: scrubbed}})
+    git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
+    assert gh.ai_calls == [] and committed_pdfs(tmp) == []
+    assert "打码没完成" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
+    assert sha not in gh.cache["check"]                                       # forgotten: the next run checks it again
+    git, gh, tmp = run_with_fakes({}, {1: dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)}, gh=gh,
+                                  pdf_text="ID: EEE2109300 Final Examination COM107")
+    assert gh.ai_calls == [("check", 1)] and committed_pdfs(tmp) == [FINAL]
+
+
+def test_redaction_pages_outside_the_file_fail_closed_before_redacting():
+    import redact
+    from decide import Check
+    from items import Item
+    w = pathlib.Path(tempfile.mkdtemp()); p = w / "item-1.pdf"; p.write_bytes(_pdf_bytes(1, 1, "ID: EEE2109300", "text"))
+    it = Item(1, "a.pdf", p, "s" * 64, "pdf", 1, True, ["ID: EEE2109300"], p)
+    for page in (2, 0, "1", None):
+        c = Check(**dict(CHECK_OK, personal_data="yes", redactions=[{"page": page, "kind": "text", "text": "EEE2109300", "what": "x"}]))
+        cache = {"check": {it.sha: {"redactions": c.redactions}}}
+        calls, real = [], redact.apply
+        redact.apply = lambda *a, **kw: calls.append(a) or real(*a, **kw)
+        try:
+            b = intake._redact_one(it, c, cache["check"][it.sha], cache, w / "redacted")
+        finally:
+            redact.apply = real
+        assert (b.status, b.out, calls) == ("failed", None, []), page
+        assert it.sha not in cache["check"] and not (w / "redacted" / "item-1.pdf").exists()
+
+
+def test_a_failed_redaction_is_held_and_approve_commits_the_redacted_copy():
+    two = [dict(TEXT_ID[0]), {"page": 1, "kind": "text", "text": "Nobody Here", "what": "姓名"}]   # the name is not on the page
+    found = dict(CHECK_OK, personal_data="yes", redactions=two)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, pdf_text="ID: EEE2109300 Final Examination COM107")
+    assert committed_pdfs(tmp) == [] and "打码没完成" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
+    sha = _sha_of(gh, 1)
+    assert gh.cache["check"][sha]["redactions_ok"] is False                    # kept, so /approve can use the redacted copy
+    gh.state.files[CACHE_PATH][0]["overrides"] = {sha: {"approved_by": "m-1"}}
+    git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
+    assert committed_pdfs(tmp) == [FINAL] and "EEE2109300" not in text(tmp / FINAL, 1)   # the redacted copy, not the original
+    body = pr_body_of(gh)
+    assert "`m-1`" in body and "打码没完成 | redaction incomplete" in _section(body, "## 打码记录", "## 登记")
+
+
+def test_approve_commits_the_redacted_copy_after_a_failed_re_check():
+    found = dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, pdf_text="ID: EEE2109300 Final Examination COM107", image=True,
+                                  verify="unsure")
+    assert committed_pdfs(tmp) == []
+    gh.state.files[CACHE_PATH][0]["overrides"] = {_sha_of(gh, 1): {"approved_by": "m-1"}}
+    git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107", image=True, verify="unsure")
+    assert committed_pdfs(tmp) == [FINAL] and "EEE2109300" not in text(tmp / FINAL, 1)
+
+
+def test_approve_without_a_redacted_copy_commits_the_original():
+    sha = __import__("hashlib").sha256(_pdf_bytes(1, 1, "Final Examination COM107", "text")).hexdigest()
+    found = dict(CHECK_OK, personal_data="yes", redactions=[{"page": 1, "kind": "text", "text": " ", "what": "学号"}])   # unusable
+    gh = FakeGH(cache={"overrides": {sha: {"approved_by": "m-1"}}})
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, gh=gh, pdf_text="Final Examination COM107")
+    assert committed_pdfs(tmp) == [FINAL] and (tmp / FINAL).is_file()
+    assert "打码没完成" in _section(pr_body_of(gh), "## 打码记录", "## 登记") and sha not in gh.cache.get("check", {})
+
+
+def test_office_files_with_personal_data_are_held_back_unredacted():
+    from decide import Decision
+    import redact
+    calls, real = [], redact.apply
+    redact.apply = lambda *a, **kw: calls.append(a) or real(*a, **kw)
+    try:
+        w = pathlib.Path(tempfile.mkdtemp()); _docx(w / "sheet.docx", body="Question 1 " * 20)
+        gh = FakeGH(); git = FakeGit()
+        asks = fake_claude(gh, {1: SORT_OK}, {1: dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)})
+        realdl, realpdf = intake.download, __import__("items").to_pdf
+        view = w / "view.pdf"; view.write_bytes(_pdf_bytes(1, 1, "ID: EEE2109300", "text"))
+        __import__("items").to_pdf = lambda path, out_dir, soffice=None: view
+        intake.download = lambda links, work: ([("sheet.docx", w / "sheet.docx")], [])
+        try:
+            gh.body = FORM_BODY
+            intake.run_issue(5, _repo_copy(), gh, git, None, w / "work", asks=asks, budget=FakeBudget())
+        finally:
+            intake.download, __import__("items").to_pdf = realdl, realpdf
+    finally:
+        redact.apply = real
+    assert calls == [] and git.calls == [("reset", "upload/issue-5")]
+    assert "Office" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
+
+
+LONG_A = ("COM107 Circuits and Devices Final Examination April 2022 Question 1 find the current through resistor R1 in the "
+          "circuit shown Question 2 find the voltage across capacitor C1 Question 3 compute the power in R2")
+LONG_B = ("COM107 Circuits and Devices Final Examination April 2022 Question 1 find the voltage over inductor L1 in the "
+          "circuit shown Question 2 derive the gain of amplifier A2 Question 3 compute the power in R2")
+OLD = "EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question.pdf"
+
+
+def _old_paper(text_):
+    def prepare(repo):
+        import fitz
+        (repo / OLD).parent.mkdir(parents=True, exist_ok=True)
+        d = fitz.open(); d.new_page().insert_text((72, 72), _wrapped(text_)); d.set_metadata({"title": "old"}); d.save(repo / OLD); d.close()
+    return prepare
+
+
+def test_a_near_duplicate_of_a_repo_file_is_not_taken():
+    import dedupe
+    assert dedupe.similarity(LONG_A, LONG_A) >= dedupe.SAME_AT and dedupe.ASK_AT <= dedupe.similarity(LONG_A, LONG_B) < dedupe.SAME_AT
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, pdf_text=LONG_A, prepare=_old_paper(LONG_A))
+    assert committed_pdfs(tmp) == [] and not any(k == "compare" for k, _ in gh.ai_calls)
+    text_ = issue_comment_or_body(gh)
+    assert f"duplicate of {OLD}" in _section(text_, "## 不收", "## 可能误判")
+    gh = FakeGH(cache={"overrides": {_sha_of(gh, 1): {"keep": True}}})                  # /keep takes it back
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, gh=gh, pdf_text=LONG_A, prepare=_old_paper(LONG_A))
+    assert committed_pdfs(tmp) == [OLD.replace("_Question.pdf", "_Question_2.pdf")]
+
+
+def test_a_similar_repo_file_is_compared_and_the_answer_names_the_file():
+    for relation, expect in (("different_set", "COM107_202204_Final_SetB_Question.pdf"),
+                             ("different_version", "COM107_202204_Final_v2_Question.pdf"),
+                             ("different", "COM107_202204_Final_Question_2.pdf"), ("same", None)):
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, pdf_text=LONG_B, prepare=_old_paper(LONG_A), compare=relation)
+        assert [c for c in gh.ai_calls if c[0] == "compare"] == [("compare", 0)], relation
+        asked = next(t for t in gh.ai_text if "<file_a>" in t)
+        assert "inductor" in asked.split("<file_b>")[0] and "capacitor" in asked.split("<file_b>")[1]
+        assert committed_pdfs(tmp) == ([f"EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/{expect}"] if expect else []), relation
+        body = issue_comment_or_body(gh)
+        assert "查重比较 | Duplicate comparisons: $0.0030" in body, relation
+        if relation == "different_set":
+            assert "另一套" in body
+
+
+def test_scanned_files_skip_the_duplicate_check_and_say_so():
+    import dedupe
+    calls, real = [], dedupe.candidates
+    dedupe.candidates = lambda *a, **kw: calls.append(a) or real(*a, **kw)
+    try:
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, scanned=True, prepare=_old_paper(LONG_A))
+    finally:
+        dedupe.candidates = real
+    assert calls == [] and committed_pdfs(tmp) == [OLD.replace("_Question.pdf", "_Question_2.pdf")]
+    row = next(l for l in pr_body_of(gh).splitlines() if l.startswith("| #1 "))
+    assert "扫描件，没有查近似重复" in row
+
+
+def test_spend_covers_the_re_check_and_the_comparison():
+    found = dict(CHECK_OK, personal_data="yes", redactions=BOX_SIG)
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, scanned=True, verify="no")
+    line = next(l for l in _section(pr_body_of(gh), "## 本次 AI 花费", "## 维护者清单").splitlines() if "Sorting" in l)
+    assert "打码复查 | Redaction re-checks: $0.0100" in line and "合计 | Total: $0.0310" in line
+    assert abs(gh.cache["spent_usd"] - 0.031) < 1e-9
 
 
 def test_comment_event_applies_a_command():
@@ -853,6 +1245,11 @@ def _event(body, number=5, who="OWNER", pr=False, labels=("upload",)):
 
 def _sha(k):
     return __import__("hashlib").sha256(_pdf_bytes(k)).hexdigest()
+
+
+def _sha_of(gh, k):
+    """File k's hash as the run recorded it."""
+    return next(i["sha"] for i in gh.cache["items"] if i["k"] == k)
 
 
 def test_commands_are_stored_and_answered_before_any_rebuild():

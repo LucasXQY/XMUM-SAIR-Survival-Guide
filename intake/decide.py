@@ -111,6 +111,15 @@ def _strip_set(value: str) -> str:
     return re.sub(r"^set[_-]?", "", _label(value), flags=re.I)
 
 
+def stem_label(type: str, label: str) -> str:
+    """The label part of the name file_name builds (before any set, "_Question" or "_2"), for finding the next free
+    set letter or version number."""
+    label = _label(label)
+    if type == "Past-Papers":
+        return re.sub(r"_?Question$", "", label, flags=re.I).strip("_.") or "PastPaper"
+    return label or str(type).replace("-", "")
+
+
 def file_name(code, session, type, label, set, ext, taken: set[str]) -> str:
     if not isinstance(code, str) or not intake.CODE_RE.fullmatch(code):
         raise ValueError("bad course code")
@@ -165,7 +174,17 @@ def _suffixed(label: str, suffix: str) -> str:
     return _label(_label(label)[:LABEL_MAX - len(suffix)].rstrip("_.") + suffix)
 
 
-def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
+REDACTION_PROBLEMS = {
+    "failed": "打码没完成 | redaction incomplete",
+    "verify_unsure": "打码后复查没通过 | redaction not confirmed by the re-check",
+}
+
+
+def decide(item, sort, check, form, override, dup, variant=None, redaction=None) -> Decision:
+    """`redaction` is what blacking out the check's redactions gave: None (nothing was redacted), "ok" (applied, every
+    string gone, and the re-check found nothing personal where one was needed), "failed" or "verify_unsure". Only "ok"
+    lets a PDF with personal data through (flag `redacted`); the others hold it back unless a maintainer approved it.
+    Office files are never redacted (spec §2), whatever `redaction` says."""
     override = override or {}
     k = item.k
     flags: list[str] = []
@@ -240,7 +259,12 @@ def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
     elif check.personal_data == "unsure":
         problem = "不确定有没有个人信息 | unsure whether it holds personal data"
     elif check.personal_data == "yes":
-        problem = "有个人信息，未处理 | holds personal data, not redacted"
+        if getattr(item, "ext", "") != "pdf":
+            problem = "Office 文件有个人信息，不自动打码 | an Office file with personal data is never redacted automatically"
+        elif redaction == "ok":
+            flags.append("redacted")
+        else:
+            problem = REDACTION_PROBLEMS.get(redaction, "有个人信息，未处理 | holds personal data, not redacted")
     if problem:
         if not approved:
             zh, _, en = problem.partition(" | ")
@@ -261,4 +285,6 @@ def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
             placed["label"] = _suffixed(label or typ.replace("-", ""), f"_Set{variant['set']}")
     elif variant.get("version"):
         placed["label"] = _suffixed(label or typ.replace("-", ""), f"_v{variant['version']}")
+    if getattr(item, "scanned", False):
+        flags.append("dedupe_skipped")      # no text to compare: near-duplicates are not looked for (spec §5 step 5)
     return done("commit", "提交 | committed", **placed)
