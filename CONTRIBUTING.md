@@ -64,6 +64,10 @@ Why: to stay clear of academic-integrity problems and to protect everyone's pers
 
 Some files are useful as a whole but contain a few sensitive bits. Don't drop them: redact, then upload.
 
+用上传表单提交时，机器人还会再查一遍：PDF 里漏掉的个人信息自动涂黑后才放进仓库，Word / PPT 里有个人信息的交给维护者处理。但拖进 GitHub 的原附件任何人都能下载，所以文件上的学号、名字最好先自己涂掉再传；不方便的话发邮件给我们。
+
+With the upload form the bot checks again: personal data you missed in a PDF is blacked out before the file enters the repo, and a Word or PPT file with personal data goes to a maintainer. The attachment itself, though, can be downloaded by anyone on GitHub, so black out student IDs and names yourself before uploading, or email the file to us instead.
+
 **必须打码 | Must be redacted**
 
 - 老师、助教的手机号、微信号、私人邮箱（hotmail / gmail / qq 等）
@@ -224,23 +228,26 @@ Dropping files in is step one. So that others can find them, also update the fil
 
 ## 如何提交 | How to submit
 
-- 最简单：用[上传表单](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml)（需要 GitHub 账号）。选好专业，把文件拖进去就行：可以一次传很多份，可以打成 zip，不同课程、不同类型混在一起也没关系；课程代码、学期、类型是选填的提示。机器人借助 Claude 逐个分拣、按上面的规则改名、归位、清元数据、登记到 README 和 CONTRIBUTORS，并以你的名义开一个 PR；拿不准的文件留给维护者看，维护者审核后合并。
+- 最简单：用[上传表单](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml)（需要 GitHub 账号）。选好专业，把文件拖进去就行：可以一次传很多份，可以打成 zip，不同课程、不同类型混在一起也没关系；课程代码、学期、类型是选填的提示。机器人借助 AI 逐个分拣、按上面的规则改名、归位、清元数据、登记到 README 和 CONTRIBUTORS；逐页检查答案和个人信息，PDF 里的个人信息自动涂黑；仓库里已有的同一份文件不重复收。最后以你的名义开一个 PR，拿不准的文件留给维护者看，维护者审核后合并。注意拖进去的原附件任何人都能下载，见上面的[打码规则](#打码规则--redaction-rules)。
 - 会用 git：fork 本仓库，添加文件，然后提 Pull Request。PR 标题写清楚课程和内容，例如 `EEE: COM107 2022-04 past papers`。
 - 不熟悉 git：直接把文件发到 `xieqiyi@ieee.org`，附上课程代码、学期、你的届，我们帮你上传，并按你的意愿署名。
 
-- Easiest: the [upload form](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml) (needs a GitHub account). Pick your programme and drop the files in: many at once, zips, and different courses or types mixed together are all fine; course code, session and type are optional hints. The bot, with Claude's help, sorts each file, renames it by the rules above, files and de-identifies it, registers it in the READMEs and CONTRIBUTORS, and opens a PR in your name; files it is unsure about are left to a maintainer, who reviews and merges.
+- Easiest: the [upload form](https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml) (needs a GitHub account). Pick your programme and drop the files in: many at once, zips, and different courses or types mixed together are all fine; course code, session and type are optional hints. The bot, with AI, sorts each file, renames it by the rules above, files it, clears its metadata and registers it in the READMEs and CONTRIBUTORS; it checks every page for answers and personal data, blacks out personal data in PDFs, and skips files the repo already has. It then opens a PR in your name; files it is unsure about are left to a maintainer, who reviews and merges. The attachments themselves can be downloaded by anyone; see [Redaction rules](#打码规则--redaction-rules) above.
 - Comfortable with git: fork the repo, add your files, open a pull request. Name the PR after the course and content, e.g. `EEE: COM107 2022-04 past papers`.
 - Not familiar with git: email the files to `xieqiyi@ieee.org` with the course code, session and your cohort. We'll upload them for you and credit you the way you prefer.
 
 ## 上传前检查清单 | Pre-upload checklist
 
 - [ ] 没有答案、评分标准或参考解答 | No answers, marking schemes or model solutions
-- [ ] 没有学生姓名、学号或签名 | No student names, IDs or signatures
+- [ ] 学生姓名、学号、签名已尽量涂掉（用上传表单的话，进仓库前机器人还会再查一遍）| Student names, IDs and signatures blacked out where you could (with the upload form, the bot checks again before anything enters the repo)
 - [ ] 没有老师的电话或私人邮箱 | No lecturer phone numbers or private emails
 - [ ] 没有 Moodle 密码、群二维码、会议链接 | No Moodle keys, group QR codes or meeting links
-- [ ] 文件属性里的作者已清空 | File metadata author cleared
 - [ ] 打码的是真涂黑，文字复制不出来 | Redactions are real: text can't be copied out
 - [ ] 文件能正常打开 | The file opens correctly
+
+用 git 自己提交时还要看下面几项；用上传表单的话机器人会做 | When you submit with git, also check these; with the upload form the bot does them:
+
+- [ ] 文件属性里的作者已清空 | File metadata author cleared
 - [ ] 放在了正确的课程 / 学期 / 类型文件夹 | It's in the correct course / session / type folder
 - [ ] 文件名符合规范 | It follows the naming convention
 - [ ] 改了对应的 README 索引 | The matching README index is updated

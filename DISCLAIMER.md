@@ -44,9 +44,9 @@ Syllabi, course codes and assessment formats change over time. We make no guaran
 
 ## 贡献者责任 | Contributor responsibility
 
-每位贡献者在上传前都应确认已删除所有个人信息，包括学生姓名、学号、签名，以及老师的私人联系方式。
+每位贡献者在上传前都应尽量删除个人信息，包括学生姓名、学号、签名，以及老师的私人联系方式。通过上传表单提交的文件，机器人在放进仓库前还会再检查一遍，PDF 里漏掉的会自动涂黑；但上传到 GitHub 的原附件任何人都能下载。
 
-Every contributor confirms, before uploading, that all personal data has been removed: student names, student IDs, signatures, and lecturers' private contact details.
+Every contributor removes personal data before uploading, as far as they can: student names, student IDs, signatures, and lecturers' private contact details. Files sent through the upload form are checked again by the bot before they enter the repo, and personal data missed in a PDF is blacked out; the original attachment on GitHub, however, can be downloaded by anyone.
 
 ## 禁止倒卖 | No resale
 

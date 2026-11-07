@@ -49,10 +49,16 @@ CREDIT_ANON = "匿名 | Anonymous"
 CREDITS = (CREDIT_LOGIN, CREDIT_NICK, CREDIT_ANON)
 CHECKS = (
     "没有答案、评分标准、参考解答 | No answers, marking schemes or model solutions",
-    "没有学生姓名、学号、签名，没有老师的私人联系方式和 Moodle 密钥 | No student names, IDs or signatures; no lecturers' private contacts or Moodle keys",
+    "我知道附件任何人都能下载，已尽量涂掉学号、姓名、签名、私人联系方式和 Moodle 密钥（进仓库前机器人还会再查一遍）"
+    " | I know attachments can be downloaded by anyone, and have blacked out student IDs, names, signatures, private contacts"
+    " and Moodle keys where I could (the bot checks again before anything enters the repo)",
     "这门课是我自己修的，或我有权分享这些文件 | I took this course myself, or I have the right to share these files",
     "我已读 DISCLAIMER，同意这些文件免费公开、非商业使用 | I have read the DISCLAIMER and agree to these files being public, free and non-commercial",
 )
+
+# earlier wording of a checklist box, still accepted so an issue opened before the change rebuilds unchanged
+OLD_CHECKS = {1: ("没有学生姓名、学号、签名，没有老师的私人联系方式和 Moodle 密钥 | No student names, IDs or signatures; "
+                  "no lecturers' private contacts or Moodle keys",)}
 
 NO_RESPONSE = "_No response_"
 NO_SELECTION = "None"                                    # what GitHub writes for an optional dropdown left unselected
@@ -96,7 +102,8 @@ def parse_form(body: str) -> Form:
         sections[title.strip()] = text
     by_key = {k: _clean(sections.get(t, ""), k in DROPDOWNS) for k, t in FIELDS.items()}
     checklist = sections.get(FIELDS["checklist"], "")
-    checked = [bool(re.search(r"^\s*- \[[xX]\] " + re.escape(s) + r"\s*$", checklist, re.M)) for s in CHECKS]
+    checked = [any(re.search(r"^\s*- \[[xX]\] " + re.escape(s) + r"\s*$", checklist, re.M) for s in (c, *OLD_CHECKS.get(i, ())))
+               for i, c in enumerate(CHECKS)]
     f = Form(prog=by_key["prog"], code=by_key["code"].upper(), name=by_key["name"], session=by_key["session"],
              type=by_key["type"], links=attachment_links(sections.get(FIELDS["files"], "")),
              assessment=by_key["assessment"], lecturer=by_key["lecturer"], weighting=by_key["weighting"],
