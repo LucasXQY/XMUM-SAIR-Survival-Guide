@@ -87,7 +87,8 @@ site/
 | `/upload/` | 上传助手：已有课程和老师边输入边提示，填完跳到预填好的 GitHub 上传表单 | 生成 |
 | `/reviews/` `/rate/` | 课程评价（搜索课程或老师、课程面板、总表、教师名录）；添加评价 | 生成 + ratings.js |
 | `/qa/` | 综合问答：不属于某门课的问题（新生、选课、科研、实习） | 模板 + giscus |
-| `/research/` | 研究机会 | `Research-Opportunities.md` |
+| `/opportunities/` | 机会墙（便签卡片，按类别筛选，点开看详情）+ 经验帖；不用登录发帖，Haiku 初审；`/research/` 跳到这里 | `Research-Opportunities.md` 的维护者条目和入门指南 + Worker `/board`（static/board.js） |
+| `/news/` | 更新日志；首页只显示最新一版的前三条 | `site/news.md` |
 | `/lecturers/<slug>/` | 某位老师教过的课（无评价）；`/lecturers/` 本身跳到 `/reviews/#lecturers` | 生成 |
 | `/contributors/` | 跳到 `/about/#contributors` | 生成 |
 | `/contributing/` | 如何贡献 | `CONTRIBUTING.md` |

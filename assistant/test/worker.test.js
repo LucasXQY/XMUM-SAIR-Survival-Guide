@@ -117,3 +117,32 @@ test("ratings are public and the admin API needs the token", async () => {
   assert.equal(page.status, 200);
   assert.ok((await page.text()).includes("/admin/api"));
 });
+
+test("board: posting needs the human check, the model's verdict decides, the list is public, admin ops need the token", async () => {
+  const { boardApi, MemoryBoard } = await import("../src/board.js");
+  const store = new MemoryBoard();
+  const e = env({ REVIEWS_ADMIN_TOKEN: "admin",
+                  BOARD: { idFromName: () => "b", get: () => ({ fetch: async (url, init) => {
+                    const r = await boardApi(store, JSON.parse(init.body));
+                    return new Response(JSON.stringify(r.data), { status: r.status }); } }) } });
+  const verdict = (decision) => ({ ...deps(), client: { messages: { create: async () => ({ stop_reason: "end_turn",
+    content: [{ type: "text", text: JSON.stringify({ decision, category: "intern", reason_zh: "z", reason_en: "e" }) }] }) } } });
+  const req = (path, body) => new Request(`https://helper.example${path}`, {
+    method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" }, body: JSON.stringify(body) });
+  const body = { kind: "opp", cat: "intern", title: "Intern at ACME", body: "A paid internship, Python and ROS, apply by email.", confirm: true, device: "x" };
+  assert.equal((await handle(req("/board/post", body), e, verdict("publish"))).status, 401);       // no Turnstile token
+  const ok = await handle(req("/board/post", { ...body, turnstile: "t" }), e, verdict("publish"));
+  assert.equal((await ok.json()).status, "live");
+  const held = await handle(req("/board/post", { ...body, turnstile: "t" }), e, verdict("hold"));
+  assert.equal((await held.json()).status, "pending");
+  const bad = await handle(req("/board/post", { ...body, title: "", turnstile: "t" }), e, verdict("publish"));
+  assert.equal(bad.status, 400);
+  const list = await handle(new Request("https://helper.example/board"), e, deps());
+  assert.equal((await list.json()).posts.length, 1);
+  const admin = (b) => handle(new Request("https://helper.example/admin/api", { method: "POST", body: JSON.stringify(b) }), e, deps());
+  assert.equal((await admin({ token: "nope", op: "board_list" })).status, 401);
+  const q = await (await admin({ token: "admin", op: "board_list" })).json();
+  assert.equal(q.pending.length, 1);
+  await admin({ token: "admin", op: "board_approve", ids: [q.pending[0].id] });
+  assert.equal((await (await handle(new Request("https://helper.example/board"), e, deps())).json()).posts.length, 2);
+});
