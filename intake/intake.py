@@ -892,9 +892,10 @@ FLAG_TEXT = {
     "possible_duplicate": "可能重复，未比较 | possible duplicate, not compared",
 }
 FLAGS_NOT_LISTED = ("placed_by_maintainer", "dedupe_skipped")   # shown in the table only, not under "worth a look"
-BLACKOUT_TEXT = {
+BLACKOUT_TEXT = {     # the redaction record; "failed" and "no_copy" say what /approve commits, as decide's reasons do
     "ok": "已打码 | blacked out",
-    "failed": "打码没完成 | redaction incomplete",
+    "failed": "打码没完成，`/approve` 会提交已打码的部分副本 | redaction incomplete: `/approve` commits the partly redacted copy",
+    "no_copy": "没有打码副本，`/approve` 会提交原文件 | no redacted copy: `/approve` commits the original",
     "verify_unsure": "已打码 | blacked out",
 }
 VERIFIED_TEXT = {
@@ -1089,7 +1090,8 @@ def report_sections(r: Report, linked: bool) -> list[str]:
         where = f"第 {'、'.join(pages)} 页 | page {', '.join(pages)}" if pages else "页码不详 | page not given"
         kinds = [_kinds(c.redactions)] if c.redactions else []
         if b is not None:
-            parts = [BLACKOUT_TEXT.get(b.status, BLACKOUT_TEXT["failed"]), where, *kinds, VERIFIED_TEXT[b.verified]]
+            done = BLACKOUT_TEXT["no_copy"] if b.out is None else BLACKOUT_TEXT.get(b.status, BLACKOUT_TEXT["failed"])
+            parts = [done, where, *kinds, VERIFIED_TEXT[b.verified]]
         else:
             what = "个人信息：有 | personal data: found" if c.personal_data == "yes" else "个人信息：拿不准 | personal data: unsure"
             parts = [what, where, *kinds]
@@ -1454,15 +1456,19 @@ def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | No
 
 def _guarded(d, c, b):
     """The anti-goal, once more: a file the check found personal data in (or something to black out) is committed only
-    as a redacted copy that was confirmed (re-checked, or text only), or when a maintainer approved it."""
+    as a redacted copy that was confirmed (re-checked, or text only), or when a maintainer approved it. The reason says
+    what an /approve would commit (decide.REDACTION_PROBLEMS)."""
     from dataclasses import replace
+    from decide import REDACTION_PROBLEMS
     if d.outcome not in ("commit", "inbox") or c is None or (c.personal_data == "no" and not c.redactions):
         return d
     if any(str(x).startswith("approved_by:") for x in d.flags):
         return d
     if b is not None and b.status == "ok" and b.out is not None and b.verified in ("passed", "not_needed"):
         return d
-    return replace(d, outcome="review", reason="需要你看：打码没完成 | needs a look: redaction incomplete", blocking=True)
+    key = "no_copy" if b is None or b.out is None else "failed" if b.status == "failed" else "verify_unsure"
+    zh, _, en = REDACTION_PROBLEMS[key].partition(" | ")
+    return replace(d, outcome="review", reason=f"需要你看：{zh} | needs a look: {en}", blocking=True)
 
 
 def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list[Path] | None = None,
@@ -1544,8 +1550,10 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
 
     def decided(it, dup=None, variant=None, redaction=None):
         b = red.get(it.k)
+        if redaction is None and b is not None:          # "no_copy": an /approve would commit the original
+            redaction = "no_copy" if b.out is None else b.status
         return decide(it, sorts.get(it.k), checks.get(it.k), f, overrides.get(it.sha), dups.get(it.k) or dup, variant,
-                      redaction if redaction is not None else b.status if b else None)
+                      redaction)
 
     before = spent()
     for it in live:

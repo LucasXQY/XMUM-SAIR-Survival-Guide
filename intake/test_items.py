@@ -106,6 +106,29 @@ def test_office_view_comes_from_the_converted_pdf():
     assert d.read_bytes() == before
 
 
+def test_each_conversion_gets_a_fresh_libreoffice_profile():                   # final review, finding 7
+    w = tmp(); d = docx(w / "a.docx"); log = w / "argv.txt"
+    (w / "rec.py").write_text("""import sys, json, pathlib
+a = sys.argv[1:]
+with open(%r, "a", encoding="utf-8") as f: f.write(json.dumps(a) + "\\n")
+pathlib.Path(a[a.index('--outdir') + 1], pathlib.Path(a[-1]).stem + '.pdf').write_bytes(b'%%PDF-1.4')
+""" % str(log), encoding="utf-8")
+    for _ in range(2):
+        items_mod.to_pdf(d, w / "out", [sys.executable, str(w / "rec.py")])
+    import json
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+    runs = [json.loads(l) for l in log.read_text(encoding="utf-8").splitlines()]
+    flags = [[x for x in a if x.startswith("-env:UserInstallation=")] for a in runs]
+    assert all(len(f) == 1 for f in flags) and flags[0] != flags[1]                # one flag, a new profile each time
+    for (flag,) in flags:
+        uri = flag.split("=", 1)[1]
+        assert uri.startswith("file:///") and urlparse(uri).scheme == "file"
+        folder = pathlib.Path(url2pathname(urlparse(uri).path))
+        assert folder.name.startswith("lo-") and folder.is_absolute() and not folder.exists()   # removed afterwards
+    assert runs[0].index(flags[0][0]) < runs[0].index("--headless")
+
+
 def test_pdf_view_is_itself_and_text_files_have_none():
     w = tmp(); a = pdf(w / "a.pdf", ["one"]); t = w / "n.txt"; t.write_text("hi", encoding="utf-8")
     x, y = items_mod.make_items([("a.pdf", a), ("n.txt", t)], ["a.pdf", "n.txt"])

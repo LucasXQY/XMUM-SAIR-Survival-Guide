@@ -184,16 +184,19 @@ def _suffixed(label: str, suffix: str) -> str:
     return _label(_label(label)[:LABEL_MAX - len(suffix)].rstrip("_.") + suffix)
 
 
-REDACTION_PROBLEMS = {
-    "failed": "打码没完成 | redaction incomplete",
+REDACTION_PROBLEMS = {     # what holds a PDF back, and what a maintainer's /approve would then commit
+    "failed": "打码没完成，`/approve` 会提交已打码的部分副本 | redaction incomplete: `/approve` commits the partly redacted copy",
+    "no_copy": "没有打码副本，`/approve` 会提交原文件 | no redacted copy: `/approve` commits the original",
     "verify_unsure": "打码后复查没通过 | redaction not confirmed by the re-check",
 }
 
 
 def decide(item, sort, check, form, override, dup, variant=None, redaction=None) -> Decision:
     """`redaction` is what blacking out the check's redactions gave: None (nothing was redacted), "ok" (applied, every
-    string gone, and the re-check found nothing personal where one was needed), "failed" or "verify_unsure". Only "ok"
-    lets a PDF with personal data through (flag `redacted`); the others hold it back unless a maintainer approved it.
+    string gone, and the re-check found nothing personal where one was needed), "failed" (a partly redacted copy
+    exists), "no_copy" (no redacted copy could be made) or "verify_unsure". Only "ok" lets a PDF with personal data
+    through (flag `redacted`); the others hold it back unless a maintainer approved it, and the reason says what an
+    /approve would commit (REDACTION_PROBLEMS).
     Office files are never redacted (spec §2), whatever `redaction` says."""
     override = override or {}
     k = item.k

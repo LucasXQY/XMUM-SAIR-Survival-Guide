@@ -57,7 +57,10 @@ def _read(path: Path, ext: str) -> tuple[int, list[str]]:
 def to_pdf(path: Path, out_dir: Path, soffice: str | list[str] | None = None) -> Path | None:
     """Convert an Office file to PDF with LibreOffice; the original is only read. `soffice` is the executable, or an
     argv prefix (a list, handy for tests); default: soffice / libreoffice on PATH. None when LibreOffice is missing,
-    fails or times out. Never raises and never prints the file name. The copy goes in a fresh subfolder of out_dir."""
+    fails or times out. Never raises and never prints the file name. The copy goes in a fresh subfolder of out_dir.
+    Every call runs with a profile of its own (-env:UserInstallation, a fresh lo-* folder in the temp directory,
+    removed afterwards), so a conversion that timed out and left soffice running cannot wedge the next ones."""
+    profile = None
     try:
         if soffice is None:
             soffice = shutil.which("soffice") or shutil.which("libreoffice")
@@ -67,12 +70,17 @@ def to_pdf(path: Path, out_dir: Path, soffice: str | list[str] | None = None) ->
         out_dir = Path(out_dir).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
         sub = Path(tempfile.mkdtemp(dir=out_dir))
-        r = subprocess.run(cmd + ["--headless", "--convert-to", "pdf", "--outdir", str(sub), str(Path(path).resolve())],
+        profile = Path(tempfile.mkdtemp(prefix="lo-")).resolve()
+        r = subprocess.run(cmd + [f"-env:UserInstallation={profile.as_uri()}", "--headless", "--convert-to", "pdf",
+                                  "--outdir", str(sub), str(Path(path).resolve())],
                            timeout=CONVERT_TIMEOUT, capture_output=True)
         pdf = sub / f"{path.stem}.pdf"
         return pdf if r.returncode == 0 and pdf.exists() else None
     except Exception:
         return None
+    finally:
+        if profile is not None:
+            shutil.rmtree(profile, ignore_errors=True)
 
 
 def _is_scanned(page_text: list[str]) -> bool:

@@ -225,11 +225,16 @@ def test_a_good_redaction_lets_personal_data_through():
 
 
 def test_a_failed_or_unconfirmed_redaction_is_held_back_with_its_reason():
-    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="failed")
-    assert (d.outcome, d.blocking) == ("review", True) and "打码没完成 | " in d.reason and "redaction incomplete" in d.reason
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="failed")         # final review, finding 6
+    assert (d.outcome, d.blocking) == ("review", True)
+    assert d.reason == ("需要你看：打码没完成，`/approve` 会提交已打码的部分副本 "
+                        "| needs a look: redaction incomplete: `/approve` commits the partly redacted copy")
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="no_copy")
+    assert (d.outcome, d.blocking) == ("review", True)
+    assert d.reason == "需要你看：没有打码副本，`/approve` 会提交原文件 | needs a look: no redacted copy: `/approve` commits the original"
     d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="verify_unsure")
     assert d.outcome == "review" and "打码后复查没通过" in d.reason and "redaction not confirmed by the re-check" in d.reason
-    for r in ("failed", "verify_unsure"):
+    for r in ("failed", "verify_unsure", "no_copy"):
         assert decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction=r).reason.count(" | ") == 1
         d = decide.decide(ITEM, S(), PD_YES, FORM, {"approved_by": "m-1"}, None, redaction=r)   # /approve: committed
         assert d.outcome == "commit" and "approved_by:m-1" in d.flags and "redacted" not in d.flags

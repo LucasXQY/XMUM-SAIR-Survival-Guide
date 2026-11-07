@@ -1111,7 +1111,7 @@ def test_a_cached_check_without_text_or_rectangles_is_held_until_retry():
     gh = FakeGH(cache={"items": [{"k": 1, "sha": sha, "source": "papers.zip › 1"}], "sort": {sha: SORT_OK}, "check": {sha: scrubbed}})
     git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
     assert gh.ai_calls == [] and committed_pdfs(tmp) == []
-    assert "打码没完成" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
+    assert "没有打码副本" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")   # nothing to black out with
     assert gh.cache["check"][sha]["redactions_ok"] is False                   # kept, marked failed
     git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
     assert gh.ai_calls == [] and committed_pdfs(tmp) == []                    # an ordinary rebuild pays nothing
@@ -1141,6 +1141,26 @@ def test_redaction_pages_outside_the_file_fail_closed_before_redacting():
         assert cache["check"][it.sha]["redactions_ok"] is False and not (w / "redacted" / "item-1.pdf").exists()
 
 
+NO_COPY = "没有打码副本，`/approve` 会提交原文件 | no redacted copy: `/approve` commits the original"
+PARTIAL = "打码没完成，`/approve` 会提交已打码的部分副本 | redaction incomplete: `/approve` commits the partly redacted copy"
+
+
+def test_the_report_says_what_approve_would_commit():                          # final review, finding 6
+    page = "ID: EEE2109300 Final Examination COM107"
+    unusable = dict(CHECK_OK, personal_data="yes", redactions=[{"page": 1, "kind": "text", "text": " ", "what": "student_id"}])
+    two = [dict(TEXT_ID[0]), {"page": 1, "kind": "text", "text": "Nobody Here", "what": "name"}]   # the name is not there
+    for found, said, not_said in ((unusable, NO_COPY, PARTIAL), (dict(CHECK_OK, personal_data="yes", redactions=two), PARTIAL, NO_COPY)):
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, pdf_text=page)
+        text_ = issue_comment_or_body(gh)
+        zh, en = said.split(" | ")
+        needs, record = _section(text_, "## 需要你看", "## 打码记录"), _section(text_, "## 打码记录", "## 登记")
+        assert f"需要你看：{zh} | needs a look: {en}" in needs and said in record, said
+        assert not_said not in text_ and committed_pdfs(tmp) == [], said
+    import decide
+    assert intake.BLACKOUT_TEXT["no_copy"] == decide.REDACTION_PROBLEMS["no_copy"] == NO_COPY
+    assert intake.BLACKOUT_TEXT["failed"] == decide.REDACTION_PROBLEMS["failed"] == PARTIAL
+
+
 def test_a_failed_redaction_is_held_and_approve_commits_the_redacted_copy():
     two = [dict(TEXT_ID[0]), {"page": 1, "kind": "text", "text": "Nobody Here", "what": "姓名"}]   # the name is not on the page
     found = dict(CHECK_OK, personal_data="yes", redactions=two)
@@ -1152,7 +1172,7 @@ def test_a_failed_redaction_is_held_and_approve_commits_the_redacted_copy():
     git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
     assert committed_pdfs(tmp) == [FINAL] and "EEE2109300" not in text(tmp / FINAL, 1)   # the redacted copy, not the original
     body = pr_body_of(gh)
-    assert "`m-1`" in body and "打码没完成 | redaction incomplete" in _section(body, "## 打码记录", "## 登记")
+    assert "`m-1`" in body and PARTIAL in _section(body, "## 打码记录", "## 登记")
 
 
 def test_approve_commits_the_redacted_copy_after_a_failed_re_check():
@@ -1171,7 +1191,7 @@ def test_approve_without_a_redacted_copy_commits_the_original():
     gh = FakeGH(cache={"overrides": {sha: {"approved_by": "m-1"}}})
     git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, gh=gh, pdf_text="Final Examination COM107")
     assert committed_pdfs(tmp) == [FINAL] and (tmp / FINAL).is_file()
-    assert "打码没完成" in _section(pr_body_of(gh), "## 打码记录", "## 登记") and gh.cache["check"][sha]["redactions_ok"] is False
+    assert NO_COPY in _section(pr_body_of(gh), "## 打码记录", "## 登记") and gh.cache["check"][sha]["redactions_ok"] is False
 
 
 def test_office_files_with_personal_data_are_held_back_unredacted():
@@ -1416,7 +1436,7 @@ def test_bookkeeping_keys_in_a_fresh_answer_are_never_trusted():
     no_text = dict(CHECK_OK, personal_data="yes", redactions=[{"page": 1, "kind": "text", "box": [0, 0, 0, 0], "what": "学号"}],
                    redactions_rects=[], redactions_ok=True)
     git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: no_text}, pdf_text=page)
-    assert committed_pdfs(tmp) == [] and "打码没完成" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
+    assert committed_pdfs(tmp) == [] and "没有打码副本" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
     bogus = dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID, redactions_rects=[{"page": 1, "rect": [0, 0, 1, 1]}],
                  redactions_ok=True, verify="no")
     git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: bogus}, pdf_text=page)
@@ -1530,6 +1550,14 @@ def test_the_push_sweep_only_dispatches_one_run_per_issue():
     assert '--comment-event "$GITHUB_EVENT_PATH"' in target and "concurrency" not in target     # stored ungrouped
     command = rest.split("\n  cleanup:")[0]
     assert "group: intake-${{ needs.command-target.outputs.issue }}" in command and '--issue "$ISSUE"' in command
+
+
+def test_a_missing_libreoffice_does_not_fail_the_run():                        # final review, finding 7
+    yml = (ROOT / ".github/workflows/intake.yml").read_text(encoding="utf-8")
+    steps = [l for l in yml.splitlines() if "apt-get install" in l]
+    assert len(steps) == 2 and yml.count("Install LibreOffice") == 2
+    for line in steps:
+        assert line.rstrip().endswith('|| echo "LibreOffice unavailable; Office files will wait for review"; fi'), line
 
 
 def test_a_failed_dispatch_does_not_stop_the_sweep():
