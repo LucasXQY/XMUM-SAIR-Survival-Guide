@@ -18,6 +18,8 @@ PER_VISITOR_DAILY = "15"   # questions per visitor per day
 GLOBAL_DAILY = "150"       # questions for the whole site per day
 HELPER_USD_DAY = "2"       # dollar cap per UTC day (the deploy workflow overrides it from the repository variable HELPER_USD_DAY)
 HELPER_USD_MONTH = "60"    # dollar cap per UTC month (repository variable HELPER_USD_MONTH)
+FORUM_USD_DAY = "0.5"      # the discussion area's check, dollars per UTC day (repository variable FORUM_USD_DAY)
+FORUM_USD_MONTH = "5"      # and per UTC month (repository variable FORUM_USD_MONTH)
 PAUSED = "0"               # the deploy workflow sets 1 when the repository variable BOTS_PAUSED is 1
 
 # one Durable Object keeps the daily counts (SQLite-backed: available on the free plan)
