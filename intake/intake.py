@@ -811,10 +811,13 @@ def update_contributors(text: str, f: Form, credit: str, n: int) -> str:
 class Placement:
     course_dir: str
     created_readme: bool
-    placed: list[tuple[str, str]]
+    placed: list[tuple]           # apply: (original name, repo path); apply_decisions: (k, repo path)
     notes: list[str]
     meta: dict[str, str]
     registered: list[str] = field(default_factory=list)
+    courses: list[str] = field(default_factory=list)              # repo-relative course folders touched
+    inbox: list[str] = field(default_factory=list)                # repo paths under _待整理/ (inbox outcome)
+    parked: list[tuple[int, str]] = field(default_factory=list)   # (k, reason): committed but could not be filed
 
 
 def _edit(path: Path, fn) -> bool:
@@ -883,6 +886,130 @@ def apply(root: Path, f: Form, files: list[tuple[str, Path]], login: str) -> Pla
                    check=True, cwd=root, capture_output=True, text=True)
     registered.append(f"`{prog}/README.md` 课程索引已重跑 | course index regenerated")
     return Placement(f"{prog}/{course.name}", created, placed, notes, meta, registered)
+
+
+
+def apply_decisions(root: Path, form: Form, decisions: list, items: dict, login: str, issue: int,
+                    files: dict | None = None, checks: dict | None = None) -> Placement:
+    """File every decided item in its own course, register each (course, session) group, regenerate the indexes.
+    commit -> <course>/<session>/<type>/<file_name>; inbox -> _待整理/issue-<n>/item-<k>.<ext>; the rest is not copied.
+    A committed item that cannot be filed (bad fields, new course without a name) is parked in the same waiting folder
+    and listed in Placement.parked (not in Placement.inbox). Repo names come only from decide.file_name and item-<k>;
+    an original file name never reaches the tree."""
+    from dataclasses import replace
+    from decide import file_name
+    files, checks = files or {}, checks or {}
+    credit = credit_name(form, login)
+    notes: list[str] = []
+    meta: dict[str, str] = {}
+    placed: list[tuple[int, str]] = []
+    inbox: list[str] = []
+    parked: list[tuple[int, str]] = []
+    registered: list[str] = []
+    courses: dict[str, Path] = {}          # code -> course folder
+    created_any = False
+    groups: dict[tuple[str, str], list] = {}
+
+    def to_wait(k: int) -> str:
+        wait = root / "_待整理" / f"issue-{issue}"
+        wait.mkdir(parents=True, exist_ok=True)
+        dest = wait / f"item-{k}.{items[k].ext}"
+        shutil.copyfile(files.get(k) or items[k].path, dest)
+        rel = dest.relative_to(root).as_posix()
+        meta[rel] = clear_metadata(dest)
+        return rel
+
+    for d in sorted(decisions, key=lambda d: d.k):
+        if d.k not in items:
+            continue
+        if d.outcome == "inbox":
+            inbox.append(to_wait(d.k))
+            continue
+        if d.outcome != "commit":
+            continue
+        item = items[d.k]
+        try:
+            file_name(d.code, d.session, d.type, d.label, d.set, item.ext, set())   # validate before any path is built
+        except ValueError as e:
+            to_wait(d.k)
+            parked.append((d.k, f"课程、学期或类型不可用（{e}），放进待整理 "
+                                f"| course, session or type unusable ({e}); moved to the waiting folder"))
+            continue
+        course = courses.get(d.code) or find_course_dir(root, d.code)
+        if course is None:
+            if not d.name.strip() or course_dir_name(d.code, d.name) == f"{d.code}_":
+                to_wait(d.k)
+                parked.append((d.k, f"{d.code} 还没有课程目录，也没有课程名，放进待整理 "
+                                    f"| {d.code} has no course folder yet and no course name; moved to the waiting folder"))
+                continue
+            course = root / (SHARED if is_shared(d.code) else form.prog) / course_dir_name(d.code, d.name)
+            course.mkdir(parents=True, exist_ok=True)
+        if d.code not in courses:
+            courses[d.code] = course
+            cprog = course.parent.name
+            if not (course / "README.md").exists():
+                (course / "README.md").write_bytes(new_course_readme(d.code, d.name or form.name).encode("utf-8"))
+                created_any = True
+                notes.append(f"新建了课程目录和 README：{cprog}/{course.name}/ "
+                             f"| created the course folder and README: {cprog}/{course.name}/")
+            if cprog != form.prog and cprog != SHARED:
+                notes.append(f"{d.code} 的课程目录已在 {cprog}/ 下，文件归入那里而不是 {form.prog}/ "
+                             f"| the {d.code} folder already lives under {cprog}/, so the files went there rather than {form.prog}/")
+            if cprog == SHARED:
+                notes.append(f"{d.code} 是全校公共课（G 选修或 MPU），放在 {SHARED}/ 下，修课记录写进 {form.prog} 的时间表 "
+                             f"| {d.code} is a university-wide course (G elective or MPU): filed under {SHARED}/, timeline row in {form.prog}")
+        target = course / d.session / d.type
+        target.mkdir(parents=True, exist_ok=True)
+        taken = {p.name for p in target.iterdir()}
+        dest = target / file_name(d.code, d.session, d.type, d.label, d.set, item.ext, taken)
+        shutil.copyfile(files.get(d.k) or item.path, dest)
+        rel = dest.relative_to(root).as_posix()
+        meta[rel] = clear_metadata(dest)
+        placed.append((d.k, rel))
+        groups.setdefault((d.code, d.session), []).append(d)
+
+    touched: list[str] = []
+    progs: list[str] = []
+    first_fm: Form | None = None
+    for (code, session), ds in groups.items():
+        course = courses[code]
+        own = code == form.code
+        cks = [checks[d.k] for d in ds if d.k in checks]
+        lecturers = list(dict.fromkeys(l for c in cks for l in c.lecturers if l))
+        weighting = next((c.weighting for c in cks if c.weighting), "")
+        name = next((d.name for d in ds if d.name), "") or (form.name if own else "")
+        fm = replace(form, code=code, name=name, session=session, type=ds[0].type,
+                     lecturer=", ".join(lecturers) if lecturers else (form.lecturer if own else ""),
+                     weighting=weighting or (form.weighting if own else ""),
+                     notes=form.notes if own else "")
+        first_fm = first_fm or fm
+        cprog = course.parent.name
+        rel_course = f"{cprog}/{course.name}"
+        touched.append(rel_course)
+        if cprog not in progs:
+            progs.append(cprog)
+        changed = _edit(course / "README.md", lambda t: update_course_readme(t, fm, credit))
+        registered.append(f"`{rel_course}` 学期表 {session}：" + ("已更新 | session table: updated" if changed
+                                                              else "无需改动 | nothing to change"))
+        when = form.taken if own else session
+        if when and when != "unknown":
+            tprog, link = (form.prog, f"../{SHARED}/{course.name}") if cprog == SHARED else (cprog, course.name)
+            tm = replace(fm, taken=when)
+            if _edit(root / tprog / "README.md", lambda t: update_timeline(t, tm, credit, course.name, link)):
+                registered.append(f"`{tprog}/README.md` 修课时间表：加了 {code} | timeline: {code} row added")
+            else:
+                registered.append(f"`{tprog}/README.md` 修课时间表：{code} 已有相同行 | timeline: identical {code} row already there")
+    if placed and first_fm is not None:
+        if _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, first_fm, credit, len(placed))):
+            registered.append("`CONTRIBUTORS.md`：加了一行 | row added")
+        else:
+            registered.append("`CONTRIBUTORS.md`：匿名或署名已在表中，未改 | anonymous or already listed, unchanged")
+    for prog in progs:
+        subprocess.run([sys.executable, str(root / "scripts" / "update_index.py"), prog],
+                       check=True, cwd=root, capture_output=True, text=True)
+        registered.append(f"`{prog}/README.md` 课程索引已重跑 | course index regenerated")
+    return Placement(touched[0] if touched else "", created_any, placed, notes, meta, registered,
+                     touched, inbox, parked)
 
 
 # ---------------------------------------------------------------- orchestration: download → PR body → git/gh → CLI

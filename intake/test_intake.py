@@ -554,6 +554,110 @@ def test_run_issue_glue_with_fakes():
         intake.download = real
 
 
+def _decide_bits():
+    from decide import Decision, Check
+    from items import Item
+    return Decision, Check, Item
+
+
+def _mk_items(w, specs):
+    Decision, Check, Item = _decide_bits()
+    items = {}
+    for k, text in specs:
+        p = _pdf(w / f"orig_{k}_张三.pdf", text=text) or (w / f"orig_{k}_张三.pdf")
+        items[k] = Item(k, f"x{k}.pdf", p, "0" * 64, "pdf", 1, False, [text])
+    return items
+
+
+def _with_course(root, folder):
+    import shutil
+    (root / "EEE" / folder).mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / "EEE" / folder / "README.md", root / "EEE" / folder / "README.md")
+
+
+def test_apply_decisions_files_each_item_and_registers_each_course():
+    Decision, Check, Item = _decide_bits()
+    root = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    _with_course(root, "COM103_Electronic_Engineering")
+    items = _mk_items(w, [(1, "Q1"), (2, "Lab 2"), (3, "?")])
+    f = intake.parse_form(_body())
+    ds = [Decision(1, "commit", "COM107", "", "2022-04", "Past-Papers", "Final"),
+          Decision(2, "commit", "COM103", "", "unknown", "Labs", "Lab2_Manual"),
+          Decision(3, "inbox"), Decision(4, "skip")]
+    pl = intake.apply_decisions(root, f, ds, items, "someone", 12)
+    paths = dict(pl.placed)
+    assert paths[1].endswith("/2022-04/Past-Papers/COM107_202204_Final_Question.pdf")
+    assert paths[2].endswith("/unknown/Labs/COM103_unknown_Lab2_Manual.pdf")
+    assert pl.inbox == ["_待整理/issue-12/item-3.pdf"] and (root / pl.inbox[0]).exists() and not pl.parked
+    assert len(pl.courses) == 2 and "2022-04" in (root / (paths[1].split("/2022-04/")[0] + "/README.md")).read_text(encoding="utf-8")
+    assert not any("张三" in str(p) for p in root.rglob("*")) and set(pl.meta) == {paths[1], paths[2], pl.inbox[0]}
+    g = intake.parse_form(_body().replace(intake.CREDIT_NICK, intake.CREDIT_LOGIN))
+    root2 = _repo_copy(); _with_course(root2, "COM103_Electronic_Engineering")
+    intake.apply_decisions(root2, g, ds, items, "newbie", 12)
+    assert "2 份 COM107 2022-04 Past-Papers" in (root2 / "CONTRIBUTORS.md").read_text(encoding="utf-8")   # committed files only
+
+
+def test_apply_decisions_no_timeline_row_for_unknown_session_of_other_course():
+    Decision, Check, Item = _decide_bits()
+    root = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    _with_course(root, "COM103_Electronic_Engineering")
+    items = _mk_items(w, [(1, "a"), (2, "b")])
+    f = intake.parse_form(_body())
+    ds = [Decision(1, "commit", "COM107", "", "2022-04", "Past-Papers", "Final"),
+          Decision(2, "commit", "COM103", "", "unknown", "Labs", "Lab")]
+    intake.apply_decisions(root, f, ds, items, "someone", 1)
+    eee = (root / "EEE/README.md").read_text(encoding="utf-8")
+    assert "| 2022-04 | [COM107](COM107_Circuits_and_Devices/) |" in eee
+    assert not any(l.startswith("| unknown | [COM103]") for l in eee.splitlines())
+    # a known session of another course does get a row, with that session as the taken-term
+    items2 = _mk_items(w, [(1, "a")])
+    intake.apply_decisions(root, f, [Decision(1, "commit", "COM103", "", "2021-09", "Labs", "Lab")], items2, "someone", 2)
+    assert "| 2021-09 | [COM103](COM103_Electronic_Engineering/) |" in (root / "EEE/README.md").read_text(encoding="utf-8")
+
+
+def test_apply_decisions_new_course_needs_a_name_else_parks():
+    Decision, Check, Item = _decide_bits()
+    root = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    items = _mk_items(w, [(1, "a"), (2, "b"), (3, "c")])
+    f = intake.parse_form(_body())
+    ds = [Decision(1, "commit", "EEE777", "", "2022-04", "Labs", "Lab"),
+          Decision(2, "commit", "EEE888", "Brand New", "2022-04", "Labs", "Lab"),
+          Decision(3, "commit", "../../x", "", "2022-04", "Labs", "Lab")]
+    pl = intake.apply_decisions(root, f, ds, items, "someone", 7)
+    assert [k for k, _ in pl.parked] == [1, 3] and all(" | " in r for _, r in pl.parked)
+    assert (root / "_待整理/issue-7/item-1.pdf").exists() and (root / "_待整理/issue-7/item-3.pdf").exists()
+    assert not list((root / "EEE").glob("EEE777*")) and not (root / "x").exists()
+    assert pl.created_readme and pl.courses == ["EEE/EEE888_Brand_New"] and pl.inbox == []
+    assert (root / "EEE/EEE888_Brand_New/README.md").read_text(encoding="utf-8").startswith("# EEE888 Brand New")
+    g = intake.parse_form(_body().replace("EEE\n", "AIT\n"))
+    pl2 = intake.apply_decisions(root, g, [Decision(1, "commit", "G0777", "New Elective", "2022-04", "Notes", "")], items, "someone", 8)
+    assert pl2.courses == ["GE/G0777_New_Elective"]
+    assert "| 2022-04 | [G0777](../GE/G0777_New_Elective/) |" in (root / "AIT/README.md").read_text(encoding="utf-8")
+
+
+def test_apply_decisions_lecturer_weighting_notes_per_course_and_files_override():
+    Decision, Check, Item = _decide_bits()
+    root = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    _with_course(root, "COM103_Electronic_Engineering")
+    items = _mk_items(w, [(1, "a"), (2, "b")])
+    red = _pdf(w / "redacted.pdf", text="REDACTED COPY") or w / "redacted.pdf"
+    f = intake.parse_form(_body().replace("### 老师 | Lecturer\n\n_No response_", "### 老师 | Lecturer\n\nDr Form").replace(
+        "### 备注 / 小贴士 | Notes\n\n_No response_", "### 备注 / 小贴士 | Notes\n\nForm note"))
+    ck = Check("none", "none", "none", "", "", [], ["Dr Ai", "Dr Bee"], "Exam 60%")
+    ds = [Decision(1, "commit", "COM107", "", "2020-01", "Past-Papers", "Final"),
+          Decision(2, "commit", "COM103", "", "2020-01", "Labs", "Lab")]
+    intake.apply_decisions(root, f, ds, items, "someone", 3, files={2: red}, checks={2: ck})
+    r107 = (root / "EEE/COM107_Circuits_and_Devices/README.md").read_text(encoding="utf-8")
+    r103 = (root / "EEE/COM103_Electronic_Engineering/README.md").read_text(encoding="utf-8")
+    row107 = next(l for l in r107.splitlines() if "2020-01" in l and l.startswith("|"))
+    row103 = next(l for l in r103.splitlines() if "2020-01" in l and l.startswith("|"))
+    assert "Dr Form" in row107 and "Form note" in row107 and "Dr Ai, Dr Bee" not in row107
+    assert "Dr Ai, Dr Bee" in row103 and "Exam 60%" in row103 and "Form note" not in row103 and "Dr Form" not in row103
+    import fitz
+    placed = next((root / "EEE/COM103_Electronic_Engineering/2020-01/Labs").glob("*.pdf"))
+    assert "REDACTED COPY" in fitz.open(placed)[0].get_text()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
