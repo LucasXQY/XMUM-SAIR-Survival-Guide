@@ -1,4 +1,4 @@
-// 管理页（/admin）：输入口令后列出标记待审的票（按课程和老师分组，可「保留」或「丢弃」），机会墙和经验帖的待审帖子，以及讨论区的待审帖子和回复（「发布」或「删除」）；口令只存在这个标签页里。
+// 管理页（/admin）：输入口令后列出标记待审的票（按课程和老师分组，可「保留」或「丢弃」），机会墙的待审帖子，以及讨论区和博客的待审帖子、回复（「发布」或「删除」，博客可以看图）；口令只存在这个标签页里。
 // The admin page (/admin): after the token, flagged votes grouped by course and lecturer, each kept or dropped, and the
 // board's and the discussion area's held posts, each published or removed.
 // The token stays in this tab (sessionStorage) and goes only to /admin/api on this Worker.
@@ -24,7 +24,7 @@ table { border-collapse: collapse; width: 100%; font-size: .9rem; } td, th { bor
 <p id="summary" class="muted"></p><div id="queue"></div>
 <h2>机会墙与经验帖 | Opportunities and posts</h2>
 <p class="muted">AI 初审拿不准、模型出错或被 3 个浏览器举报的帖子在这里，发布前网站上看不到。下面也列出最近已发布和被退回的帖子。<br>Posts the first check was unsure about, could not check, or that three browsers reported; hidden until published. Recent live and rejected posts are listed too.</p><div id="posts"></div>
-<h2>讨论区 | Discussion</h2>
+<h2>讨论区与博客 | Discussion and blog</h2>
 <p class="muted">讨论区的主题帖和回复：关键词表命中、AI 拿不准、模型出错或今天的 AI 额度用完、被 3 个浏览器举报的都在这里，发布前网站上看不到。<br>Threads and replies that hit a keyword list, that the check was unsure about or could not check, or that three browsers reported; hidden until published.</p><div id="forum"></div>
 <script>
 (function () {
@@ -73,7 +73,7 @@ table { border-collapse: collapse; width: 100%; font-size: .9rem; } td, th { bor
     }).catch(function (e) { document.getElementById('summary').textContent = e.message; });
     loadPosts();
   }
-  var KINDS = { opp: '机会', story: '经验', thread: '主题', reply: '回复' };
+  var KINDS = { opp: '机会', story: '经验', thread: '主题', reply: '回复', post: '博客' };
   function postTable(list, buttons, reload) {
     var t = el('table'), hr = el('tr');
     ['时间 Time', '类型 Kind', '标题与正文 Title and text', '初审 Check', '举报 Reports', ''].forEach(function (h) { hr.appendChild(el('th', h)); });
@@ -87,6 +87,18 @@ table { border-collapse: collapse; width: 100%; font-size: .9rem; } td, th { bor
       d.appendChild(s);
       var f = Object.keys(p.fields || {}).map(function (k) { return k + ': ' + p.fields[k]; }).join('\\n');
       var pre = el('pre', (f ? f + '\\n\\n' : '') + p.body); pre.style.whiteSpace = 'pre-wrap'; d.appendChild(pre);
+      if (p.images && p.images.length) {   // a blog post's images: fetched with the token, shown here only
+        var show = el('button', '看图（' + p.images.length + '）| Images'); d.appendChild(show);
+        show.onclick = function () {
+          show.disabled = true;
+          p.images.forEach(function (id) {
+            api('forum_img', { id: id }).then(function (im) {
+              var img = document.createElement('img'); img.src = 'data:' + im.mime + ';base64,' + im.data; img.alt = id;
+              img.style.maxWidth = '100%'; img.style.display = 'block'; img.style.margin = '6px 0'; d.appendChild(img);
+            }).catch(function () { d.appendChild(el('p', id + '：读不到 | not found')); });
+          });
+        };
+      }
       c.appendChild(d); tr.appendChild(c);
       tr.appendChild(el('td', p.reason || ''));
       tr.appendChild(el('td', String(p.reports || 0)));

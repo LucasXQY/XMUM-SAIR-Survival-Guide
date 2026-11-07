@@ -152,7 +152,7 @@ Builds on the upload channel in DESIGN.md and replaces its "Claude pre-check" se
 | `upload`（分拣、全文检查、核验、重复比较） | 60 | 15 | 每次上传最多 8 |
 | `helper`（小帮手，Worker 里计） | 60 | 2 | 每人每天 15 个问题不变 |
 | `haiku`（审核、知识点索引） | 10 | 2 | |
-| `forum`（讨论区发帖审核，Worker 里计，2026-11-07） | 5 | 0.5 | 每天 400 次不变 |
+| `forum`（讨论区和博客的发帖与图片审核，Worker 里计，2026-11-07） | 5 | 0.5 | 每天 400 次不变 |
 | 备用（不分配） | 15 | | |
 
 - **记账**：每次调用后按 API 返回的 `usage`（输入、输出、缓存写、缓存读 token）和实际服务的模型（`response.model`）乘单价算出美元。单价表放在 `llm/claude_check.py`（Python）和 `assistant/src/core.js`（Worker）各一份，测试里核对两份一致。

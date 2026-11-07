@@ -610,9 +610,11 @@ def test_opportunities_page_and_research_redirect():
     assert curated and all(c["title"] and not c["title"].startswith("[") for c in curated)    # template rows left out
     assert {c["cat"] for c in curated} <= {k for k, *_ in build.BOARD_CATS["opp"]}
     guide = build.research_guide(site)
-    assert guide and guide["kind"] == "story" and "**" not in guide["body"]
+    assert guide.startswith('<details class="board-how guide" open>') and "<strong>" in guide and "这一篇在网站上" not in guide
     page = (out / "opportunities/index.html").read_text(encoding="utf-8")
-    assert 'data-compose="opp"' in page and 'data-compose="story"' in page and build.WORKER_URL + "/board" in page
+    assert 'data-compose="opp"' in page and 'data-compose="story"' not in page and build.WORKER_URL + "/board" in page
+    assert f'href="{P}blog/?write=1"' in page and "科研入门" in page                 # experience posts are written on the blog now
+    assert '"story"' not in page
     data = json.loads(re.search(r'<script type="application/json" class="board-data">(.*?)</script>', page, re.S).group(1))
     worker = (ROOT / "assistant/src/board.js").read_text(encoding="utf-8")
     for kind, cats in data["cats"].items():                                    # the site and the Worker agree on the keys
@@ -627,3 +629,22 @@ if __name__ == "__main__":
     for t in tests:
         t()
     print(f"ok {len(tests)} tests")
+
+
+def test_blog_page_and_tabs():
+    """The blog sits next to the discussion area: its own page, the same Worker, its categories match the Worker's."""
+    _, out = _build()
+    blog = (out / "blog/index.html").read_text(encoding="utf-8")
+    attrs, data = _forum(blog)
+    assert attrs["mode"] == "blog" and attrs["forum"] == build.WORKER_URL + "/forum"
+    assert [c["key"] for c in data["cats"]] == [k for k, *_ in build.BLOG_CATS] == build.forum_board_keys(name="BLOG_HINTS")
+    assert "<h1>博客 | Blog</h1>" in blog and "最多 6 张" in blog and "1600" in blog
+    qa = (out / "qa/index.html").read_text(encoding="utf-8")
+    for page_html, here in ((qa, "qa"), (blog, "blog")):
+        tabs = re.search(r'<nav class="tabs".*?</nav>', page_html, re.S).group(0)
+        assert f'href="{P}qa/"' in tabs and f'href="{P}blog/"' in tabs and f'href="{P}{here}/" aria-current="page"' in tabs
+    assert "blog/" in (out / "sitemap.xml").read_text(encoding="utf-8")
+    js = (out / "static/site.js").read_text(encoding="utf-8")
+    assert "/qa/" in js and "blog" in js                                         # the Discussion block lights up on the blog
+    forum_js = (out / "static/forum.js").read_text(encoding="utf-8")
+    assert "innerHTML" not in forum_js and "insertAdjacentHTML" not in forum_js     # post text never becomes HTML

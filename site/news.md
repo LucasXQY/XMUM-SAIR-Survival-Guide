@@ -7,6 +7,7 @@
 
 ## v4 · 2026-11-07
 
+- 新的[博客](/blog/)：写科研、实习、求职、升学、比赛的经验，支持小标题、列表和最多 6 张图片，不用登录 | A new [blog](/blog/): write up research, internships, job hunting, grad school or competitions with headings, lists and up to 6 images, no login
 - [讨论区](/qa/)不用登录、不用 GitHub 账号了：直接发帖、回帖，每条先经过审核再出现 | The [discussion area](/qa/) needs no login or GitHub account: post and reply directly, every post is checked before it appears
 - 新的[机会墙](/opportunities/)：实习、科研、全职、内推码、比赛、升学，点便签看详情，内推码一键复制 | A new [opportunity wall](/opportunities/): internships, research, jobs, referral codes, competitions and study, with one-click copy for referral codes
 - 不用登录就能发机会、写经验帖，提交后自动初审 | Post an opportunity or an experience without logging in; every post gets an automatic first check
