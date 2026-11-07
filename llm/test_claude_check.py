@@ -168,6 +168,15 @@ def test_ask_returns_json_with_schema_low_effort_and_refusal_fallback():
     assert h.path == "messages" and "fallbacks" not in h.kw                   # Haiku has no server-side fallback
 
 
+def test_the_upload_check_runs_at_medium_effort_with_a_long_timeout():         # final review, fold-in 12
+    for task, model, effort, timeout in (("upload", "claude-opus-5-5", "medium", 600), ("sort", "claude-haiku-5-5", "low", None),
+                                         ("moderation", "claude-haiku-5-5", "low", None), ("topics", "claude-opus-5-5", "low", None)):
+        c = FakeClient()
+        assert cc.ask(task, "sys", "hi", SCHEMA, client=c, model=model) == {"verdict": "hide"}
+        assert c.kw["output_config"] == {"effort": effort, "format": {"type": "json_schema", "schema": SCHEMA}}, task
+        assert c.kw.get("timeout") == timeout and ("timeout" in c.kw) == (timeout is not None), task
+
+
 def test_ask_reports_the_cost_even_when_there_is_no_answer():
     seen = []
     cc.ask("moderation", "sys", "hi", SCHEMA, client=FakeClient(usage={"input_tokens": 1000, "output_tokens": 100}), on_cost=seen.append)

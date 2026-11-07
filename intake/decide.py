@@ -66,7 +66,9 @@ def _label(value) -> str:
 
 
 def validate_sort(raw, cat_codes: set[str]) -> Sort | None:
-    """Untrusted model output in, a Sort whose path-shaping fields are safe out."""
+    """Untrusted model output in, a Sort whose path-shaping fields are safe out: a code, session or type that does not
+    fit is dropped, and so is a label, assessment, set or course name that looks personal (intake.personal: a keyword
+    or a value such as a student ID); either way the sort is no longer confident."""
     if not isinstance(raw, dict):
         return None
     confident = raw.get("confident") is True
@@ -91,7 +93,12 @@ def validate_sort(raw, cat_codes: set[str]) -> Sort | None:
         if any(bad in text for bad in ("/", "\\", "..")):
             confident = False
         parts[key] = _label(text)
-    return Sort(course_code=code, course_name=str(raw.get("course_name") or "").strip()[:80], session=session,
+        if intake.personal(text) or intake.personal(parts[key]):
+            parts[key], confident = "", False
+    name = str(raw.get("course_name") or "").strip()
+    if intake.personal(name):
+        name, confident = "", False
+    return Sort(course_code=code, course_name=name[:80], session=session,
                 type=typ, label=parts["label"], assessment=parts["assessment"],
                 set=parts["set"], keep=keep, skip_reason=reason, confident=confident,
                 note=str(raw.get("note") or "").strip()[:200])
@@ -109,6 +116,15 @@ def resolve_session(sort: Sort, form) -> str:
 
 def _strip_set(value: str) -> str:
     return re.sub(r"^set[_-]?", "", _label(value), flags=re.I)
+
+
+def stem_label(type: str, label: str) -> str:
+    """The label part of the name file_name builds (before any set, "_Question" or "_2"), for finding the next free
+    set letter or version number."""
+    label = _label(label)
+    if type == "Past-Papers":
+        return re.sub(r"_?Question$", "", label, flags=re.I).strip("_.") or "PastPaper"
+    return label or str(type).replace("-", "")
 
 
 def file_name(code, session, type, label, set, ext, taken: set[str]) -> str:
@@ -147,7 +163,41 @@ def _usable_place(p) -> dict | None:
     return {"code": code, "session": session, "type": typ, "label": _label(p.get("label"))}
 
 
-def decide(item, sort, check, form, override, dup) -> Decision:
+def _variant(v) -> dict:
+    """A usable {"set": "B"} or {"version": 2}, or {"possible_duplicate": True} (like a file in the archive, but the
+    comparison gave no answer); anything else is no variant."""
+    if not isinstance(v, dict):
+        return {}
+    if v.get("possible_duplicate") is True:
+        return {"possible_duplicate": True}
+    letter = v.get("set")
+    if isinstance(letter, str) and re.fullmatch(r"[A-Z]", letter.strip().upper()):
+        return {"set": letter.strip().upper()}
+    n = v.get("version")
+    if type(n) is int and n >= 2:
+        return {"version": n}
+    return {}
+
+
+def _suffixed(label: str, suffix: str) -> str:
+    """The label cut so that label + suffix still fits LABEL_MAX: the suffix is what makes the name different."""
+    return _label(_label(label)[:LABEL_MAX - len(suffix)].rstrip("_.") + suffix)
+
+
+REDACTION_PROBLEMS = {     # what holds a PDF back, and what a maintainer's /approve would then commit
+    "failed": "打码没完成，`/approve` 会提交已打码的部分副本 | redaction incomplete: `/approve` commits the partly redacted copy",
+    "no_copy": "没有打码副本，`/approve` 会提交原文件 | no redacted copy: `/approve` commits the original",
+    "verify_unsure": "打码后复查没通过 | redaction not confirmed by the re-check",
+}
+
+
+def decide(item, sort, check, form, override, dup, variant=None, redaction=None) -> Decision:
+    """`redaction` is what blacking out the check's redactions gave: None (nothing was redacted), "ok" (applied, every
+    string gone, and the re-check found nothing personal where one was needed), "failed" (a partly redacted copy
+    exists), "no_copy" (no redacted copy could be made) or "verify_unsure". Only "ok" lets a PDF with personal data
+    through (flag `redacted`); the others hold it back unless a maintainer approved it, and the reason says what an
+    /approve would commit (REDACTION_PROBLEMS).
+    Office files are never redacted (spec §2), whatever `redaction` says."""
     override = override or {}
     k = item.k
     flags: list[str] = []
@@ -222,13 +272,34 @@ def decide(item, sort, check, form, override, dup) -> Decision:
     elif check.personal_data == "unsure":
         problem = "不确定有没有个人信息 | unsure whether it holds personal data"
     elif check.personal_data == "yes":
-        problem = "有个人信息，未处理 | holds personal data, not redacted"
+        if getattr(item, "ext", "") != "pdf":
+            problem = "Office 文件有个人信息，不自动打码 | an Office file with personal data is never redacted automatically"
+        elif redaction == "ok":
+            flags.append("redacted")
+        else:
+            problem = REDACTION_PROBLEMS.get(redaction, "有个人信息，未处理 | holds personal data, not redacted")
     if problem:
         if not approved:
             zh, _, en = problem.partition(" | ")
             return done("review", f"需要你看：{zh} | needs a look: {en}", **placed)
         flags.append(f"approved_by:{approved}")
 
+    variant = _variant(variant)
+    if variant.get("set"):
+        flags.append("new_set")
+    elif variant.get("version"):
+        flags.append("new_version")
+    elif variant.get("possible_duplicate"):
+        flags.append("possible_duplicate")
     if not code:
         return done("inbox", "课程不明，放入待整理 | course unknown, held in the inbox")
+    if variant.get("set"):
+        if typ == "Past-Papers":
+            placed["set"] = variant["set"]
+        else:
+            placed["label"] = _suffixed(label or typ.replace("-", ""), f"_Set{variant['set']}")
+    elif variant.get("version"):
+        placed["label"] = _suffixed(label or typ.replace("-", ""), f"_v{variant['version']}")
+    if getattr(item, "scanned", False):
+        flags.append("dedupe_skipped")      # no text to compare: near-duplicates are not looked for (spec §5 step 5)
     return done("commit", "提交 | committed", **placed)

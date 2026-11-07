@@ -1,5 +1,6 @@
 """Per-upload cache on the bot-state branch. That branch is public and its commits are permanent, so everything is
-scrubbed before it is written: redactions keep page and position only, and free-text notes that look personal are blanked."""
+scrubbed before it is written: redactions keep page, position and kind only, and Claude's free text and the sort's
+name-shaping fields (label, assessment, set, course name) are blanked when they look personal."""
 from __future__ import annotations
 
 import copy
@@ -11,17 +12,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "llm"))
 sys.path.insert(0, str(HERE))
 import claude_check as cc
-from intake import PII_RE
+from intake import WHAT_TEXT, personal
 
-NOTE_KEYS = ("summary", "notes", "note")
-WHAT_MAX = 40
+# Claude's free text, and the sort's fields that name a file or a folder
+NOTE_KEYS = ("summary", "notes", "note", "weighting", "lecturers", "label", "assessment", "set", "course_name")
 TRIES = 5          # writes retried after a Conflict
 
 
 def _note(v):
-    """Every string beneath a summary/notes/note key is free text: blank the ones that look personal."""
+    """Every string beneath a NOTE_KEYS key (summary, notes, note, weighting, lecturers, label, assessment, set,
+    course_name) is Claude's text: blank the ones that look personal (a keyword or a value: intake.personal)."""
     if isinstance(v, str):
-        return "" if PII_RE.search(v) else v
+        return "" if personal(v) else v
     if isinstance(v, dict):
         return {k: _note(x) for k, x in v.items()}
     if isinstance(v, list):
@@ -29,10 +31,10 @@ def _note(v):
     return copy.deepcopy(v)
 
 
-def _what(v):
-    if not isinstance(v, str):
-        return v
-    return "" if PII_RE.search(v) else v[:WHAT_MAX]
+def _what(v) -> str:
+    """A redaction's kind: one of the check's closed list (intake.WHAT_TEXT: "student_id", "name" ...) as given, else ""
+    (free text, a value, anything that is not a string)."""
+    return v if isinstance(v, str) and v in WHAT_TEXT else ""
 
 
 def _redaction(r):
@@ -58,7 +60,8 @@ def _scrub(v):
 
 
 def scrub(data: dict) -> dict:
-    """A deep copy that is safe to publish: no redaction text, no personal-looking summary/notes/note. The input is untouched."""
+    """A deep copy that is safe to publish: no redaction text, a known kind or "" for each redaction, no personal-looking
+    free text or name-shaping field (NOTE_KEYS). The input is untouched."""
     return _scrub(data)
 
 

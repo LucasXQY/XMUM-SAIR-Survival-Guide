@@ -69,14 +69,14 @@ def test_scrub_keeps_positions_and_drops_personal_text():
 def test_scrub_blanks_pii_notes_everywhere_and_does_not_mutate():
     data = {"sort": {"s1": {"note": "mail me at a.b@gmail.com", "label": "Final"}},
             "check": {"s1": {"summary": "fine exam", "notes": "student id on page 2",
-                             "redactions": [{"page": 2, "kind": "box", "box": [1, 2, 3, 4], "what": "id", "text": "ABC1234567"}]}},
+                             "redactions": [{"page": 2, "kind": "box", "box": [1, 2, 3, 4], "what": "student_id", "text": "ABC1234567"}]}},
             "verify": {"s1": {"notes": ["x"], "summary": "call 13812345678"}}, "spent_usd": 0.5, "extra": {"k": [1]}}
     before = copy.deepcopy(data)
     clean = cache.scrub(data)
     assert data == before
     assert clean["sort"]["s1"] == {"note": "", "label": "Final"}
     assert clean["check"]["s1"]["summary"] == "fine exam" and clean["check"]["s1"]["notes"] == ""
-    assert clean["check"]["s1"]["redactions"] == [{"page": 2, "kind": "box", "box": [1, 2, 3, 4], "what": "id"}]
+    assert clean["check"]["s1"]["redactions"] == [{"page": 2, "kind": "box", "box": [1, 2, 3, 4], "what": "student_id"}]
     assert clean["verify"]["s1"]["notes"] == ["x"] and clean["verify"]["s1"]["summary"] == ""
     assert clean["spent_usd"] == 0.5 and clean["extra"] == {"k": [1]}
     clean["extra"]["k"].append(2)
@@ -85,16 +85,49 @@ def test_scrub_blanks_pii_notes_everywhere_and_does_not_mutate():
 
 def test_scrub_redaction_label_and_nested_notes():
     data = {"check": {"s": {"redactions": [{"page": 1, "kind": "text", "what": "student ID EEE2109300"},
-                                           {"page": 2, "kind": "text", "what": "学号"},
+                                           {"page": 2, "kind": "text", "what": "student_id"},
                                            {"page": 3, "kind": "text", "what": "x" * 60}],
                             "notes": {"p1": "email a@gmail.com", "p2": "fine", "deep": [{"z": "call 13812345678"}, "ok"]}},
                       "t": {"summary": ["mail b@gmail.com", "plain"]}}}
     before = copy.deepcopy(data)
     c = cache.scrub(data)
     assert data == before
-    assert [r["what"] for r in c["check"]["s"]["redactions"]] == ["", "学号", "x" * 40]
+    assert [r["what"] for r in c["check"]["s"]["redactions"]] == ["", "student_id", ""]
     assert c["check"]["s"]["notes"] == {"p1": "", "p2": "fine", "deep": [{"z": ""}, "ok"]}
     assert c["check"]["t"]["summary"] == ["", "plain"]
+
+
+def test_scrub_blanks_personal_lecturers_and_weighting():
+    data = {"check": {"s": {"lecturers": ["Dr Tan", "tan@gmail.com", "ABC2109123"], "weighting": "ABC2109123 Final 60%"},
+                      "t": {"lecturers": ["Dr Lim"], "weighting": "Final 50%, Midterm 50%"}}}
+    c = cache.scrub(data)
+    assert c["check"]["s"] == {"lecturers": ["Dr Tan", "", ""], "weighting": ""}
+    assert c["check"]["t"] == {"lecturers": ["Dr Lim"], "weighting": "Final 50%, Midterm 50%"}
+    assert "gmail" not in json.dumps(c) and "ABC2109123" not in json.dumps(c)
+
+
+def test_redaction_kinds_are_a_closed_list_and_free_text_is_filtered_by_both():
+    # final review, fold-in 8: `what` is one of the check's kinds; anything else (free text, a value, not a string) is ""
+    labels = ["name", "student_id", "signature", "photo", "qr_code", "phone", "email", "address", "other"]
+    values = ["学号 2109300123", "身份证 990101-14-5678", "电话 012-345 6789", "ID EEE2109300", "mail a@gmail.com",
+              "学号 | student ID", "Student_ID", "", 3, None, ["name"], {"x": 1}]
+    data = {"check": {"s": {"redactions": [{"page": 1, "kind": "box", "what": w} for w in labels + values],
+                            "summary": "身份证 990101-14-5678", "notes": "电话 012-345 6789",
+                            "weighting": "学号 2109300123 Final 60%", "lecturers": ["Dr Tan", "Dr 2109300123"]},
+                      "t": {"summary": "student id on page 2", "notes": "Final 60% | page 3"}}}
+    c = cache.scrub(data)["check"]
+    assert [r["what"] for r in c["s"]["redactions"]] == labels + [""] * len(values)
+    assert c["s"]["summary"] == c["s"]["notes"] == c["s"]["weighting"] == "" and c["s"]["lecturers"] == ["Dr Tan", ""]
+    assert c["t"] == {"summary": "", "notes": "Final 60% | page 3"}             # keywords still blank free text
+
+
+def test_scrub_blanks_personal_names_and_folders_of_the_sort():                # final review, finding 2
+    data = {"sort": {"s": {"label": "Assignment1_EEE2109300", "assessment": "Final", "set": "a.b@gmail.com",
+                           "course_name": "Circuits EEE2109300", "course_code": "COM107", "keep": True},
+                     "t": {"label": "Final", "assessment": "Midterm", "set": "B", "course_name": "Circuits and Devices"}}}
+    c = cache.scrub(data)["sort"]
+    assert c["s"] == {"label": "", "assessment": "Final", "set": "", "course_name": "", "course_code": "COM107", "keep": True}
+    assert c["t"] == data["sort"]["t"] and "2109300" not in json.dumps(c) and "gmail" not in json.dumps(c)
 
 
 PATH = "intake-cache/issue-7.json"

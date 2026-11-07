@@ -26,6 +26,10 @@ DEFAULT_MODELS = {"moderation": "claude-haiku-5-5", "topics": "claude-haiku-5-5"
 # models that take the server-side refusal fallback ("default" routes a declined request to Anthropic's recommended model)
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 STATE_BRANCH, STATE_FILE = "bot-state", "claude-usage.json"
+# thinking effort and the client timeout (seconds) per task; any other task: low effort, the client's 180 s. The full
+# check and its re-check of an upload ("upload") read whole files and say what to black out, so they think longer.
+EFFORT = {"upload": "medium"}
+TIMEOUT = {"upload": 600}
 
 # USD per million tokens; the Cloudflare Worker reads the same file, so it stays plain JSON
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prices.json"), encoding="utf-8") as _f:
@@ -251,15 +255,18 @@ def ask(task: str, system: str, content, schema: dict, max_tokens: int = 4000, c
         import anthropic
     except ImportError:
         anthropic = None
+    timeout = TIMEOUT.get(task)
     if client is None:
         if anthropic is None or not os.environ.get("ANTHROPIC_API_KEY"):
             return None
-        client = anthropic.Anthropic(max_retries=2, timeout=180)
+        client = anthropic.Anthropic(max_retries=2, timeout=timeout or 180)
     model = model or model_for(task)
     kw = {"model": model, "max_tokens": max_tokens, "system": system,
           "messages": [{"role": "user", "content": content}],
-          # a classification: low effort keeps thinking short; the schema makes the answer parseable
-          "output_config": {"effort": "low", "format": {"type": "json_schema", "schema": schema}}}
+          # mostly classifications: low effort keeps thinking short (EFFORT); the schema makes the answer parseable
+          "output_config": {"effort": EFFORT.get(task, "low"), "format": {"type": "json_schema", "schema": schema}}}
+    if timeout:
+        kw["timeout"] = timeout                         # per request too, whatever client was passed in
     try:
         if model in FALLBACK_MODELS:
             r = client.beta.messages.create(betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kw)

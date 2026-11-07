@@ -106,6 +106,34 @@ def test_hostile_fields_never_shape_a_path():
     assert decide.validate_sort(dict(SORT_OK), CAT).course_code == "COM107"
 
 
+def test_personal_data_never_shapes_a_file_or_folder_name():                   # final review, finding 2
+    for key, value in (("label", "Assignment1_EEE2109300"), ("assessment", "Final_2109300123"), ("set", "a.b@gmail.com"),
+                       ("course_name", "Circuits EEE2109300"), ("label", "Quiz 012-345 6789"), ("course_name", "Ask on WeChat")):
+        s = decide.validate_sort(dict(SORT_OK, **{key: value}), CAT)
+        assert getattr(s, key) == "" and s.confident is False, (key, value)
+    s = decide.validate_sort(dict(SORT_OK, label="Assignment1", course_name="Circuits and Devices", set="B"), CAT)
+    assert (s.label, s.course_name, s.set, s.confident) == ("Assignment1", "Circuits and Devices", "B", True)
+    s = decide.validate_sort(dict(SORT_OK, label="Assignment1_EEE2109300"), CAT)
+    d = decide.decide(ITEM, s, CLEAN, FORM, None, None)
+    assert d.outcome == "inbox" and "2109300" not in d.label + d.name                # unsure: never named by it
+
+
+def test_an_uncompared_near_duplicate_is_committed_and_flagged():               # final review, finding 11
+    d = decide.decide(ITEM, S(), CLEAN, FORM, None, None, {"possible_duplicate": True})
+    assert (d.outcome, d.blocking, "possible_duplicate" in d.flags) == ("commit", False, True)
+    for v in ({"possible_duplicate": 1}, {"possible_duplicate": "yes"}, None, {}):
+        assert "possible_duplicate" not in decide.decide(ITEM, S(), CLEAN, FORM, None, None, v).flags, v
+
+
+def test_codes_and_sessions_take_ascii_digits_only():                         # final review, fold-in 9
+    assert intake.CODE_RE.fullmatch("EEE202") and not intake.CODE_RE.fullmatch("EEE２０２")
+    assert intake.SESSION_RE.fullmatch("2022-04") and not intake.SESSION_RE.fullmatch("２０２２-０４")
+    s = decide.validate_sort(dict(SORT_OK, course_code="COM１０７", session="٢٠٢٢-٠٤"), CAT)
+    assert (s.course_code, s.session, s.confident) == ("", "unknown", False)
+    assert intake.VALUE_RE.search("2109300123") and not intake.VALUE_RE.search("٢١٠٩٣٠٠١٢٣")   # its digit classes too
+    assert "\\d" not in intake.VALUE_RE.pattern
+
+
 def test_checks_fail_closed():
     for bad in ("yes", "Yes", "", "maybe", None):
         d = decide.decide(ITEM, S(), replace(CLEAN, personal_data=bad), FORM, None, None)
@@ -181,6 +209,56 @@ def test_past_papers_label_prefers_assessment():
     assert d.label == "Scan1"
     d = decide.decide(ITEM, S(type="Notes", assessment="Midterm", label="Week3"), CLEAN, FORM, None, None)
     assert d.label == "Week3"
+
+
+PD_YES = replace(CLEAN, personal_data="yes", redactions=[{"page": 1, "kind": "box", "box": [0, 0, 9, 9], "what": "签名"}])
+
+
+def test_a_good_redaction_lets_personal_data_through():
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, None, "ok")              # positional, like the run
+    assert (d.outcome, d.blocking, "redacted" in d.flags) == ("commit", False, True)
+    d = decide.decide(ITEM, S(confident=False), PD_YES, FORM, None, None, redaction="ok")
+    assert (d.outcome, "redacted" in d.flags) == ("inbox", True)                    # the inbox gets the redacted copy too
+    assert decide.decide(ITEM, S(), PD_YES, FORM, None, None).outcome == "review"   # no redaction: held back
+    for bad in ("", "yes", "OK", None):
+        assert decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction=bad).outcome == "review", bad
+
+
+def test_a_failed_or_unconfirmed_redaction_is_held_back_with_its_reason():
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="failed")         # final review, finding 6
+    assert (d.outcome, d.blocking) == ("review", True)
+    assert d.reason == ("需要你看：打码没完成，`/approve` 会提交已打码的部分副本 "
+                        "| needs a look: redaction incomplete: `/approve` commits the partly redacted copy")
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="no_copy")
+    assert (d.outcome, d.blocking) == ("review", True)
+    assert d.reason == "需要你看：没有打码副本，`/approve` 会提交原文件 | needs a look: no redacted copy: `/approve` commits the original"
+    d = decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction="verify_unsure")
+    assert d.outcome == "review" and "打码后复查没通过" in d.reason and "redaction not confirmed by the re-check" in d.reason
+    for r in ("failed", "verify_unsure", "no_copy"):
+        assert decide.decide(ITEM, S(), PD_YES, FORM, None, None, redaction=r).reason.count(" | ") == 1
+        d = decide.decide(ITEM, S(), PD_YES, FORM, {"approved_by": "m-1"}, None, redaction=r)   # /approve: committed
+        assert d.outcome == "commit" and "approved_by:m-1" in d.flags and "redacted" not in d.flags
+    unsure = replace(PD_YES, personal_data="unsure")                                 # unsure stays unsure
+    assert decide.decide(ITEM, S(), unsure, FORM, None, None, redaction="ok").outcome == "review"
+
+
+def test_office_files_with_personal_data_are_never_redacted():
+    docx = replace(ITEM, ext="docx")
+    d = decide.decide(docx, S(), replace(CLEAN, personal_data="yes"), FORM, None, None)
+    assert d.outcome == "review" and "Office" in d.reason and d.reason.count(" | ") == 1
+    assert decide.decide(docx, S(), PD_YES, FORM, None, None, redaction="ok").outcome == "review"   # never "redacted"
+
+
+def test_scanned_files_are_noted_as_not_compared():
+    scan = replace(ITEM, scanned=True)
+    assert "dedupe_skipped" in decide.decide(scan, S(), CLEAN, FORM, None, None).flags
+    assert "dedupe_skipped" not in decide.decide(ITEM, S(), CLEAN, FORM, None, None).flags
+    assert "dedupe_skipped" not in decide.decide(scan, S(), None, FORM, None, None).flags      # held back: no note
+
+
+def test_stem_label_matches_the_file_name():
+    assert decide.stem_label("Past-Papers", "Final_Question") == "Final" and decide.stem_label("Past-Papers", "") == "PastPaper"
+    assert decide.stem_label("Exam-Review", "") == "ExamReview" and decide.stem_label("Labs", "Lab2_Manual") == "Lab2_Manual"
 
 
 if __name__ == "__main__":

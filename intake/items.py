@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,6 +13,8 @@ import intake
 
 SCANNED_BELOW = 100          # a page with fewer characters of text counts as scanned
 REPO_DIRS = ("EEE", "AIT", "ROBO", "GE")
+OFFICE_EXTS = ("docx", "pptx", "xlsx", "doc", "ppt", "xls")
+CONVERT_TIMEOUT = 120       # seconds for one LibreOffice conversion
 
 
 @dataclass
@@ -22,6 +27,7 @@ class Item:
     pages: int               # PDF page count; 1 for other files; 0 for a PDF that cannot be opened
     scanned: bool            # most pages (non-PDF: the whole file) have under SCANNED_BELOW characters
     page_text: list[str]     # every page's text (Office/text: one entry)
+    view: Path | None = None  # the PDF the AI reads: the file itself for a PDF, the converted copy for Office, else None
 
 
 def _sha256(path: Path) -> str:
@@ -48,15 +54,47 @@ def _read(path: Path, ext: str) -> tuple[int, list[str]]:
         return 1, [""]
 
 
+def to_pdf(path: Path, out_dir: Path, soffice: str | list[str] | None = None) -> Path | None:
+    """Convert an Office file to PDF with LibreOffice; the original is only read. `soffice` is the executable, or an
+    argv prefix (a list, handy for tests); default: soffice / libreoffice on PATH. None when LibreOffice is missing,
+    fails or times out. Never raises and never prints the file name. The copy goes in a fresh subfolder of out_dir.
+    Every call runs with a profile of its own (-env:UserInstallation, a fresh lo-* folder in the temp directory,
+    removed afterwards), so a conversion that timed out and left soffice running cannot wedge the next ones."""
+    profile = None
+    try:
+        if soffice is None:
+            soffice = shutil.which("soffice") or shutil.which("libreoffice")
+        if not soffice:
+            return None
+        cmd = [soffice] if isinstance(soffice, str) else list(soffice)
+        out_dir = Path(out_dir).resolve()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sub = Path(tempfile.mkdtemp(dir=out_dir))
+        profile = Path(tempfile.mkdtemp(prefix="lo-")).resolve()
+        r = subprocess.run(cmd + [f"-env:UserInstallation={profile.as_uri()}", "--headless", "--convert-to", "pdf",
+                                  "--outdir", str(sub), str(Path(path).resolve())],
+                           timeout=CONVERT_TIMEOUT, capture_output=True)
+        pdf = sub / f"{path.stem}.pdf"
+        return pdf if r.returncode == 0 and pdf.exists() else None
+    except Exception:
+        return None
+    finally:
+        if profile is not None:
+            shutil.rmtree(profile, ignore_errors=True)
+
+
 def _is_scanned(page_text: list[str]) -> bool:
     if not page_text:
         return True
     return sum(len(t.strip()) < SCANNED_BELOW for t in page_text) * 2 > len(page_text)
 
 
-def make_items(accepted: list[tuple[str, Path]], origins: list[str]) -> list[Item]:
+def make_items(accepted: list[tuple[str, Path]], origins: list[str], soffice: str | list[str] | None = None,
+               work: Path | None = None) -> list[Item]:
     """`origins[i]` comes from `intake.unpack`: the attachment name, or already "<zip> › <n>" for a zip member.
-    A bare .zip name (not from unpack) gets its members numbered in order."""
+    A bare .zip name (not from unpack) gets its members numbered in order.
+    PDFs are their own `view`; Office files are converted to PDF in `work` (default `<file folder>/_view`) and `pages`,
+    `page_text`, `scanned` then come from that PDF. If conversion fails, `view` is None and the Office text is used."""
     out: list[Item] = []
     members: dict[str, int] = {}
     for k, ((name, path), origin) in enumerate(zip(accepted, origins), 1):
@@ -66,8 +104,14 @@ def make_items(accepted: list[tuple[str, Path]], origins: list[str]) -> list[Ite
             members[origin] = members.get(origin, 0) + 1
             source = f"{origin}{intake.ORIGIN_SEP}{members[origin]}"
         ext = intake._split_ext(path.name)[1]
-        pages, text = _read(path, ext)
-        out.append(Item(k, source, path, _sha256(path), ext, pages, _is_scanned(text), text))
+        view = path if ext == "pdf" else None
+        if ext in OFFICE_EXTS:
+            view = to_pdf(path, work or path.parent / "_view", soffice)
+        pages, text = _read(view or path, "pdf" if view else ext)
+        if ext in OFFICE_EXTS and view and pages == 0:   # converter said fine but the PDF is unreadable
+            view = None
+            pages, text = _read(path, ext)
+        out.append(Item(k, source, path, _sha256(path), ext, pages, _is_scanned(text), text, view))
     return out
 
 
