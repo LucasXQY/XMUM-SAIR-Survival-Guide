@@ -6,7 +6,7 @@ One row per session. Add a row when contributing material from a new session.
 
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
-| [unknown](unknown/) | | | [niconiconi-nico](https://github.com/niconiconi-nico) | 期中回忆版题目，6 页，学期不详 / Reconstructed midterm questions, 6 pages, session unknown |
+| [2025-09](2025-09/) | | | [niconiconi-nico](https://github.com/niconiconi-nico) | 期中回忆版题目，6 页 / Reconstructed midterm questions, 6 pages |
 
 ## 资料说明 | Material notes
 
@@ -14,9 +14,9 @@ One row per session. Add a row when contributing material from a new session.
 
 The midterm recall preserves the question statements, figures and reconstruction caveats from the supplied reconstructed solution document. The original wording of Q1(a) and Q1(c) is incomplete, and the figures also come from that reconstruction. Q1(b) is absent from the supplied document, so the original numbering is retained. All answers, worked solutions and solution figures have been removed, and file metadata has been cleared.
 
-原始考试学期和贡献者修读学期待确认，因此资料暂存于 unknown，修课时间表也标为 unknown。
+贡献者确认学期为 2025-09，资料目录、文件名和修课时间表均按此学期归档。
 
-The original examination session and the contributor's study session are unverified. The material and course-timeline entry therefore use unknown.
+The contributor confirmed the session as 2025-09. The material directory, filename and course timeline use this session.
 
 ## 同名课程资料 | Related course materials
 
