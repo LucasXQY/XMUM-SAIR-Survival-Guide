@@ -420,14 +420,22 @@ def test_notes_ink_and_free_text_on_a_redacted_page_are_gone():
     assert mean_pixel(out, 1, (0.2, 0.76, 0.38, 0.8)) < 20                       # the ink is not drawn over the black
 
 
-def test_a_note_or_an_author_on_another_page_is_caught():
+def test_a_note_or_an_author_on_another_page_is_emptied():
+    # final review: every committed PDF loses its annotations' authors and contents (scrub_pdf), so a note or an
+    # author on a page without a redaction no longer fails the file: it is emptied, and the strings are gone
     for add in (lambda pg: pg.add_text_annot((500, 500), "note " + ID),
                 lambda pg: pg.add_highlight_annot(fitz.Rect(72, 60, 200, 76)).set_info(title="Tan Ah Kow")):
         d = fitz.open(); d.new_page().insert_text((72, 72), "Name: Tan Ah Kow  ID: " + ID)
         pg = d.new_page(); pg.insert_text((72, 72), "Question 1"); add(pg)
-        p = _save(d)
-        r = redact.apply(p, tmp() / "o.pdf", [_text(1, ID), _text(1, "Tan Ah Kow")])
-        assert not r.ok and any("page 2" in x for x in r.problems) and ID not in " ".join(r.problems)
+        p = _save(d); out = tmp() / "o.pdf"
+        r = redact.apply(p, out, [_text(1, ID), _text(1, "Tan Ah Kow")])
+        assert r.ok and not anywhere(out, ID) and not anywhere(out, "Tan Ah Kow")
+        with fitz.open(out) as o:
+            assert len(list(o[1].annots())) >= 1                                  # the annotation itself stays
+    d = fitz.open(); d.new_page().insert_text((72, 72), "ID: " + ID)            # drawn text is still caught
+    d.new_page().add_freetext_annot(fitz.Rect(72, 400, 300, 430), "Student " + ID, fontsize=12)
+    r = redact.apply(_save(d), tmp() / "o.pdf", [_text(1, ID)])
+    assert not r.ok and any("page 2" in x for x in r.problems) and ID not in " ".join(r.problems)
 
 
 def test_outline_page_labels_and_page_extras_are_stripped():
@@ -603,6 +611,122 @@ def test_a_fallback_word_in_another_case_on_another_page_fails():
     p = _save(d)
     r = redact.apply(p, tmp() / "o.pdf", [_text(1, "Tan Ah Kow")])
     assert not r.ok and any("page 2" in x for x in r.problems) and "KOW" not in " ".join(r.problems)
+
+
+# ---- final review: what every committed PDF loses (redacted or not), an /Annot without a Subtype
+
+NAME = "Tan Ah Kow"
+HIGHLIGHT = fitz.Rect(72, 60, 200, 76)
+
+
+def _annotated():
+    """Page 1: a highlight (author, subject, contents and rich text naming the student), a sticky note holding the ID,
+    a file attachment, a direct annotation dict, piece info and a thumbnail; page 2: an annotation only the structure
+    tree points at. Plus an embedded file, catalog piece info, an outline entry, XMP and an author."""
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "Question 1 highlight me")
+    h = pg.add_highlight_annot(HIGHLIGHT); h.set_info(title=NAME, subject=NAME, content=ID); h.set_popup(fitz.Rect(300, 300, 400, 400))
+    d.xref_set_key(h.xref, "RC", f"(<body><p>{NAME}</p></body>)")
+    note = pg.add_text_annot((500, 500), "note " + ID); note.set_info(title=NAME)
+    pg.add_file_annot((500, 600), ID.encode(), "notes.txt", desc=NAME)
+    px = pg.xref
+    annots = d.xref_get_key(px, "Annots")[1]
+    d.xref_set_key(px, "Annots", annots[:-1] + f" <</Type/Annot/Subtype/Square/Rect[100 400 200 450]/C[1 0 0]/T({NAME})/Contents({ID})>>]")
+    d.xref_set_key(px, "PieceInfo", f"<</App<</Private({ID})>>>>")
+    tx = d.get_new_xref(); d.update_object(tx, "<</Type/XObject/Subtype/Image/Width 2/Height 2/ColorSpace/DeviceGray/BitsPerComponent 8>>")
+    d.update_stream(tx, ID.encode()[:4]); d.xref_set_key(px, "Thumb", f"{tx} 0 R")
+    p2 = d.new_page(); p2.insert_text((72, 72), "Question 2")
+    orphan = d.get_new_xref(); d.update_object(orphan, f"<</Type/Annot/Subtype/Text/Rect[72 300 90 320]/Contents({ID})/T({NAME})>>")
+    se = d.get_new_xref(); d.update_object(se, f"<</Type/StructElem/S/Annot/Pg {p2.xref} 0 R/K<</Type/OBJR/Obj {orphan} 0 R>>>>")
+    st = d.get_new_xref(); d.update_object(st, f"<</Type/StructTreeRoot/K[{se} 0 R]>>")
+    cat = d.pdf_catalog()
+    d.xref_set_key(cat, "StructTreeRoot", f"{st} 0 R"); d.xref_set_key(cat, "PieceInfo", f"<</App<</Private({NAME})>>>>")
+    d.embfile_add("x.txt", ID.encode(), desc=NAME)
+    d.set_toc([[1, "Part 1", 1]])
+    d.set_metadata({"author": NAME}); d.set_xml_metadata(f"<x:xmpmeta xmlns:x='adobe:ns:meta/'><dc>{NAME}</dc></x:xmpmeta>")
+    return _save(d)
+
+
+def _yellow(path, rect=HIGHLIGHT):
+    """(mean red, mean blue) over the inside of `rect` on page 1: a highlight is drawn when red stays high, blue drops."""
+    with fitz.open(path) as d:
+        pix = d[0].get_pixmap(dpi=72, colorspace=fitz.csRGB, clip=rect + (8, 3, -8, -3))
+    px = [pix.pixel(x, y) for y in range(pix.height) for x in range(pix.width)]
+    return sum(p[0] for p in px) / len(px), sum(p[2] for p in px) / len(px)
+
+
+def test_scrub_pdf_empties_what_no_committed_pdf_keeps_and_keeps_what_is_drawn():
+    p = _annotated()
+    assert anywhere(p, ID) and anywhere(p, NAME)
+    red, blue = _yellow(p)
+    assert red > 200 and blue < 120                                             # the highlight is drawn
+    with fitz.open(p) as d:
+        redact.scrub_pdf(d)
+        out = tmp() / "o.pdf"; d.save(out, garbage=3, deflate=True)
+    assert not anywhere(out, ID) and not anywhere(out, NAME)
+    red, blue = _yellow(out)
+    assert red > 200 and blue < 120                                             # still drawn
+    with fitz.open(out) as o:
+        kinds = [a.type[1] for a in o[0].annots()]
+        assert "Highlight" in kinds and "Text" in kinds and "FileAttachment" not in kinds and o.embfile_names() == []
+        assert o.get_toc() == [[1, "Part 1", 1]] and "Question 1 highlight me" in o[0].get_text()   # outline and text stay
+        assert all(o.xref_get_key(pg.xref, k)[0] == "null" for pg in o for k in ("Thumb", "PieceInfo"))
+        assert o.xref_get_key(o.pdf_catalog(), "PieceInfo")[0] == "null" and o.get_xml_metadata() == ""
+        assert not any(o.metadata.get(k) for k in ("author", "title", "subject", "keywords", "creator", "producer"))
+
+
+def test_scrub_pdf_passes_over_objects_mupdf_cannot_load():
+    p = _annotated()                                    # a real upload had xref entries MuPDF cannot load ("cannot find object")
+    with fitz.open(p) as d:
+        cat, real = d.pdf_catalog(), redact._annotation
+        redact._annotation = lambda doc, x, keep_out: (_ for _ in ()).throw(RuntimeError("cannot find object")) \
+            if x == cat else real(doc, x, keep_out)
+        try:
+            redact.scrub_pdf(d)
+        finally:
+            redact._annotation = real
+        out = tmp() / "o.pdf"; d.save(out, garbage=3)
+    assert not anywhere(out, ID) and not anywhere(out, NAME)
+
+
+def test_scrub_pdf_keeps_form_field_names():
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "Question 1"); _field(pg, value="Answer here", name="answer")
+    p = _save(d)
+    with fitz.open(p) as d:
+        redact.scrub_pdf(d)
+        out = tmp() / "o.pdf"; d.save(out, garbage=3)
+    with fitz.open(out) as o:
+        assert [(w.field_name, w.field_value) for w in o[0].widgets()] == [("answer", "Answer here")]
+
+
+def test_a_redacted_file_gets_the_same_scrub_on_its_other_pages():
+    p = _annotated()
+    two = p.with_name("two.pdf")
+    with fitz.open(p) as d:                                                     # the student's ID in page 2's text too
+        d[1].insert_text((72, 120), "ID: " + ID); d.save(two)
+    out = tmp() / "o.pdf"
+    r = redact.apply(two, out, [_text(2, ID)])                                  # page 1 keeps its annotations, emptied
+    assert r.ok and not anywhere(out, ID) and not anywhere(out, NAME)
+    red, blue = _yellow(out)
+    assert red > 200 and blue < 120
+
+
+def test_an_annot_without_a_subtype_is_emptied_with_the_page():
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "ID: " + ID); d.new_page().insert_text((72, 72), "Q2")
+    a = d.get_new_xref(); d.update_object(a, f"<</Type/Annot/Rect[72 300 300 330]/Contents({ID})>>"); px = d[0].xref
+    d.xref_set_key(px, "Annots", f"[{a} 0 R]")
+    se = d.get_new_xref(); d.update_object(se, f"<</Type/StructElem/S/Link/Pg {px} 0 R/K<</Type/OBJR/Obj {a} 0 R>>>>")
+    st = d.get_new_xref(); d.update_object(st, f"<</Type/StructTreeRoot/K[{se} 0 R]>>")
+    d.xref_set_key(d.pdf_catalog(), "StructTreeRoot", f"{st} 0 R")
+    p = _save(d)
+    with fitz.open(p) as s:
+        assert redact._ours(s, a, set())
+    out = tmp() / "o.pdf"
+    fitz.TOOLS.mupdf_display_errors(False)              # MuPDF complains it cannot draw an annotation without a subtype
+    try:
+        r = redact.apply(p, out, [_text(1, ID)])
+    finally:
+        fitz.TOOLS.mupdf_display_errors(True)
+    assert r.ok and not anywhere(out, ID)
 
 
 if __name__ == "__main__":

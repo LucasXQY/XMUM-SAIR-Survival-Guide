@@ -318,17 +318,18 @@ def _blank_tags(xml: bytes, tags: tuple[str, ...]) -> bytes:
 
 
 def clear_metadata(path: Path) -> str:
-    """Strip author-like metadata in place. Returns a short status for the report."""
+    """Strip author-like metadata in place. Returns a short status for the report. A PDF goes through
+    redact.scrub_pdf, which every committed PDF gets, redacted or not: annotation authors and contents, pop-ups, file
+    attachments, embedded files, piece info, thumbnails, the info dictionary and XMP go; what is drawn stays."""
     ext = _split_ext(path.name)[1]
     tmp = path.with_name(path.name + ".tmp")
     if ext == "pdf":
         try:
             import fitz
-            doc = fitz.open(path)
-            doc.set_metadata({})
-            doc.del_xml_metadata()
-            doc.save(tmp, garbage=3, deflate=True)
-            doc.close()
+            import redact
+            with fitz.open(path) as doc:
+                redact.scrub_pdf(doc)
+                doc.save(tmp, garbage=3, deflate=True)
         except Exception as e:  # corrupt or encrypted PDF: keep the file, tell the maintainer
             tmp.unlink(missing_ok=True)
             return f"PDF 打不开，请手动检查 | PDF could not be processed, check manually ({type(e).__name__})"

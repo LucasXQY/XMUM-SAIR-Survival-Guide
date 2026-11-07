@@ -537,9 +537,14 @@ def _wrapped(text_):
     return "\n".join(textwrap.wrap(text_, 70)) if len(text_) > 70 else text_
 
 
+ANNOTATED_HIGHLIGHT = (72, 60, 260, 76)
+
+
 def _pdf_bytes(k, pages=1, text=None, kind="text"):
     """One fixed PDF per number (PyMuPDF output is not byte-stable, so each is made once). kind "text": a text line per
-    page; "scan": every page one picture of the text, no text layer; "image": the text line and a picture beside it."""
+    page; "scan": every page one picture of the text, no text layer; "image": the text line and a picture beside it;
+    "annotated": the text line under a highlight whose author is "Tan Ah Kow", and a sticky note holding "EEE2109300"
+    (what Acrobat or Preview leave in a file nobody redacts: nothing of it is drawn as text)."""
     key = (k, pages, text, kind)
     if key not in _BYTES:
         import fitz
@@ -554,6 +559,9 @@ def _pdf_bytes(k, pages=1, text=None, kind="text"):
             pg.insert_text((72, 72), line)
             if kind == "image":
                 pg.insert_image(fitz.Rect(72, 300, 272, 500), pixmap=_picture(line, dpi=20))
+            if kind == "annotated":
+                pg.add_highlight_annot(ANNOTATED_HIGHLIGHT).set_info(title="Tan Ah Kow")
+                pg.add_text_annot((500, 500), "EEE2109300")
         _BYTES[key] = d.tobytes(); d.close()
     return _BYTES[key]
 
@@ -682,10 +690,12 @@ _BEFORE = {}        # repo copy -> its files before the run
 
 
 def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=(), during=None, pages=None,
-                   pdf_text=None, scanned=False, image=False, verify="no", compare="different", prepare=None):
+                   pdf_text=None, scanned=False, image=False, verify="no", compare="different", prepare=None,
+                   annotated=False):
     """Issue #5 with one attachment, a zip holding files 1..n (n = the highest number in the tables, at least 1);
     `pages` gives some of them more than one page. `pdf_text` is file 1's text (or {k: text}); `scanned` makes file 1 a
-    scan (pictures, no text layer), `image` gives file 1's pages a picture beside the text. `verify` and `compare` are
+    scan (pictures, no text layer), `image` gives file 1's pages a picture beside the text, `annotated` a highlight and a
+    note that hold personal data (see _pdf_bytes). `verify` and `compare` are
     the fake re-check's and comparison's answers; `prepare(repo)` runs on the repo copy before the run. The run's
     ledger is gh.budget; the PDFs the thumbnail sheet was made from are kept for thumbnail_sources."""
     import zipfile
@@ -697,7 +707,7 @@ def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", f
     z = w / "upload.zip"
     with zipfile.ZipFile(z, "w") as zf:
         for k in range(1, max([*sorts, *checks, *(pages or {}), 1]) + 1):
-            kind = ("scan" if scanned else "image" if image else "text") if k == 1 else "text"
+            kind = ("scan" if scanned else "image" if image else "annotated" if annotated else "text") if k == 1 else "text"
             zf.writestr(f"d{k}/{member}" if member else f"orig_{k}.pdf", _pdf_bytes(k, (pages or {}).get(k, 1), texts.get(k), kind))
     gh = gh or FakeGH()
     gh.body = gh.body or FORM_BODY
@@ -898,6 +908,26 @@ def test_redaction_targets_never_leave_the_run():                           # th
     stored = gh.cache["check"][_sha_of(gh, 1)]
     assert [r.get("text") for r in stored["redactions"]] == [None, None] and [r["page"] for r in stored["redactions"]] == [1, 1]
     assert stored["redactions_ok"] is True and stored["redactions_rects"] and all(set(r) == {"page", "rect"} for r in stored["redactions_rects"])
+
+
+def test_an_unredacted_pdf_is_committed_without_annotation_authors_or_notes():    # final review, finding 1
+    import fitz
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, annotated=True)   # the check found nothing to black out
+    original = _pdf_bytes(1, 1, None, "annotated")
+    assert _leaks(original, "Tan Ah Kow") and _leaks(original, "EEE2109300")
+    assert committed_pdfs(tmp) == [FINAL]
+    committed = (tmp / FINAL).read_bytes()
+    assert not _leaks(committed, "Tan Ah Kow") and not _leaks(committed, "EEE2109300")
+    assert not any(_leaks(b, "Tan Ah Kow") or _leaks(b, "EEE2109300") for p, b in _THUMBS if tmp in p.parents)
+    def highlight(pdf_bytes):
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as d:
+            assert "Highlight" in [a.type[1] for a in d[0].annots()] and "COM107 Final" in d[0].get_text()
+            return d[0].get_pixmap(dpi=72, colorspace=fitz.csRGB, clip=fitz.Rect(ANNOTATED_HIGHLIGHT)).samples
+    drawn = highlight(committed)
+    assert drawn == highlight(original)                                          # the highlight is drawn as before
+    with fitz.open(stream=original, filetype="pdf") as d:
+        d[0].delete_annot(d[0].first_annot)
+        assert d[0].get_pixmap(dpi=72, colorspace=fitz.csRGB, clip=fitz.Rect(ANNOTATED_HIGHLIGHT)).samples != drawn
 
 
 def test_a_file_over_100_pages_is_held_back_unchecked():

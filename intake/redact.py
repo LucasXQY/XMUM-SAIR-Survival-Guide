@@ -1,9 +1,14 @@
 """Black out personal data in a PDF (spec §5 steps 3–4): the full check's redactions become PyMuPDF redaction
 annotations, applied so that the text, image pixels and any line art they touch are removed, not just covered. Every
 annotation and form field on a redacted page goes first (a field's value would survive under the black box), and the
-outline, page labels, page thumbnails and piece info, metadata, XMP and embedded files go from the whole file. Every
-page is read again afterwards: every blacked-out string, and every word the word fallback blacked out, must be gone.
-Problems name pages or redaction numbers, never the text; the rectangles kept for the cache hold no text."""
+outline and page labels go from the whole file. Every page is read again afterwards: every blacked-out string, and every
+word the word fallback blacked out, must be gone. Problems name pages or redaction numbers, never the text; the
+rectangles kept for the cache hold no text.
+
+scrub_pdf is what EVERY committed PDF goes through, redacted or not (intake.clear_metadata): the places a name ends up
+without being drawn on the page (annotation authors, subjects, contents and rich text, pop-ups, file attachments,
+embedded files, piece info, page thumbnails and metadata streams, the info dictionary, XMP) are emptied, while what
+annotations draw (highlights, ink) and the outline stay."""
 from __future__ import annotations
 
 import math
@@ -15,7 +20,12 @@ from pathlib import Path
 WIDEN = 0.02        # each side of a box grows by this share of the displayed page's width / height
 MIN_WORD = 3        # the word fallback searches the words of at least this many characters
 BLACK = (0, 0, 0)
-PAGE_KEYS = ("PieceInfo", "Metadata", "Thumb")      # removed from every page
+DOC_KEYS = ("PieceInfo", "AF")                      # removed from the catalog of every committed PDF
+PAGE_KEYS = ("PieceInfo", "Metadata", "Thumb", "AF")  # removed from every page of every committed PDF
+ANNOT_TEXT = ("T", "Subj", "Contents", "RC")        # an annotation's author, subject, contents and rich text
+ANNOT_SUBTYPES = {"Text", "Link", "FreeText", "Line", "Square", "Circle", "Polygon", "PolyLine", "Highlight", "Underline",
+                  "Squiggly", "StrikeOut", "Stamp", "Caret", "Ink", "Popup", "FileAttachment", "Sound", "Movie", "Widget",
+                  "Screen", "PrinterMark", "TrapNet", "Watermark", "3D", "Redact", "Projection", "RichMedia"}
 _REF = re.compile(r"(\d+)\s+\d+\s+R")
 _EDGE = re.compile(r"^\W+|\W+$")
 _HYPHEN_BREAK = re.compile(r"-[ \t]*\n\s*")
@@ -194,13 +204,14 @@ def _plan(doc, redactions):
     return marks, sorted(boxes), list(dict.fromkeys(used)), problems
 
 
-def _top_refs(array: str) -> list[int]:
-    """Object numbers referenced by the top-level entries of a PDF array "[...]". What sits inside a direct dict,
-    a nested array or a string entry (an annotation's /P, /Popup, /Parent, /AP ...) is never followed."""
+def _scan(array: str) -> tuple[str, list[tuple[int, int]]] | None:
+    """A PDF array "[...]" read once: (its top-level text, with every string, dict and nested array blanked out; the
+    (start, end) of every top-level "<<...>>" entry in the array's inner text, array.strip()[1:-1]). None when it is not
+    an array."""
     body = array.strip()
     if not (body.startswith("[") and body.endswith("]")):
-        return []
-    body, flat, depth, i = body[1:-1], [], 0, 0
+        return None
+    body, flat, spans, depth, start, i = body[1:-1], [], [], 0, None, 0
     while i < len(body):
         c = body[i]
         if c == "(":                                            # a literal string: balanced, with escapes
@@ -210,7 +221,14 @@ def _top_refs(array: str) -> list[int]:
                 i += 2 if body[i] == "\\" else 1
             flat.append(" ")
         elif body.startswith("<<", i) or body.startswith(">>", i):
-            depth += 1 if c == "<" else -1
+            if c == "<":
+                start = i if depth == 0 else start
+                depth += 1
+            else:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    spans.append((start, i + 2))
+                    start = None
             flat.append(" ")
             i += 2
         elif c == "<":                                          # a hex string
@@ -224,7 +242,14 @@ def _top_refs(array: str) -> list[int]:
         else:
             flat.append(c if depth == 0 else " ")
             i += 1
-    return [int(m) for m in _REF.findall("".join(flat))]
+    return "".join(flat), spans
+
+
+def _top_refs(array: str) -> list[int]:
+    """Object numbers referenced by the top-level entries of a PDF array "[...]". What sits inside a direct dict,
+    a nested array or a string entry (an annotation's /P, /Popup, /Parent, /AP ...) is never followed."""
+    s = _scan(array)
+    return [] if s is None else [int(m) for m in _REF.findall(s[0])]
 
 
 def _refs(doc, got) -> list[int]:
@@ -252,10 +277,13 @@ def _page_tree(doc) -> set[int]:
 
 def _ours(doc, x: int, keep_out: set[int]) -> bool:
     """Is object x an annotation or a form field (the only objects ever emptied)? Not the page tree, not a stream,
-    not anything typed other than /Annot (a font, an image ...)."""
+    not anything typed other than /Annot (a font, an image ...). /Type /Annot is enough on its own, Subtype or not."""
     if x in keep_out or not 0 < x < doc.xref_length() or doc.xref_is_stream(x):
         return False
-    if doc.xref_get_key(x, "Type")[1] not in ("null", "/Annot"):
+    typ = doc.xref_get_key(x, "Type")[1]
+    if typ == "/Annot":
+        return True
+    if typ != "null":
         return False
     return bool(set(doc.xref_get_keys(x)) & {"Subtype", "FT", "T", "Kids", "Parent", "V"})
 
@@ -317,13 +345,95 @@ def _prune_form(doc) -> None:
     doc.xref_set_key(form, key + "Fields", "[" + " ".join(f"{f} 0 R" for f in fields) + "]")
 
 
-def _strip(doc) -> None:
-    """What a redacted file never keeps: unused form fields, the outline, page labels, every page's piece info,
-    metadata stream and thumbnail, embedded files, the info dictionary and the XMP metadata."""
-    _prune_form(doc)
-    doc.set_toc([])
+def _annotation(doc, x: int, keep_out: set[int]) -> bool:
+    """Is object x an annotation: /Type /Annot, or untyped with an annotation subtype? Never the page tree or a stream."""
+    if x in keep_out or not 0 < x < doc.xref_length() or doc.xref_is_stream(x):
+        return False
+    typ = doc.xref_get_key(x, "Type")[1]
+    return typ == "/Annot" or (typ == "null" and doc.xref_get_key(x, "Subtype")[1].lstrip("/") in ANNOT_SUBTYPES)
+
+
+def _own_annots(doc, page) -> None:
+    """Every annotation written straight into the page's /Annots array (a direct dict, which has no object number of
+    its own) becomes an object of its own in the same place, so that scrub_pdf reaches it like every other one."""
+    kind, val = doc.xref_get_key(page.xref, "Annots")
+    holder = None
+    if kind == "xref":
+        holder = int(val.split()[0])
+        if not 0 < holder < doc.xref_length() or doc.xref_is_stream(holder):
+            return
+        val = doc.xref_object(holder)
+    elif kind != "array":
+        return
+    s = _scan(val)
+    if s is None or not s[1]:
+        return
+    inner = val.strip()[1:-1]
+    for a, b in reversed(s[1]):
+        x = doc.get_new_xref()
+        doc.update_object(x, inner[a:b])
+        inner = f"{inner[:a]} {x} 0 R {inner[b:]}"
+    if holder is None:
+        doc.xref_set_key(page.xref, "Annots", f"[{inner}]")
+    else:
+        doc.update_object(holder, f"[{inner}]")
+
+
+def _drop_attachments(doc, page, keep_out: set[int]) -> None:
+    """File-attachment annotations, and their pop-ups, off the page (scrub_pdf then empties them and their files)."""
+    refs = _refs(doc, doc.xref_get_key(page.xref, "Annots"))
+    files = [x for x in refs if _annotation(doc, x, keep_out) and doc.xref_get_key(x, "Subtype")[1] == "/FileAttachment"]
+    if not files:
+        return
+    gone = set(files)
+    for x in files:
+        kind, val = doc.xref_get_key(x, "Popup")
+        if kind == "xref":
+            gone.add(int(val.split()[0]))
+    doc.xref_set_key(page.xref, "Annots", "[" + " ".join(f"{x} 0 R" for x in refs if x not in gone) + "]")
+
+
+def _empty_annotation(doc, x: int, keep_out: set[int]) -> None:
+    """Annotation x without its author, subject, contents and rich text, a direct pop-up's too (a widget keeps its /T:
+    that is the form field's name). A file attachment is emptied whole, with the file specification it points at."""
+    if doc.xref_get_key(x, "Subtype")[1] == "/FileAttachment":
+        kind, val = doc.xref_get_key(x, "FS")
+        if kind == "xref":
+            fs = int(val.split()[0])
+            if fs not in keep_out and 0 < fs < doc.xref_length() and not doc.xref_is_stream(fs):
+                _blank(doc, fs)
+        _blank(doc, x)
+        return
+    field_ = doc.xref_get_key(x, "Subtype")[1] == "/Widget" or doc.xref_get_key(x, "FT")[0] != "null"
+    for k in ANNOT_TEXT:
+        if (k != "T" or not field_) and doc.xref_get_key(x, k)[0] != "null":
+            doc.xref_set_key(x, k, "null")
+    if doc.xref_get_key(x, "Popup")[0] == "dict":
+        for k in ANNOT_TEXT:
+            if doc.xref_get_key(x, "Popup/" + k)[0] != "null":
+                doc.xref_set_key(x, "Popup/" + k, "null")
+
+
+def scrub_pdf(doc) -> None:
+    """What no committed PDF keeps, redacted or not, in place on an open document: every annotation's author (/T),
+    subject, contents and rich text, pop-ups' too, wherever the annotation object is (a page's /Annots, written
+    straight into it, or only the structure tree); file-attachment annotations; embedded files and associated files;
+    the catalog's and every page's piece info, every page's thumbnail and metadata stream; the info dictionary and the
+    XMP metadata. What annotations draw (their appearance streams: highlights, ink, stamps) and the outline stay;
+    widgets keep their field names. The caller saves (with garbage collection, so what was cut loose goes)."""
+    keep_out = _page_tree(doc)
+    for page in doc:
+        _own_annots(doc, page)
+        _drop_attachments(doc, page, keep_out)
+    for x in range(1, doc.xref_length()):
+        try:
+            found = _annotation(doc, x, keep_out)
+        except Exception:               # a missing or unparseable object: nothing the save could write either
+            continue
+        if found:
+            _empty_annotation(doc, x, keep_out)
     cat = doc.pdf_catalog()
-    for k in ("PageLabels", "PieceInfo"):
+    for k in DOC_KEYS:
         if doc.xref_get_key(cat, k)[0] != "null":
             doc.xref_set_key(cat, k, "null")
     for page in doc:
@@ -334,6 +444,16 @@ def _strip(doc) -> None:
         doc.embfile_del(name)
     doc.set_metadata({})
     doc.del_xml_metadata()
+
+
+def _strip(doc) -> None:
+    """What a redacted file loses on top of scrub_pdf: unused form fields, the outline and the page labels."""
+    _prune_form(doc)
+    doc.set_toc([])
+    cat = doc.pdf_catalog()
+    if doc.xref_get_key(cat, "PageLabels")[0] != "null":
+        doc.xref_set_key(cat, "PageLabels", "null")
+    scrub_pdf(doc)
 
 
 def _remove(out: Path) -> None:
