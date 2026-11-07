@@ -475,9 +475,13 @@ def upload_page(site: Site) -> str:
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     content = (
         "<h1>上传资料 | Upload material</h1>"
+        "<p>一次可以传很多份，zip 也行，不同课程、不同类型可以混在一起：机器人会逐个分拣、改名、归位，拿不准的留给维护者。"
+        "下面填的课程、学期和类型只是给机器人的提示。"
+        "<br><small>Many files, zips and mixed courses or types are fine: the bot sorts each file, renames and files it, "
+        "and leaves the ones it is unsure about to a maintainer. The course, session and type below are only hints for the bot.</small></p>"
         '<ol class="rate-steps">'
-        "<li>在这里填课程、老师、学期和资料类型。已有的课和老师边打字边提示；列表里没有的直接写完，会当作新的。"
-        "<br><small>Fill in the course, lecturer, session and type. Known courses and lecturers are suggested as you type; anything not listed is taken as new.</small></li>"
+        "<li>在这里填主要那门课的课程、老师、学期和资料类型。已有的课和老师边打字边提示；列表里没有的直接写完，会当作新的。"
+        "<br><small>Fill in the course, lecturer, session and type of the main course. Known courses and lecturers are suggested as you type; anything not listed is taken as new.</small></li>"
         "<li>点「下一步」，跳到已经填好的 GitHub 表单，把文件拖进「文件」框，勾选确认后提交（需要 GitHub 账号）。"
         "<br><small>Press Next: the GitHub form opens filled in; drag your files into the Files box, tick the checklist and submit (needs a GitHub account).</small></li>"
         "<li>几分钟内机器人回复一个整理好的 PR，维护者审核合并后网站更新。"
@@ -505,8 +509,8 @@ def upload_page(site: Site) -> str:
         '<p id="up-error" class="error" role="alert"></p>'
         '<p><button type="submit" class="btn big">下一步：到 GitHub 加文件 | Next: add files on GitHub</button></p></form>'
         f'<script type="application/json" id="up-data">{blob}</script>'
-        f'<p class="muted">也可以<a href="{UPLOAD_URL}">直接打开空白表单</a>。没有 GitHub 账号？发邮件到 <code>xieqiyi@ieee.org</code>，我们帮你传并署名。'
-        f'<br>Or <a href="{UPLOAD_URL}">open the blank form</a>. No GitHub account? Email <code>xieqiyi@ieee.org</code> and we upload it for you, with credit.</p>')
+        f'<p class="muted">什么都不想填？<a href="{UPLOAD_URL}">直接打开空白表单</a>，选好专业、拖进文件就行。没有 GitHub 账号？发邮件到 <code>xieqiyi@ieee.org</code>，我们帮你传并署名。'
+        f'<br>Rather not fill anything in? <a href="{UPLOAD_URL}">Open the blank form</a>: pick your programme and drop the files. No GitHub account? Email <code>xieqiyi@ieee.org</code> and we upload it for you, with credit.</p>')
     return page(site, "上传资料 | Upload material", content, "上传试卷、大纲、笔记：选好课程和老师，再到 GitHub 加文件 | upload material")
 
 

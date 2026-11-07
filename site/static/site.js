@@ -98,20 +98,23 @@
     type.addEventListener('change', function () { assessRow.hidden = type.value !== 'Past-Papers'; });
     up.addEventListener('submit', function (e) {
       e.preventDefault();
+      // only the programme is needed (it always has a value); course, session and type are hints for the bot, so an
+      // empty one is left out of the GitHub form, and only a hint given in the wrong shape stops the visitor
       var c = norm(code.value);
       var session = term.value === 'other' ? other.value.trim() : (year.value && term.value ? year.value + '-' + term.value : '');
-      var miss = [];
-      if (!CODE.test(c)) miss.push('课程代码 | course code');
-      if (!name.value.trim()) miss.push('课程名称 | course name');
-      if (!/^\d{4}-\d{2}$/.test(session)) miss.push('学期 | session');
-      if (!type.value) miss.push('资料类型 | type');
-      if (miss.length) { err.textContent = '还差 | Still needed: ' + miss.join('、'); return; }
+      var bad = [];
+      if (c && !CODE.test(c)) bad.push('课程代码 | course code');
+      if ((session || year.value || (term.value && term.value !== 'other')) && !/^\d{4}-\d{2}$/.test(session)) bad.push('学期 | session');
+      if (bad.length) { err.textContent = '格式不对，改一下或留空 | Fix or leave blank: ' + bad.join('、'); return; }
       err.textContent = '';
       var p = new URLSearchParams();
       p.set('template', 'upload.yml');
-      p.set('title', '[上传 | Upload] ' + c + ' ' + session + ' ' + type.value);
-      p.set('prog', $('up-prog').value); p.set('code', c); p.set('name', name.value.trim());
-      p.set('session', session); p.set('type', type.value);
+      p.set('title', ['[上传 | Upload]', c, session, type.value].filter(Boolean).join(' '));
+      p.set('prog', $('up-prog').value);
+      if (c) p.set('code', c);
+      if (name.value.trim()) p.set('name', name.value.trim());
+      if (session) p.set('session', session);
+      if (type.value) p.set('type', type.value);
       if (lect.value.trim()) p.set('lecturer', lect.value.trim());
       if (type.value === 'Past-Papers' && assess.value.trim()) p.set('assessment', assess.value.trim());
       location.href = up.dataset.form.split('?')[0] + '?' + p.toString().replace(/\+/g, '%20');
