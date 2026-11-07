@@ -597,7 +597,7 @@ def rate_page(site: Site) -> str:
 
 def site_pages(site: Site) -> list[str]:
     """Every page's path relative to the site root, for the sitemap."""
-    pages = ["", "qa/", "courses/", "upload/", "recent/", "wanted/", "reviews/", "rate/", "news/", "opportunities/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
+    pages = ["", "qa/", "blog/", "courses/", "upload/", "recent/", "wanted/", "reviews/", "rate/", "news/", "opportunities/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
              *(f"{c.path}/" for c in site.courses), *(f"lecturers/{lecturer_slug(n)}/" for n in lecturers(site))]
     return list(dict.fromkeys(pages))
 
@@ -1018,9 +1018,11 @@ def news_page(site: Site) -> str:
 BOARD_CATS = {
     "opp": [("research", "科研", "Research", "🔬"), ("intern", "实习", "Internship", "💼"), ("job", "全职", "Full-time", "🏢"),
             ("referral", "内推码", "Referral", "🎟️"), ("event", "比赛活动", "Events", "🏆"), ("study", "升学奖学金", "Study", "🎓")],
-    "story": [("research", "科研经历", "Research", "🔬"), ("intern", "实习经历", "Internship", "💼"), ("job", "求职面经", "Job hunting", "🏢"),
-              ("study", "升学申请", "Grad school", "🎓"), ("event", "比赛经验", "Competitions", "🏆"), ("life", "其他", "Other", "☕")],
 }
+# the blog's categories (experience posts moved off the opportunity wall on 2026-11-07); assistant/src/forum.js keeps the
+# same keys in BLOG_HINTS and check() compares them
+BLOG_CATS = [("research", "科研经历", "Research", "🔬"), ("intern", "实习经历", "Internship", "💼"), ("job", "求职面经", "Job hunting", "🏢"),
+             ("study", "升学申请", "Grad school", "🎓"), ("event", "比赛经验", "Competitions", "🏆"), ("life", "校园生活", "Student life", "☕")]
 CURATED_CAT = {"科研": "research", "实习": "intern", "全职": "job", "内推": "referral", "比赛活动": "event", "升学": "study"}
 OPP_MD = "Research-Opportunities.md"
 
@@ -1048,27 +1050,24 @@ def curated_opportunities(site: Site) -> list[dict]:
     return out
 
 
-def research_guide(site: Site) -> dict | None:
-    """The getting-started guide as a pinned experience post."""
+def research_guide(site: Site) -> str:
+    """The maintainers' getting-started guide, folded open under the wall ("" without one)."""
     path = site.root / OPP_MD
     if not path.is_file():
-        return None
+        return ""
     text = path.read_text(encoding="utf-8")
     m = re.search(r"^## (科研入门[^|\n]*?)\s*\|\s*(.*)$", text, flags=re.M)
     sec = _md_section(text, "科研入门")
     if not (m and sec):
-        return None
-    body = re.sub(r"^这一篇在网站上置顶.*\n", "", sec, flags=re.M).strip()
-    body = re.sub(r"\*\*(.+?)\*\*", r"\1", body)   # plain text: the page shows posts as text
-    body = re.sub(r"^- ", "• ", body, flags=re.M)
-    return {"id": "guide", "kind": "story", "cat": "research", "title": f"{m.group(1).strip()} | {m.group(2).strip()}",
-            "body": body, "fields": {}, "author": "维护者 | maintainers", "at": "", "pinned": True}
+        return ""
+    body = re.sub(r"^这一篇在网站上.*\n", "", sec, flags=re.M).strip()
+    return (f'<details class="board-how guide" open><summary>📌 {esc(m.group(1).strip())} | {esc(m.group(2).strip())}</summary>'
+            f"{render_md(site, body, OPP_MD)}</details>")
 
 
 def board_data(site: Site) -> str:
-    guide = research_guide(site)
     data = {"cats": {k: [{"key": a, "zh": b, "en": c, "icon": d} for a, b, c, d in v] for k, v in BOARD_CATS.items()},
-            "curated": curated_opportunities(site) + ([guide] if guide else [])}
+            "curated": curated_opportunities(site)}
     return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
 
 
@@ -1088,26 +1087,30 @@ def opportunities_page(site: Site) -> str:
         how = render_md(site, _md_section(path.read_text(encoding="utf-8"), "怎么发布"), OPP_MD)
     content = (
         "<h1>🧭 机会 | Opportunities</h1>"
-        '<p class="lead">实习、科研、全职、内推码、比赛、升学：同学和老师贴的机会都在这面墙上，点便签看详情。下面是同学写的经验帖。'
+        '<p class="lead">实习、科研、全职、内推码、比赛、升学：同学和老师贴的机会都在这面墙上，点便签看详情。'
+        f'经历过的同学，欢迎到<a href="{site.prefix}blog/">博客</a>写一篇经验。'
         "<br><span class=\"muted\">Internships, research, jobs, referral codes, competitions and study, pinned by students and lecturers; "
-        "tap a note for details. Experience posts from students are further down.</span></p>"
+        f'tap a note for details. Been through one? Write it up on the <a href="{site.prefix}blog/">blog</a>.</span></p>'
         '<p class="board-actions"><button type="button" class="btn big" data-compose="opp">＋ 发布机会 | Post an opportunity</button> '
-        '<button type="button" class="btn" data-compose="story">✍️ 分享经验 | Share an experience</button></p>'
+        f'<a class="btn" href="{site.prefix}blog/?write=1">✍️ 写经验 | Write an experience post</a></p>'
         + board_html(site)
+        + research_guide(site)
         + f'<details class="board-how"><summary>怎么发布、怎么审核 | How posting and checking work</summary>{how}</details>'
         f'<script src="{site.prefix}static/board.js" defer></script>')
-    return page(site, "机会 | Opportunities", content, "实习、科研、全职、内推码、比赛和经验分享 | internships, research, jobs, referral codes and experience posts")
+    return page(site, "机会 | Opportunities", content, "实习、科研、全职、内推码、比赛和升学机会 | internships, research, jobs, referral codes and study")
 
 
 def forum_html(site: Site, mode: str, course: str = "") -> str:
     """The discussion area's mount point; static/forum.js fills it from the Worker (assistant/src/forum.js). One per page.
-    mode: full (the discussion page), course (one course's threads), preview (home page), requests (wanted page)."""
+    mode: full (the discussion page), blog (the blog), course (one course's threads and posts), preview (home page),
+    requests (wanted page)."""
     data = {"boards": [{k: b[k] for k in ("key", "zh", "en", "icon")} for b in BOARDS_CFG["boards"]],
+            "cats": [{"key": a, "zh": b, "en": c, "icon": d} for a, b, c, d in BLOG_CATS],
             "courses": {c.code: {"name": c.name, "url": f"{site.prefix}{c.path}/"} for c in site.courses}}
     attrs = (f'data-forum="{WORKER_URL}/forum" data-sitekey="{TURNSTILE_SITE_KEY}" data-mode="{mode}"'
              + (f' data-course="{esc(course)}"' if course else ""))
-    fallback = ('<noscript><p class="muted">讨论区需要打开 JavaScript。| The discussion area needs JavaScript.</p></noscript>'
-                if mode in ("full", "course") else "")
+    fallback = ('<noscript><p class="muted">讨论区和博客需要打开 JavaScript。| The discussion area and the blog need JavaScript.</p></noscript>'
+                if mode in ("full", "course", "blog") else "")
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return (f'<div class="forum-app" {attrs}>{fallback}</div>'
             f'<script type="application/json" class="forum-data">{blob}</script>'
@@ -1141,8 +1144,45 @@ def qa_page(site: Site) -> str:
                f'<p class="muted">改版前在 GitHub 上的帖子留作只读存档：<a href="{GH}/discussions">GitHub 讨论区</a>。新问题请在上面发帖。'
                f'<br>Posts from before, on GitHub, are kept as a read-only archive: <a href="{GH}/discussions">GitHub Discussions</a>. '
                'Please start new threads above.</p>')
-    return page(site, "讨论区 | Discussion", head + rules + forum_html(site, "full") + archive,
+    return page(site, "讨论区 | Discussion", community_tabs(site, "qa") + f'<div class="forum-intro">{head}{rules}</div>' + forum_html(site, "full") + archive,
                 "按话题分板块的讨论区，不用登录 | discussion boards, no login")
+
+
+def community_tabs(site: Site, here: str) -> str:
+    """Two tabs over the discussion area and the blog; both sit under the header's Discussion block."""
+    tabs = [("qa", "💬 讨论区", "Discussion"), ("blog", "📝 博客", "Blog")]
+    links = "".join(f'<a href="{site.prefix}{k}/"' + (' aria-current="page"' if k == here else "") + f'>{zh} <small>{en}</small></a>'
+                    for k, zh, en in tabs)
+    return f'<nav class="tabs" aria-label="社区 | Community">{links}</nav>'
+
+
+BLOG_RULES = ("<ul><li>写你自己的经历：科研、实习、求职面经、升学申请、比赛、校园生活。可以写公司、实验室、学校的名字和面试题。"
+              "<br>Your own experience: research, internships, job hunting and interviews, grad school, competitions, student life. "
+              "Naming the company, lab or school and describing interview questions is fine.</li>"
+              "<li>格式：<code>## 小标题</code>、<code>**加粗**</code>、<code>- 列表</code>、<code>&gt; 引用</code>、<code>[链接](https://…)</code>，"
+              "工具栏里都有按钮，写完可以预览。草稿自动保存在你的浏览器里。"
+              "<br>Formatting: headings, bold, lists, quotes and links, all on the toolbar, with a preview. The draft is saved in your browser.</li>"
+              "<li>图片：每篇最多 6 张，JPG / PNG / WebP。浏览器会先把图片压到长边 1600 像素、约 400 KB，同时去掉照片里的位置和设备信息；"
+              "每个浏览器每天最多传 20 张。"
+              "<br>Images: up to 6 per post, JPG, PNG or WebP. Your browser shrinks each to 1600 px and about 400 KB and drops the "
+              "photo's location and camera data; at most 20 images per browser per day.</li>"
+              "<li>审核：文字和图片都先过关键词表和 AI 初审，拿不准的等维护者看。学生证、成绩单、offer 上的个人信息、考试答案和评分标准、"
+              "别人的聊天截图（带名字或号码）都不能放。"
+              "<br>Checking: text and images go through the keyword lists and an automatic check first; unsure posts wait for a "
+              "maintainer. No student cards, transcripts or offer letters with personal data, no exam answers or marking "
+              "schemes, no screenshots of other people's chats with their names or numbers.</li>"
+              "<li>评论、举报、撤回和讨论区一样。| Comments, reports and withdrawing work as in the discussion area.</li></ul>")
+
+
+def blog_page(site: Site) -> str:
+    """The blog: students' experience posts with images, served by the Worker like the discussion area."""
+    head = ("<h1>博客 | Blog</h1>"
+            "<p>同学写的经验：科研、实习、求职面经、升学申请、比赛、校园生活。不用登录就能写，可以放图片，发出前会先审核。"
+            "<br>Experience posts by students: research, internships, job hunting, grad school, competitions, student life. "
+            "Write without logging in, add images; every post is checked first.</p>")
+    rules = f'<details class="board-how"><summary>怎么写、怎么审核 | How writing and checking work</summary>{BLOG_RULES}</details>'
+    return page(site, "博客 | Blog", community_tabs(site, "blog") + f'<div class="forum-intro">{head}{rules}</div>' + forum_html(site, "blog"),
+                "同学写的科研、实习、求职、升学和比赛经验 | students' write-ups of research, internships, job hunting, grad school and competitions")
 
 
 def not_found_page(site: Site) -> str:
@@ -1187,6 +1227,7 @@ def build(root: Path, out: Path, prefix: str, topics: dict | None = None) -> Sit
     write("index.html", home_page(site))
     write("404.html", not_found_page(site))
     write("qa/index.html", qa_page(site))
+    write("blog/index.html", blog_page(site))
     write("courses/index.html", courses_page(site))
     write("upload/index.html", upload_page(site))
     write("recent/index.html", recent_page(site))
@@ -1248,9 +1289,9 @@ def check_generator_sources() -> list[str]:
     return hits
 
 
-def forum_board_keys(path: Path = HERE.parent / "assistant" / "src" / "forum.js") -> list[str]:
-    """The board keys in the Worker's BOARD_HINTS, in order."""
-    block = re.search(r"export const BOARD_HINTS = \{(.*?)\n\};", path.read_text(encoding="utf-8"), re.S)
+def forum_board_keys(path: Path = HERE.parent / "assistant" / "src" / "forum.js", name: str = "BOARD_HINTS") -> list[str]:
+    """The keys of one of the Worker's key lists (BOARD_HINTS, BLOG_HINTS), in order."""
+    block = re.search(rf"export const {name} = \{{(.*?)\n\}};", path.read_text(encoding="utf-8"), re.S)
     return re.findall(r"^\s+(\w+):", block.group(1), re.M) if block else []
 
 
@@ -1268,6 +1309,8 @@ def check(site: Site, out: Path) -> None:
     worker_boards = forum_board_keys()
     assert worker_boards == [b["key"] for b in BOARDS_CFG["boards"]], \
         f"assistant/src/forum.js boards {worker_boards} differ from discussions/boards.json"
+    worker_cats = forum_board_keys(name="BLOG_HINTS")
+    assert worker_cats == [k for k, *_ in BLOG_CATS], f"assistant/src/forum.js blog categories {worker_cats} differ from BLOG_CATS"
     for page_file in out.rglob("*.html"):
         text = page_file.read_text(encoding="utf-8")
         for href in re.findall(r'href="([^"]*)"', text):

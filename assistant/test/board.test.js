@@ -17,7 +17,7 @@ test("validation: kind, category, lengths, dates, links, referral needs a code o
   assert.equal(bd.validate(opp()).ok, true);
   assert.equal(bd.validate(opp({ kind: "x" })).ok, false);
   assert.equal(bd.validate(opp({ cat: "life" })).ok, false);                 // a story category on an opportunity
-  assert.equal(bd.validate(opp({ kind: "story", cat: "life" })).ok, true);
+  assert.equal(bd.validate(opp({ kind: "story", cat: "life" })).ok, false);   // experience posts live on the blog now
   assert.equal(bd.validate(opp({ title: "abc" })).ok, false);
   assert.equal(bd.validate(opp({ body: "too short" })).ok, false);
   assert.equal(bd.validate(opp({ fields: { deadline: "next week" } })).ok, false);

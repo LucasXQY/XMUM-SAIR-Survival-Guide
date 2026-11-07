@@ -1,6 +1,6 @@
-// 机会墙与经验帖（/board）：不用登录，每次发帖过一次人机验证；Haiku 先看一遍，决定直接发布、留给维护者看，还是退回并说明原因。
+// 机会墙（/board；经验帖 2026-11-07 起搬到博客，见 forum.js）：不用登录，每次发帖过一次人机验证；Haiku 先看一遍，决定直接发布、留给维护者看，还是退回并说明原因。
 // 模型出错或超时一律「留给维护者」，从不因为模型失败而直接发布。帖子存在 Durable Object 的 SQLite 里（worker.js 的 BoardStore）。
-// The opportunity wall and experience posts (/board): no login, a human check per post; Haiku reads each post and either
+// The opportunity wall (/board; experience posts moved to the blog in forum.js on 2026-11-07): no login, a human check per post; Haiku reads each post and either
 // publishes it, holds it for the maintainer, or sends it back with a reason. A model error always means "hold", never
 // "publish". Posts live in a Durable Object's SQLite (BoardStore in worker.js); MemoryBoard below is for tests.
 
@@ -9,7 +9,6 @@ export const MOD_MODEL = "claude-haiku-5-5";
 // Kinds and their categories. Keys are stored; labels are shown by the site (static/board.js keeps the same list).
 export const CATS = {
   opp: ["research", "intern", "job", "referral", "event", "study"],
-  story: ["research", "intern", "job", "study", "event", "life"],
 };
 export const LIMITS = {
   perIpDaily: 20,        // posts per network per day (a campus shares one address, so this is generous)
@@ -26,7 +25,7 @@ const clean = (s, n) => String(s ?? "").normalize("NFC").replace(/\r\n?/g, "\n")
 
 export function validate(body) {
   const b = body || {};
-  const kind = b.kind === "story" ? "story" : b.kind === "opp" ? "opp" : "";
+  const kind = b.kind === "opp" ? "opp" : "";
   const problems = [];
   if (!kind) problems.push("类型 | kind");
   const cat = String(b.cat || "");

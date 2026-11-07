@@ -1,4 +1,5 @@
-/* XMUM SAIR 生存指南 — the opportunity wall and experience posts (/opportunities/, and three notes on the home page).
+/* XMUM SAIR 生存指南 — the opportunity wall (/opportunities/, and three notes on the home page). Experience posts moved
+   to the blog (static/forum.js, /blog/) on 2026-11-07.
    Posts come from the site's Worker (assistant/src/board.js) plus the maintainers' notes in Research-Opportunities.md,
    which build.py puts in the page. Posting needs no account: one human check (Turnstile) per post, then an automatic
    first check decides "live", "held for a maintainer" or "sent back with a reason". Everything is drawn with
@@ -66,18 +67,6 @@
     return el;
   }
 
-  function storyCard(p) {
-    var c = cat('story', p.cat);
-    var el = mk('button', 'story' + (p.pinned ? ' is-pinned' : ''));
-    el.type = 'button';
-    el.addEventListener('click', function () { openPost(p); });
-    el.appendChild(mk('span', 'story-cat', (p.pinned ? '📌 ' : '') + c.icon + ' ' + c.zh));
-    el.appendChild(mk('span', 'story-title', p.title));
-    el.appendChild(mk('span', 'story-excerpt', p.body.replace(/\s+/g, ' ').slice(0, 140)));
-    el.appendChild(mk('span', 'story-meta', [p.author || '匿名 | anonymous', when(p.at)].filter(Boolean).join(' · ')));
-    return el;
-  }
-
   function chips(kind, onPick) {
     var row = mk('div', 'board-filters');
     row.setAttribute('role', 'group');
@@ -136,22 +125,6 @@
       wall.appendChild(d);
     }
     app.appendChild(wall);
-    // experience posts
-    var sec = mk('section', 'stories-sec');
-    sec.id = 'stories';
-    sec.appendChild(mk('h2', '', '经验分享 | Experience posts'));
-    var list = mk('div', 'stories');
-    var stories = sortPosts(posts.filter(function (p) { return p.kind === 'story'; }));
-    function fillStories(key) {
-      while (list.firstChild) list.removeChild(list.firstChild);
-      var l = stories.filter(function (p) { return !key || p.cat === key; });
-      if (!l.length) list.appendChild(mk('p', 'muted', '这一类还没有人写，来写第一篇 | Nobody has written here yet'));
-      l.forEach(function (p) { list.appendChild(storyCard(p)); });
-    }
-    sec.appendChild(chips('story', fillStories));
-    sec.appendChild(list);
-    fillStories('');
-    app.appendChild(sec);
   }
 
   // ------------------------------------------------------------ the detail dialog
@@ -254,15 +227,13 @@
     while (d.firstChild) d.removeChild(d.firstChild);
     d.className = 'board-dialog dlg-form';
     d.appendChild(closeBtn(d));
-    d.appendChild(mk('h2', '', kind === 'opp' ? '发布机会 | Post an opportunity' : '分享经验 | Share an experience'));
-    d.appendChild(mk('p', 'muted', kind === 'opp'
-      ? '不用登录。提交后自动初审：没问题直接上墙，拿不准的等维护者看。| No login. An automatic check reads it first: fine posts go up at once, unsure ones wait for a maintainer.'
-      : '写你自己的经历：怎么找到的、准备了什么、过程和建议。不用登录，提交后自动初审。| Your own experience: how you found it, how you prepared, what happened, your advice. No login; checked automatically first.'));
+    d.appendChild(mk('h2', '', '发布机会 | Post an opportunity'));
+    d.appendChild(mk('p', 'muted', '不用登录。提交后自动初审：没问题直接上墙，拿不准的等维护者看。| No login. An automatic check reads it first: fine posts go up at once, unsure ones wait for a maintainer.'));
     var form = mk('form', 'board-form');
     var sel = mk('select');
     CATS[kind].forEach(function (c) { var o = mk('option', '', c.icon + ' ' + c.zh + ' | ' + c.en); o.value = c.key; sel.appendChild(o); });
     field(form, 'cat', '分类 | Category *', sel);
-    field(form, 'title', '标题 | Title *', input('text', 80, kind === 'opp' ? '例如：ACME 机器人 2027 暑期实习 | e.g. ACME Robotics summer intern 2027' : '例如：大三拿到 XX 实习的全过程 | e.g. How I got my Year 3 internship'));
+    field(form, 'title', '标题 | Title *', input('text', 80, '例如：ACME 机器人 2027 暑期实习 | e.g. ACME Robotics summer intern 2027'));
     var extra = {};
     if (kind === 'opp') {
       extra.org = field(form, 'org', '机构或老师 | Organisation or lecturer', input('text', 200));
@@ -274,9 +245,8 @@
       var syncRef = function () { extra.code.classList.toggle('want', sel.value === 'referral'); };
       sel.addEventListener('change', syncRef); syncRef();
     }
-    var ta = mk('textarea'); ta.rows = kind === 'opp' ? 6 : 12; ta.maxLength = 4000;
-    ta.placeholder = kind === 'opp' ? '做什么、对谁开放、要求、待遇、怎么申请 | what it is, who can apply, requirements, pay, how to apply'
-                                    : '可以分段写。不要写别人的姓名、学号、电话 | Paragraphs welcome. No other people\'s names, IDs or phone numbers';
+    var ta = mk('textarea'); ta.rows = 6; ta.maxLength = 4000;
+    ta.placeholder = '做什么、对谁开放、要求、待遇、怎么申请 | what it is, who can apply, requirements, pay, how to apply';
     field(form, 'body', '正文 | Text *', ta);
     field(form, 'author', '署名（可不填）| Name to show (optional)', input('text', 30, '昵称或留空匿名 | a nickname, or blank for anonymous'));
     var ok = mk('label', 'confirm'); var cb = mk('input'); cb.type = 'checkbox';

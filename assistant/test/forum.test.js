@@ -50,7 +50,7 @@ test("moderation: the model decides, a fold-list hit is never published at once,
   assert.equal(v.decision, "publish");
   assert.equal(v.board, "career");                                                    // filled in where the poster left it blank
   assert.equal(v.course, "EEE308");
-  assert.ok(calls[0].messages[0].content.includes("<post>") && calls[0].model === fm.FORUM_MODEL);
+  assert.ok(calls[0].messages[0].content.at(-1).text.includes("<post>") && calls[0].model === fm.FORUM_MODEL);
   const own = await fm.moderate(stub("publish", { board: "career" }), fm.validate(thread()).item);
   assert.equal(own.board, "study");                                                   // the poster's own board wins
   const hit = await fm.moderate(stub("publish"), fm.validate(thread()).item, { hits: [{ cat: "zh_profanity", word: "傻逼" }] });
@@ -218,4 +218,128 @@ test("routes: paused or out of allowance, posts wait for the maintainer and the 
   const r3 = await (await handle(req("/forum/post", { ...thread(), device: "x", turnstile: "t" }), e3, deps)).json();
   assert.equal(r3.status, "pending");
   assert.equal(calls.length, 0);
+});
+
+// ---------------------------------------------------------------- the blog
+
+const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20]);
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+const article = (over = {}) => ({ kind: "post", cat: "intern", course: "", title: "大三暑假在 ACME 机器人实习的全过程",
+  body: "## 怎么找到的\n学院群里看到招聘，投了简历，两轮面试。\n\n![工位](img:0123456789abcdef)\n\n**建议**：早点准备 ROS。", confirm: true, ...over });
+
+test("blog: validation, image references, plain text for the list", () => {
+  const v = fm.validate(article());
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.item.images, ["0123456789abcdef"]);
+  assert.equal(v.item.board, "intern");
+  assert.equal(fm.validate(article({ cat: "freshers" })).ok, false);                  // a discussion board is not a blog category
+  assert.equal(fm.validate(article({ cat: "" })).ok, false);                          // a blog post needs its category
+  assert.equal(fm.validate(article({ body: "太短了" })).ok, false);
+  const seven = Array.from({ length: 7 }, (_, i) => `![](img:${String(i).repeat(16)})`).join("\n") + "\n" + "正文".repeat(30);
+  assert.equal(fm.validate(article({ body: seven })).ok, false);                      // at most six images
+  assert.equal(fm.validate(article({ title: "x".repeat(101) })).ok, false);
+  assert.equal(fm.validate(article({ body: "长".repeat(20000) })).ok, true);
+  assert.deepEqual(fm.validate({ ...thread(), body: "![](img:0123456789abcdef) 讨论区的帖子不带图片" }).item.images, []);
+  assert.equal(fm.plainText("## 标题\n**粗体** 和 [链接](https://x.y)\n![a](img:0123456789abcdef)\n- 列表"), "标题 粗体 和 链接 列表");
+  assert.deepEqual(fm.BLOG_CATS, ["research", "intern", "job", "study", "event", "life"]);
+});
+
+test("blog: images are typed by their bytes and survive base64", () => {
+  assert.equal(fm.sniff(WEBP), "image/webp");
+  assert.equal(fm.sniff(PNG), "image/png");
+  assert.equal(fm.sniff(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0])), "image/jpeg");
+  assert.equal(fm.sniff(new TextEncoder().encode("<svg onload=alert(1)>")), null);   // no SVG, no HTML
+  const big = new Uint8Array(100_000).map((_, i) => i % 251);
+  assert.deepEqual(fm.fromBase64(fm.toBase64(big)), big);
+});
+
+test("blog: the model sees the images first and picks a blog category", async () => {
+  const calls = [];
+  const it = fm.validate(article()).item;
+  const v = await fm.moderate(stub("publish", { board: "job" }, calls), it, { images: [{ mime: "image/webp", data: "AAAA" }] });
+  const content = calls[0].messages[0].content;
+  assert.equal(content[0].type, "image");
+  assert.equal(content[0].source.media_type, "image/webp");
+  assert.ok(content.at(-1).text.includes("blog post with 1 image"));
+  assert.deepEqual(calls[0].output_config.format.schema.properties.board.enum, fm.BLOG_CATS);
+  assert.equal(v.board, "intern");                                                    // the poster's category wins
+});
+
+async function upload(s, device = "d1", over = {}) {
+  return fm.forumApi(s, { op: "img_put", device, ip: "i1", mime: "image/webp", size: 1000, data: "AAAA", ...over }, NOW);
+}
+
+test("blog store: images wait unattached, only their uploader may use them, and they show only on a live post", async () => {
+  const s = new fm.MemoryForum();
+  const id = (await upload(s)).data.id;
+  assert.match(id, /^[a-f0-9]{16}$/);
+  const body = article({ body: `第一段：怎么找到的，投了简历，两轮面试，最后拿到了。\n\n![](img:${id})` });
+  assert.equal((await fm.forumApi(s, { op: "img_pack", ids: [id], device: "d2" }, NOW)).status, 400);   // another browser's image
+  assert.equal((await fm.forumApi(s, { op: "img_pack", ids: [id], device: "d1" }, NOW)).data.images[0].mime, "image/webp");
+  assert.equal((await fm.forumApi(s, { op: "img_get", id }, NOW)).status, 404);      // not in a post yet
+  const held = (await put(s, body, "hold")).data;
+  assert.equal(held.status, "pending");
+  assert.equal((await fm.forumApi(s, { op: "img_get", id }, NOW)).status, 404);      // in a post nobody can see yet
+  assert.equal((await fm.forumApi(s, { op: "img_get", id, admin: true }, NOW)).status, 200);
+  assert.equal((await put(s, body)).status, 400);                                    // an image belongs to one post
+  const ok = await fm.forumApi(s, { op: "approve", ids: [held.id] }, NOW);
+  assert.deepEqual(ok.data.images, [id]);
+  assert.equal((await fm.forumApi(s, { op: "img_get", id }, NOW)).status, 200);
+  const list = (await fm.forumApi(s, { op: "list" }, NOW)).data.threads;
+  assert.equal(list[0].type, "post");
+  assert.equal(list[0].cover, id);
+  assert.equal(list[0].minutes, 1);
+  assert.ok(!list[0].excerpt.includes("img:"));
+  // withdrawing the post deletes its images
+  await fm.forumApi(s, { op: "withdraw", id: held.id, device: "d1" }, NOW);
+  assert.equal((await fm.forumApi(s, { op: "img_get", id, admin: true }, NOW)).status, 404);
+});
+
+test("blog store: image caps per browser, the store size, unused images expire, removed posts lose their images", async () => {
+  const s = new fm.MemoryForum();
+  for (let i = 0; i < fm.LIMITS.imagesPerDeviceDaily; i++) assert.equal((await upload(s)).status, 200);
+  assert.equal((await upload(s)).status, 429);
+  assert.equal((await upload(s, "d2", { storeBytes: 20_500 })).status, 507);       // 20 × 1000 bytes stored; 1000 more would pass it
+  const old = new fm.MemoryForum();
+  const id = (await fm.forumApi(old, { op: "img_put", device: "d", ip: "i", mime: "image/png", size: 10, data: "AA" }, NOW - 2 * 86_400_000)).data.id;
+  await upload(old);                                                                  // any upload sweeps images unused for a day
+  assert.equal((await fm.forumApi(old, { op: "img_get", id, admin: true }, NOW)).status, 404);
+  const removed = new fm.MemoryForum();
+  const kept = (await upload(removed)).data.id;
+  const p = (await put(removed, article({ body: `一段足够长的正文，讲讲比赛的准备过程和经验教训，以及最后的结果。\n![](img:${kept})` }))).data;
+  await fm.forumApi(removed, { op: "remove", ids: [p.id] }, NOW);
+  assert.equal((await fm.forumApi(removed, { op: "img_get", id: kept, admin: true }, NOW)).status, 404);
+});
+
+test("blog routes: upload raw bytes with a session, post with images, serve them, reserve per image", async () => {
+  const e = forumEnv();
+  const calls = [];
+  const deps = { ...forumDeps(), client: stub("publish", { board: "intern" }, calls) };
+  const send = (bytes, headers) => handle(new Request("https://helper.example/forum/img", { method: "POST", body: bytes,
+    headers: { Origin: ORIGIN, "Content-Type": "image/webp", "CF-Connecting-IP": "1.2.3.4", "X-Forum-Device": "x", ...headers } }), e, deps);
+  assert.equal((await send(WEBP, {})).status, 401);                                   // no human check yet
+  assert.equal((await send(new TextEncoder().encode("<html>"), { "X-Forum-Turnstile": "t" })).status, 415);
+  assert.equal((await send(new Uint8Array(fm.LIMITS.imageBytes + 1), { "X-Forum-Turnstile": "t" })).status, 413);
+  const up = await (await send(WEBP, { "X-Forum-Turnstile": "t" })).json();
+  assert.ok(up.id && up.session);
+  const up2 = await (await send(PNG, { "X-Forum-Session": up.session })).json();     // the session carries on
+  const body = article({ body: `## 经过\n投简历、两轮面试，过程比想象中顺利，下面是工位和合影。\n\n![](img:${up.id})\n![](img:${up2.id})` });
+  const r = await (await handle(req("/forum/post", { ...body, device: "x", session: up.session }), e, deps)).json();
+  assert.equal(r.status, "live");
+  assert.equal(calls[0].messages[0].content.filter((b) => b.type === "image").length, 2);
+  const img = await handle(new Request(`https://helper.example/forum/img?id=${up.id}`), e, deps);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get("Content-Type"), "image/webp");
+  assert.equal(img.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.deepEqual(new Uint8Array(await img.arrayBuffer()), WEBP);
+  assert.equal((await handle(new Request("https://helper.example/forum/img?id=../../etc"), e, deps)).status, 404);
+  const other = await (await handle(req("/forum/post", { ...body, device: "y", turnstile: "t" }), e, deps)).json();
+  assert.equal(other.error, "images");                                                // someone else cannot reuse the images
+  const list = await (await handle(new Request("https://helper.example/forum"), e, deps)).json();
+  assert.equal(list.threads[0].type, "post");
+  const opts = await handle(new Request("https://helper.example/forum/img", { method: "OPTIONS", headers: { Origin: ORIGIN } }), e, deps);
+  assert.ok(opts.headers.get("Access-Control-Allow-Headers").includes("X-Forum-Session"));
+  // a long post fits the larger body limit
+  const long = await handle(req("/forum/post", { ...article({ body: "长".repeat(19000) }), device: "x", session: up.session }), e, deps);
+  assert.equal(long.status, 200);
 });

@@ -155,6 +155,7 @@ site/
 - 审核：先过 `moderation/words` 的关键词表（Worker 从仓库读取，10 分钟缓存，规则同 `moderation/moderation.py`），再由 Claude Haiku 决定发布、待审或退回（退回时告诉发帖人原因）。命中「折叠」类词表的，模型说可以发也进待审；模型出错、超时、暂停，或讨论区自己的美元额度（每天 0.5、每月 5 美元，见 intake/AI-PIPELINE.md §8）、每天 400 次用完，一律待审。维护者在 Worker 的 `/admin` 页批准或删除。3 个不同浏览器举报后自动撤回待审；发帖的浏览器可以自己撤回。
 - 板块的键在 `assistant/src/forum.js` 的 `BOARD_HINTS` 里也有一份，`build.py` 的自检会比对两边。
 - GitHub 上的旧帖不导入，`/qa/` 底部链接到 GitHub Discussions 作只读存档。
+- **博客（2026-11-07，维护者选「经验帖并入社区、改名博客、可以放图」）**：机会页的经验帖搬到 `/blog/`，和讨论区共用 Worker 的 `Forum`（帖子 `type = post`，分类在 `board` 列，键和 build.py 的 `BLOG_CATS`、forum.js 的 `BLOG_HINTS` 一致，自检比对）。`/qa/` 和 `/blog/` 顶部两个标签，都算页头「讨论」块。正文是一小套 Markdown（`##` 小标题、加粗、斜体、行内代码、代码块、列表、引用、http(s) 链接、单独一行的图片 `![说明](img:<id>)`），由 static/forum.js 用 DOM 逐个建元素渲染，不接受任何 HTML。编辑器有工具栏、预览、字数和图片计数，草稿存在 localStorage `blog-draft`。图片：浏览器用 canvas 压到长边 1600 px、WebP（不支持就 JPEG）、约 400 KB，顺带去掉 EXIF；`POST /forum/img` 收原始字节（最多 1 MB，按文件头判断只收 JPG/PNG/WebP），每浏览器每天 20 张、每网络 100 张，全部图片合计 2 GB（`FORUM_IMAGE_STORE_BYTES`）；图片先不挂帖子，一天没用就删；发帖时只能用本浏览器上传、还没用过的图，每篇最多 6 张；Haiku 和文字一起看图（每张多预留 0.001 美元，算在 forum 池里）。`GET /forum/img` 只给已发布帖子的图（缓存一天），待审帖子的图只在 `/admin` 里用口令看；帖子被删除或撤回时图片一起删。机会页只留机会墙，维护者的科研入门指南显示在墙下面。
 
 ## 10. 搜索 | Search（已定）
 

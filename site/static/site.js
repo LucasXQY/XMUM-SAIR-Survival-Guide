@@ -6,7 +6,7 @@
   var base = document.body.dataset.base || '/';
 
   // 1. mark the header block that covers the current URL; a programme page also lights up the Courses block
-  var here = location.pathname.replace(/\/index\.html$/, '/');
+  var here = location.pathname.replace(/\/index\.html$/, '/').replace(/\/blog\/$/, '/qa/');   // the blog sits under Discussion
   var best = null;
   document.querySelectorAll('.site-header a.nb[href]').forEach(function (a) {
     var p = a.getAttribute('href');

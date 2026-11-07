@@ -1,12 +1,12 @@
 # 机会 | Opportunities
 
-网站上的[机会页](https://xmum-sair.github.io/opportunities/)是一面便签墙：科研、实习、全职、内推码、比赛活动、升学奖学金，同学和老师都能贴；旁边是同学写的经验帖（科研经历、实习、求职面经、升学申请、比赛……）。这个文件只放**维护者整理**的条目和一篇入门指南；同学自己发的帖子存在网站的服务里，不在仓库里。
+网站上的[机会页](https://xmum-sair.github.io/opportunities/)是一面便签墙：科研、实习、全职、内推码、比赛活动、升学奖学金，同学和老师都能贴。同学写的经验帖（科研经历、实习、求职面经、升学申请、比赛……）在网站的[博客](https://xmum-sair.github.io/blog/)里。这个文件只放**维护者整理**的条目和一篇入门指南；同学自己发的帖子存在网站的服务里，不在仓库里。
 
-The site's [Opportunities page](https://xmum-sair.github.io/opportunities/) is a wall of notes: research, internships, full-time jobs, referral codes, competitions and events, study and scholarships, posted by students and lecturers, next to experience posts written by students (research, internships, job hunting and interviews, grad school applications, competitions …). This file holds only the entries **curated by the maintainers** and a getting-started guide; posts made on the site live in the site's service, not in the repository.
+The site's [Opportunities page](https://xmum-sair.github.io/opportunities/) is a wall of notes: research, internships, full-time jobs, referral codes, competitions and events, study and scholarships, posted by students and lecturers. Experience posts written by students (research, internships, job hunting and interviews, grad school applications, competitions …) are on the site's [blog](https://xmum-sair.github.io/blog/). This file holds only the entries **curated by the maintainers** and a getting-started guide; posts made on the site live in the site's service, not in the repository.
 
 ## 怎么发布 | How to post
 
-- 在机会页点「发布机会」或「分享经验」，填表提交即可，**不用登录**，每次过一次人机验证。
+- 在机会页点「发布机会」，填表提交即可，**不用登录**，每次过一次人机验证。经验帖请到博客写（机会页上有「写经验」按钮）。
 - 提交后先由 AI 做一次初审：没问题直接上墙；拿不准的交给维护者人工看，通常一两天内处理；明显的广告、诈骗（要交押金、刷单）、代写、他人隐私会被退回，并告诉你原因。
 - 内推码直接写在「内推码」一栏，卡片上有一键复制；有截止日期的写上日期，过期后自动收进「已截止」。
 - 只发你有权公开的信息：老师的招人信息要老师公开说过或同意公开；不要发别人的电话、学号。
@@ -32,7 +32,7 @@ Long-running entries the maintainers have checked, shown on the site as notes wi
 
 ## 科研入门：怎么找老师进组 | Getting started: joining a research group
 
-这一篇在网站上置顶在经验帖的最前面。/ Pinned at the top of the experience posts on the site.
+这一篇在网站上显示在机会墙下面。/ Shown under the opportunity wall on the site.
 
 - **先做功课再敲门**：去老师的 Google Scholar 或学院主页看最近两三年的论文，知道他具体在做什么，再决定找谁。方向对不上，再热情也白搭。
 - **什么时候找**：大二下到大三是最合适的时间。FYP 分配前先找到老师，FYP 就能顺着组里现有的课题做，不用从零开始。
