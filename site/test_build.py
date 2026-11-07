@@ -1,5 +1,5 @@
 """Checks for site/build.py. Run from the repo root: python site/test_build.py"""
-import sys, pathlib
+import hashlib, sys, pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -606,7 +606,7 @@ def test_helper_window_appears_only_when_configured():
         for p in ["index.html", "EEE/COM107_Circuits_and_Devices/index.html", "404.html"]:
             html = (out / p).read_text(encoding="utf-8")
             assert 'id="helper" data-url="https://helper.example.workers.dev" data-sitekey="0x4AAA"' in html, p
-            assert f'src="{P}static/assistant.js"' in html, p
+            assert f'src="{P}static/assistant.js?v=' in html, p
         js = (out / "static/assistant.js").read_text(encoding="utf-8")
         assert "turnstile" in js and "sessionStorage" in js and "xmum-sair\\.github\\.io" in js   # links only to the site
         os.environ["BOTS_PAUSED"] = "1"
@@ -627,7 +627,7 @@ def test_reviews_are_submitted_on_the_site_without_github():
     for dim in ("course", "instructor", "difficulty", "work", "learned", "communication", "access", "recommend"):
         assert f'name="{dim}"' in rate, dim
     assert 'id="rate-confirm"' in rate and "不需要 GitHub 账号" in rate and 'id="rate-year"' in rate and 'id="rate-term"' in rate
-    assert f'src="{P}static/rate.js"' in rate
+    assert f'src="{P}static/rate.js?v=' in rate
     js = (out / "static/rate.js").read_text(encoding="utf-8")
     assert "turnstile" in js and "localStorage" in js and "URLSearchParams" in js and "data-vote" not in js and "dataset.vote" in js
     course = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
@@ -703,10 +703,21 @@ def test_blog_page_and_tabs():
     assert "<h1>博客 | Blog</h1>" in blog and "最多 6 张" in blog and "1600" in blog
     qa = (out / "qa/index.html").read_text(encoding="utf-8")
     for page_html, here in ((qa, "qa"), (blog, "blog")):
-        tabs = re.search(r'<nav class="tabs".*?</nav>', page_html, re.S).group(0)
+        tabs = re.search(r'<nav class="switch".*?</nav>', page_html, re.S).group(0)
         assert f'href="{P}qa/"' in tabs and f'href="{P}blog/"' in tabs and f'href="{P}{here}/" aria-current="page"' in tabs
     assert "blog/" in (out / "sitemap.xml").read_text(encoding="utf-8")
     js = (out / "static/site.js").read_text(encoding="utf-8")
     assert "/qa/" in js and "blog" in js                                         # the Discussion block lights up on the blog
     forum_js = (out / "static/forum.js").read_text(encoding="utf-8")
     assert "innerHTML" not in forum_js and "insertAdjacentHTML" not in forum_js     # post text never becomes HTML
+
+
+def test_static_files_are_versioned():
+    """Each page asks for static/x.css?v=<hash of the file>, so a release never pairs new pages with cached old files."""
+    _, out = _build()
+    page_html = (out / "blog/index.html").read_text(encoding="utf-8")
+    for name in ("style.css", "site.js", "forum.js"):
+        v = hashlib.sha256((ROOT / "site/static" / name).read_bytes()).hexdigest()[:8]
+        assert f'static/{name}?v={v}"' in page_html, name
+    assert not re.search(r'static/[\w.-]+\.(css|js)"', page_html)                 # none left without a version
+    assert (out / "static/style.css").is_file()

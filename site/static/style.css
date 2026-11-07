@@ -411,11 +411,20 @@ ul.threads { list-style: none; padding: 0; margin: 0; }
 .reply-form { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
 .forum-result { margin: 6px 0; }
 
-/* the tabs over the discussion area and the blog */
-.tabs { display: flex; gap: 6px; margin: 4px 0 10px; border-bottom: 1px solid var(--line); }
-.tabs a { padding: 6px 12px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; color: var(--muted); text-decoration: none; }
-.tabs a small { font-size: .78rem; }
-.tabs a[aria-current="page"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 600; margin-bottom: -1px; }
+/* the switch over the discussion area and the blog: two halves of one control, the current one filled like a header block */
+.switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 6px 0 14px;
+          border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.sw { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; color: var(--fg); text-decoration: none;
+      transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+.sw:hover, .sw:focus-visible { background: var(--accent-bg); }
+.sw[aria-current] { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .12); }
+.sw-ic { font-size: 1.4rem; line-height: 1; }
+.sw-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sw-t b { font-size: 1rem; white-space: nowrap; }
+.sw-t b small { font-weight: 400; font-size: .75rem; color: inherit; opacity: .75; }
+.sw-d { font-size: .78rem; color: var(--muted); }
+.sw[aria-current] .sw-d { color: rgba(255, 255, 255, .85); }
+@media (max-width: 480px) { .sw { padding: 8px 10px; gap: 8px; } .sw-d { display: none; } .sw-t b small { display: block; } }   /* stacked the same way in both halves */
 
 /* the blog (static/forum.js, mode "blog") */
 .post-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin: 6px 0 18px; }
