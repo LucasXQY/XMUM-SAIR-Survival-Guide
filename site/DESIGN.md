@@ -28,7 +28,7 @@ This document describes the website for whoever builds it. Rules for the repo's 
 - 不做 PDF 正文全文搜索，只搜元数据和文件名。
 - 不做中英文切换按钮：和仓库一样，中文一段英文一段同时显示。
 - 不做自己的账号系统、匿名发言、点赞排行、私信。
-- 不做访问统计、埋点、任何第三方脚本（giscus 除外）。
+- 不做访问统计、埋点、任何第三方脚本（Cloudflare Turnstile 人机验证除外）。
 - 不做"最近更新"动态、RSS、自定义域名、AIT/ROBO 以外的学院。
 - 不做上传功能（见第 11 节，第二阶段另议）。
 
@@ -83,10 +83,10 @@ site/
 | `/courses/` | 课程总览：同样的四张卡片（页头「课程」块在没有脚本时的去处） | 生成 |
 | `/about/` | 仓库介绍 + 贡献者名单 | 根目录 `README.md` 渲染，其中「贡献者」一节换成 `CONTRIBUTORS.md` 的内容（第 16 节） |
 | `/EEE/` `/AIT/` `/ROBO/` `/GE/` | 专业页：一句介绍 + 生成的课程表 + 折叠的修课时间表（GE 分 G 选修和 MPU 两张表，没有时间表） | 生成；时间表取自专业 `README.md`（第 16 节） |
-| `/EEE/COM107_Circuits_and_Devices/` | 课程页：课程评价 → 资料 → 课程信息（README 学期表）→ 问答 | 课程 `README.md` + 文件夹扫描 + ratings.json + giscus |
+| `/EEE/COM107_Circuits_and_Devices/` | 课程页：课程评价 → 资料 → 课程信息（README 学期表）→ 问答 | 课程 `README.md` + 文件夹扫描 + ratings.json + 讨论区（Worker） |
 | `/upload/` | 上传助手：已有课程和老师边输入边提示，填完跳到预填好的 GitHub 上传表单 | 生成 |
 | `/reviews/` `/rate/` | 课程评价（搜索课程或老师、课程面板、总表、教师名录）；添加评价 | 生成 + ratings.js |
-| `/qa/` | 综合问答：不属于某门课的问题（新生、选课、科研、实习） | 模板 + giscus |
+| `/qa/` | 讨论区：按板块列主题帖，不用登录 | 模板 + Worker（§9） |
 | `/opportunities/` | 机会墙（便签卡片，按类别筛选，点开看详情）+ 经验帖；不用登录发帖，Haiku 初审；`/research/` 跳到这里 | `Research-Opportunities.md` 的维护者条目和入门指南 + Worker `/board`（static/board.js） |
 | `/news/` | 更新日志；首页只显示最新一版的前三条 | `site/news.md` |
 | `/lecturers/<slug>/` | 某位老师教过的课（无评价）；`/lecturers/` 本身跳到 `/reviews/#lecturers` | 生成 |
@@ -145,16 +145,16 @@ site/
 1. `/disclaimer/` 页：`DISCLAIMER.md` 全文。
 2. 每页页脚一行：
    「本站由厦马学生自发维护，与 XMUM 无官方关联；试卷与课程材料版权归 XMUM 及授课老师，仅作非商业学习用途；如需删除请邮件 `xieqiyi@ieee.org`。| Student-run, not affiliated with XMUM. Copyright in papers and course material belongs to XMUM and the lecturers; shared for non-commercial study only. Takedown: `xieqiyi@ieee.org`.」
-3. 每个评论区上方一段：
-   「发言需登录 GitHub，用户名公开。请勿张贴答案、评分标准、他人个人信息或老师的私人联系方式。评论保存在本仓库的 GitHub Discussions 中，维护者可以删除。| Sign in with GitHub to post; your username is public. Do not post answers, marking schemes, other people's personal data or lecturers' private contact details. Comments live in this repo's GitHub Discussions and may be removed by the maintainers.」
+3. 讨论区页面上「怎么发言、怎么审核」一段：发言规则和审核方式（§9）。
 
-## 9. 问答 | Q&A with giscus（已定）
+## 9. 讨论区 | Discussion（2026-11-07 改为不用登录）
 
-- 课程页底部和 `/qa/` 页各嵌一个 giscus `<script>`，属性：`data-repo="xmum-sair/xmum-sair.github.io"`、`data-repo-id="R_kgDOQ_iF5g"`、`data-mapping="specific"`、`data-strict="1"`、`data-reactions-enabled="1"`、`data-emit-metadata="0"`、`data-input-position="top"`、`data-theme="preferred_color_scheme"`、`data-lang="zh-CN"`、`crossorigin="anonymous"`、`async`。
-- 课程页：`data-category="Q&A"`、`data-category-id="DIC_kwDOQ_iF5s4DKajf"`、`data-term="<CODE> <Course Name>"`（例：`COM107 Circuits and Devices`）。首次有人评论时 giscus 自动在 Discussions 里建同名讨论。仓库里有多门课同名或只差一个罗马数字（COM108 / COM110 都叫 Engineering Mathematics I，COM204 / EEE220 都叫 Engineering Graphics），所以必须 `data-strict="1"`：giscus 按 term 的哈希精确匹配，不会把评论挂到相近课名的讨论下。代价是课程文件夹改名后旧讨论接不回来，页面会另起新讨论，旧的仍留在 Discussions 列表里；课程代码变更本来就是新建文件夹，不受影响。
-- `/qa/` 页：`data-category="General"`、`data-category-id="DIC_kwDOQ_iF5s4DKaje"`、`data-term="综合问答 | General Q&A"`。
-- 分区目前沿用 GitHub 默认名（Q&A、General、Announcements…）。维护者随时可在仓库 Settings → Discussions 里改成中文名，嵌入用的是 ID，不受影响。
-- 页面上不加任何自己的评论、点赞或统计逻辑。
+- 改版前用 giscus 嵌 GitHub Discussions，发言要 GitHub 账号。现在讨论区和机会墙一样由站点的 Cloudflare Worker 提供（`assistant/src/forum.js`），网页端是 `static/forum.js`，帖子存在 Worker 的 Durable Object 里，不进仓库。
+- `/qa/`：按 `discussions/boards.json` 的板块列主题帖，可搜索、按最新回复 / 最新发布 / 没人回排序；`?t=<id>` 打开一帖和它的回复，`?board=<key>` 只看一个板块。课程页底部列出带这门课代码的帖子，可「就这门课提问」；首页列最新 5 帖；`/wanted/` 列「资料求助」板块，按课程分组。
+- 发帖、回帖不用登录，昵称可不填（显示「匿名同学」）。每个浏览器一小时过一次 Turnstile 人机验证；同一网络每天 60 条、同一浏览器每天 20 条。
+- 审核：先过 `moderation/words` 的关键词表（Worker 从仓库读取，10 分钟缓存，规则同 `moderation/moderation.py`），再由 Claude Haiku 决定发布、待审或退回（退回时告诉发帖人原因）。命中「折叠」类词表的，模型说可以发也进待审；模型出错、超时、暂停或当天 400 次额度用完，一律待审。维护者在 Worker 的 `/admin` 页批准或删除。3 个不同浏览器举报后自动撤回待审；发帖的浏览器可以自己撤回。
+- 板块的键在 `assistant/src/forum.js` 的 `BOARD_HINTS` 里也有一份，`build.py` 的自检会比对两边。
+- GitHub 上的旧帖不导入，`/qa/` 底部链接到 GitHub Discussions 作只读存档。
 
 ## 10. 搜索 | Search（已定）
 
@@ -203,7 +203,7 @@ site/
 
 维护者 2026-11-05 的决定与我的实现选择：
 
-- **页头**：一排块（图标 + 中文/英文两行），按重要性排序：三个专业、问答、上传、如何贡献、教师、研究机会、贡献者、关于、GitHub。悬停上浮、当前页高亮、加载淡入；`prefers-reduced-motion` 时全关。右上角一个深浅色切换按钮，选择存 `localStorage`（`theme` = `light` / `dark`），`<head>` 里一段内联脚本在首次绘制前把 `data-theme` 写到 `<html>` 上避免闪烁；不选则跟随系统。切换时同步通知页面里的 giscus iframe（`postMessage setConfig.theme`）。
+- **页头**：一排块（图标 + 中文/英文两行），按重要性排序：三个专业、问答、上传、如何贡献、教师、研究机会、贡献者、关于、GitHub。悬停上浮、当前页高亮、加载淡入；`prefers-reduced-motion` 时全关。右上角一个深浅色切换按钮，选择存 `localStorage`（`theme` = `light` / `dark`），`<head>` 里一段内联脚本在首次绘制前把 `data-theme` 写到 `<html>` 上避免闪烁；不选则跟随系统。
 - **教师页**（本段为 2026-11-05 上午的设计，同日被下面的「老师页只是名录」条目取代）：`/lecturers/` 先渲染 Lecturers.md（写作规则 + 模板），再列出从各课程 README 学期表里读到的全部老师（逗号分隔的多位老师拆开）。每位老师一页 `/lecturers/<slug>/`：教过的课程与学期（链到课程页锚点），下面是一个 giscus 讨论串（General 分类，term `教师 | Lecturer: <姓名>`），登录即写、立刻可见，由审核机器人按关键词事后折叠（见 moderation/DESIGN.md）。课程页学期标题里的老师名链到老师页。以后课程评价的分数也放这一页。
 - **最近上传与订阅**：从 `git log --diff-filter=A` 取每个文件首次入库的日期（pages.yml 用 `fetch-depth: 0`），按（日期、课程、学期、类型）归组。首页显示最近 8 组，`/recent/` 显示最近 100 组，`feed.xml` 是 Atom 订阅；没有 git 历史的树（干跑、临时副本）只给一个告警、列表为空。"来自"取课程 README 该学期的"资料来自"列。
 - **征集榜** `/wanted/`：按专业列出还没有任何资料的课程，首页给入口。
@@ -228,7 +228,7 @@ site/
 - **自动删除评分来源**（维护者决定，取代 2026-11-05「维护者手动删除」）：机器人登记并回复后等 60 秒（让作者先收到通知邮件），用 `secrets.REVIEWS_DELETE_TOKEN` 调 GraphQL `deleteIssue` 删除 Issue。删除 Issue 需要仓库管理员，所以这个 token 是维护者自己的 fine-grained token，资源所有者 `xmum-sair`、只选本仓库、Issues 读写；没有这个 secret 或 GitHub 拒绝时退回关闭并锁定，日志里写明原因。登记失败的表单关闭后保留 7 天让作者看到原因；每次运行（每个评价 Issue 和手动 Run workflow）顺带清理：已登记的关闭 Issue 立即删除，失败满 7 天的删除，机器人没回复过的不动。注意：仓库关注者（watch）收到的通知邮件里仍有原文，删除 Issue 删不掉别人邮箱里的副本。
 - **同日补充（维护者）**：页头顺序改为 课程 / 讨论（原「问答」，giscus 的 term 不变，旧讨论串不丢）/ 评价 / 科研机会 / 关于 / GitHub / 如何贡献 / 上传，块收紧到页面宽度下一行放得下。评价页不再显示可排序的大表：已有评价的课程显示成圆角标签，点开才看课程面板；每位老师的分数在课程页和面板里都是一张卡片（四个主维度小色块 + 一行细分分数），不满 3 人只显示人数。
 - **评价里的老师链接**：评价表单里的老师名可能不在任何课程 README 里，这些老师没有名录页。页面在评分容器上带 `data-known`（有名录页的老师 slug），ratings.js 只给这些名字加链接，其余显示为纯文字。2026-11-06 检查：104 个打包下载都在 Release 里，168 个外部链接都能打开（github.com/signup 只拒绝脚本）。
-- **讨论区板块（2026-11-06，维护者选「一帖一问 + Haiku 分板块」）**：每个问题是 GitHub Discussions 里的一个帖子（General 分类，「发新帖」跳到 GitHub 发帖页）。`discussions/boards.py`（工作流 `discussions.yml`）给新帖贴板块标签：标题以「[板块名]」开头就按它，否则请 Claude（默认 Haiku 5.5，`CLAUDE_MODEL_CLASSIFY`，每天 200 次 `CLAUDE_DAILY_CLASSIFY`）在 `discussions/boards.json` 的六个板块里选一个；提到已有课程代码的再加「课程:代码」标签。没有 Claude 时只按前缀和课程代码贴，没板块的帖子显示在「其他」。贴完标签后它手动触发 pages.yml（GITHUB_TOKEN 改的标签不会触发工作流）。pages.yml 在讨论区有新帖、改标签、新评论时重建，构建前 `site/fetch_discussions.py` 拉帖子列表（不含 giscus 的页面讨论串和被锁定的帖子）。网站：`/qa/` 按板块列出最新帖子；课程页「讨论」上方列出带这门课标签的帖子；「资料求助」板块的帖子出现在征集榜和那门课的资料区。旧的「综合问答」giscus 串保留在讨论区底部（term 不变）。
+- **讨论区板块（2026-11-06，维护者选「一帖一问 + Haiku 分板块」；2026-11-07 被 §9 不用登录的讨论区取代）**：每个问题是 GitHub Discussions 里的一个帖子（General 分类，「发新帖」跳到 GitHub 发帖页）。`discussions/boards.py`（工作流 `discussions.yml`）给新帖贴板块标签：标题以「[板块名]」开头就按它，否则请 Claude（默认 Haiku 5.5，`CLAUDE_MODEL_CLASSIFY`，每天 200 次 `CLAUDE_DAILY_CLASSIFY`）在 `discussions/boards.json` 的六个板块里选一个；提到已有课程代码的再加「课程:代码」标签。没有 Claude 时只按前缀和课程代码贴，没板块的帖子显示在「其他」。贴完标签后它手动触发 pages.yml（GITHUB_TOKEN 改的标签不会触发工作流）。pages.yml 在讨论区有新帖、改标签、新评论时重建，构建前 `site/fetch_discussions.py` 拉帖子列表（不含 giscus 的页面讨论串和被锁定的帖子）。网站：`/qa/` 按板块列出最新帖子；课程页「讨论」上方列出带这门课标签的帖子；「资料求助」板块的帖子出现在征集榜和那门课的资料区。旧的「综合问答」giscus 串保留在讨论区底部（term 不变）。
 - **知识点索引（2026-11-06）**：`topics/topics.py`（工作流 `topics.yml`，main 上资料变动时运行，也可手动 Run）让 Claude（默认 Haiku 5.5，`CLAUDE_MODEL_TOPICS`）读每个文件一次：有文字层的发前 40 页文字（最多 3 万字符），扫描件发前 20 页 PDF；列出 5–12 个「中文 英文」知识点和一句概述。结果按文件 sha256 存在 `bot-state` 分支的 `topics.json`，改名搬家不重算；每天最多 700 个文件（`CLAUDE_DAILY_TOPICS`）。pages.yml 构建前取回它，`search.json` 的文件条目多出 `topics`、`about`，首页搜索也匹配知识点并显示命中的知识点。小帮手用同一份索引。
 - **每周链接检查（2026-11-06）**：`scripts/check_links.py`（工作流 `links.yml`，每周一 01:00 UTC，也可手动）生成一遍网站，查站内死链、缺失的打包下载、打不开的外部链接（站内文件链接由构建自检负责，github.com/signup 这类拒绝脚本的页面不算）；有问题开或更新标签为 `link-check` 的「坏链接」Issue，全部正常时自动关闭。
 - **评价里的新老师（2026-11-06）**：`reviews.py` 登记一票时，如果网站没把这位老师列在这门课下，就把（课程、老师、学期）记进 `bot-state` 分支的 `pending-lecturers.json`。`reviews/lecturers.py`（工作流 `lecturers.yml`，每次评价之后、每周一、手动）合并这份清单和 `ratings.json` 里的老师（汇总不带学期，记作 unknown），在 `bot/new-lecturers` 分支上把他们加进对应课程 README 的学期表，开或更新一个 PR 给维护者合并；仓库里没有文件夹的课程只在 PR 里列出。合并后清单里对应的条目自动删除。

@@ -124,8 +124,7 @@ def test_build_writes_every_page():
 def test_course_page_contents():
     _, out = _build()
     html = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
-    assert 'data-strict="1"' in html and 'data-term="COM107 Circuits and Devices"' in html
-    assert 'data-category-id="DIC_kwDOQ_iF5s4DKajf"' in html and 'data-repo-id="R_kgDOQ_iF5g"' in html
+    assert 'data-mode="course"' in html and 'data-course="COM107"' in html and "giscus" not in html
     assert 'id="2022-04"' in html and "Chua Ming Yam" in html
     assert build.GH + "/blob/main/EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/" in html
     assert build.RAW + "/EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/" in html
@@ -162,8 +161,8 @@ def test_prog_and_qa_pages():
     ge = (out / "GE/index.html").read_text(encoding="utf-8")
     ge = ge[ge.index("<h2>G 开头"):]                                   # the course tables, after the recently-added box
     assert "G0191" in ge and "MPU1.1" in ge and ge.index("G0191") < ge.index("MPU1.1") and "MPU" in ge and "选修" in ge
-    qa = (out / "qa/index.html").read_text(encoding="utf-8")   # renamed 讨论 on the page; the giscus term stays, or the thread is lost
-    assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa and "<h1>讨论区 | Discussion</h1>" in qa
+    qa = (out / "qa/index.html").read_text(encoding="utf-8")
+    assert "<h1>讨论区 | Discussion</h1>" in qa and 'data-mode="full"' in qa and "giscus" not in qa
 
 
 def test_search_index():
@@ -336,7 +335,7 @@ def test_theme_toggle_and_data_theme_css():
     css = (out / "static/style.css").read_text(encoding="utf-8")
     assert ':root[data-theme="dark"]' in css and ':root:not([data-theme="light"])' in css
     js = (out / "static/site.js").read_text(encoding="utf-8")
-    assert "giscus" in js and "setConfig" in js and "localStorage.setItem('theme'" in js
+    assert "giscus" not in js and "localStorage.setItem('theme'" in js
 
 
 
@@ -464,60 +463,57 @@ def test_added_dates_follow_renames():
     assert d["GE/G0103_X/2021-09/Syllabus/a.pdf"] == "2026-11-04" and d["GE/G0103_X/2021-09/Notes/new.pdf"] == "2026-11-06"
 
 
-D_URL = "https://github.com/xmum-sair/xmum-sair.github.io/discussions/"
-DISCUSSIONS = [
-    {"number": 11, "title": "[新生入门] 宿舍怎么选", "url": D_URL + "11", "labels": ["板块:新生入门"], "comments": 3,
-     "created": "2026-11-06T09:00:00Z", "updated": "2026-11-06T10:00:00Z"},
-    {"number": 12, "title": "求 COM107 往年卷 <b>急</b>", "url": D_URL + "12", "labels": ["板块:资料求助", "课程:COM107"], "comments": 0,
-     "created": "2026-11-05T09:00:00Z", "updated": "2026-11-05T09:00:00Z"},
-    {"number": 13, "title": "EEE308 和 EEE322 哪个先修", "url": D_URL + "13", "labels": ["板块:选课与学业", "课程:EEE308"], "comments": 2,
-     "created": "2026-11-04T09:00:00Z", "updated": "2026-11-06T08:00:00Z"},
-    {"number": 14, "title": "还没分到板块的帖子", "url": D_URL + "14", "labels": [], "comments": 1,
-     "created": "2026-11-03T09:00:00Z", "updated": "2026-11-03T09:00:00Z"},
-]
+def _forum(html: str) -> tuple[dict, dict]:
+    """The forum mount point's data attributes and its embedded JSON."""
+    tag = re.search(r'<div class="forum-app" ([^>]*)>', html).group(1)
+    attrs = dict(re.findall(r'data-([a-z]+)="([^"]*)"', tag))
+    data = json.loads(re.search(r'<script type="application/json" class="forum-data">(.*?)</script>', html, re.S).group(1))
+    return attrs, data
 
 
-def _build_with(discussions):
-    out = pathlib.Path(tempfile.mkdtemp()) / "_site"
-    return build.build(ROOT, out, P, discussions=discussions), out
-
-
-def test_discussion_boards_page():
-    """One post per question, sorted into boards by label; the old General thread stays at the bottom."""
-    _, out = _build_with(DISCUSSIONS)
+def test_discussion_area_needs_no_github():
+    """The discussion area is served by the Worker: no giscus, no GitHub post links, the old posts linked as an archive."""
+    _, out = _build()
     qa = (out / "qa/index.html").read_text(encoding="utf-8")
+    attrs, data = _forum(qa)
+    assert attrs["mode"] == "full" and attrs["forum"] == build.WORKER_URL + "/forum" and attrs["sitekey"] == build.TURNSTILE_SITE_KEY
     boards = json.loads((ROOT / "discussions/boards.json").read_text(encoding="utf-8"))["boards"]
-    assert all(b["zh"] in qa for b in boards) and "宿舍怎么选" in qa and "&lt;b&gt;急&lt;/b&gt;" in qa and "<b>急" not in qa
-    other = qa[qa.index("其他"):]
-    assert "还没分到板块的帖子" in other                                             # unlabelled posts sit under Other
-    assert build.NEW_POST in qa and "发新帖" in qa and "title=%5B%E6%96%B0%E7%94%9F%E5%85%A5%E9%97%A8%5D" in qa
-    assert 'data-term="综合问答 | General Q&amp;A"' in qa                          # earlier comments keep their thread
-    assert "某门课的具体问题请到那门课的页面底部提问" not in qa                         # the old one-thread intro is gone
-    empty = (_build()[1] / "qa/index.html").read_text(encoding="utf-8")
-    assert "暂时读不到" in empty and build.NEW_POST in empty
+    assert [b["key"] for b in data["boards"]] == [b["key"] for b in boards] and all(b["zh"] in qa for b in boards)
+    assert data["courses"]["COM107"]["url"] == P + "EEE/COM107_Circuits_and_Devices/"
+    assert "discussions/new" not in qa and "giscus" not in qa and "不用登录" in qa and "举报" in qa
+    assert build.GH + "/discussions" in qa                                       # the old posts, read-only
+    assert qa.count('class="forum-app"') == 1 and "static/forum.js" in qa
+    for page_file in out.rglob("*.html"):
+        assert "giscus" not in page_file.read_text(encoding="utf-8"), page_file
+    assert (out / "static/forum.js").is_file()
 
 
-def test_course_page_and_wanted_list_show_requests_and_related_posts():
-    _, out = _build_with(DISCUSSIONS)
+def test_course_home_and_wanted_pages_carry_the_forum():
+    _, out = _build()
     com107 = (out / "EEE/COM107_Circuits_and_Devices/index.html").read_text(encoding="utf-8")
-    files = com107[com107.index('id="files"'):com107.index('id="details"')]
-    assert "1 人在求" in files and D_URL + "12" in files                             # the request shows where the files are
-    talk = com107[com107.index('id="qa"'):]
-    assert D_URL + "12" in talk and "相关帖子" in talk
-    eee308 = (out / "EEE/EEE308_RF_and_Microwave_Circuits/index.html").read_text(encoding="utf-8")
-    assert D_URL + "13" in eee308 and "人在求" not in eee308
+    attrs, _ = _forum(com107[com107.index('id="qa"'):])
+    assert attrs["mode"] == "course" and attrs["course"] == "COM107"
+    home = (out / "index.html").read_text(encoding="utf-8")
+    assert _forum(home)[0]["mode"] == "preview" and "board-app" in home        # the opportunity wall keeps its own mount point
     wanted = (out / "wanted/index.html").read_text(encoding="utf-8")
-    assert "同学在求的资料" in wanted and "COM107" in wanted[wanted.index("同学在求的资料"):] and D_URL + "12" in wanted
+    assert _forum(wanted)[0]["mode"] == "requests"
 
 
-def test_fetch_discussions_shapes_the_graphql_answer():
-    import fetch_discussions as fd
-    node = {"number": 1, "title": "t", "url": "u", "createdAt": "c", "updatedAt": "d", "locked": False,
-            "author": {"login": "a"}, "comments": {"totalCount": 2}, "labels": {"nodes": [{"name": "板块:其他"}]}}
-    out = fd.shape([node, {**node, "number": 2, "author": {"login": "giscus"}}, {**node, "number": 3, "locked": True},
-                    {**node, "number": 4, "author": None}])
-    assert [d["number"] for d in out] == [1, 4]                                       # page threads and locked posts are left out
-    assert out[0] == {"number": 1, "title": "t", "url": "u", "created": "c", "updated": "d", "comments": 2, "labels": ["板块:其他"]}
+def test_forum_data_cannot_close_its_script_tag():
+    site = build.Site(ROOT, P)
+    site.courses[0].name = "</script><b>x"
+    html = build.forum_html(site, "full")
+    # the JSON ends at the first </script>: it parses only if the name's </script> was escaped
+    assert json.loads(re.search(r'class="forum-data">(.*?)</script>', html, re.S).group(1))["courses"][site.courses[0].code]["name"] == "</script><b>x"
+
+
+def test_worker_boards_match_the_site():
+    """assistant/src/forum.js keeps its own copy of the board keys; the build's self-check compares them."""
+    keys = [b["key"] for b in json.loads((ROOT / "discussions/boards.json").read_text(encoding="utf-8"))["boards"]]
+    assert build.forum_board_keys() == keys
+    fake = pathlib.Path(tempfile.mkdtemp()) / "forum.js"
+    fake.write_text('export const BOARD_HINTS = {\n  study: "x",\n  other: "y",\n};\n', encoding="utf-8")
+    assert build.forum_board_keys(fake) == ["study", "other"]
 
 
 def test_search_index_carries_topics():

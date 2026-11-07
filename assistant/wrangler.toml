@@ -44,3 +44,12 @@ class_name = "Board"
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["Board"]
+
+# the discussion area: threads, replies, reports and today's counters in one SQLite-backed Durable Object (src/forum.js)
+[[durable_objects.bindings]]
+name = "FORUM"
+class_name = "Forum"
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["Forum"]

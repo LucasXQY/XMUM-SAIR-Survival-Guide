@@ -397,3 +397,24 @@ p.more { margin: .6rem 0 0; font-size: .9rem; }
 @media (max-width: 600px) { .hero h1 span { display: none; } }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .note::before { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.08); } }
 :root[data-theme="dark"] .note::before { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.08); }
+
+/* the discussion area (static/forum.js) */
+.forum-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 8px; }
+.forum-search { flex: 1 1 200px; min-width: 0; font: inherit; padding: 7px 10px; }
+.forum-sort { font: inherit; padding: 6px 8px; }
+ul.threads { list-style: none; padding: 0; margin: 0; }
+.thread-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.thread-board { font-size: 1.1rem; line-height: 1.4; }
+.thread-main { display: flex; flex-direction: column; min-width: 0; }
+.thread-title { font-weight: 600; overflow-wrap: anywhere; }
+.thread-meta { color: var(--muted); font-size: .8rem; }
+.forum-back { display: inline-block; margin: 8px 0; }
+.thread-h { border: 0; margin: .2rem 0 .8rem; }
+.post { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; margin: 10px 0; background: var(--bg); }
+.post-op { background: var(--card); }
+.post-head { margin: 0 0 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.post-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-actions { display: block; margin-top: 6px; font-size: .8rem; color: var(--muted); }
+.badge { font-size: .72rem; padding: 0 7px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); }
+.reply-form { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.forum-result { margin: 6px 0; }

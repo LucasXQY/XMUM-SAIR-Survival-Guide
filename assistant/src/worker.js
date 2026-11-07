@@ -3,16 +3,19 @@
 // 2. 课程评价（/vote、/ratings、/admin）：不用登录；每一票都要过人机验证；同一 IP 每天最多 100 票、同一浏览器每天最多 20 票；
 //    突增和名单外的老师或课程照常计入但标记待审（reviews.js）。票存在 Durable Object 的 SQLite 里。
 // 3. 机会墙与经验帖（/board、/board/post、/board/report）：不用登录，每帖一次人机验证，Haiku 初审（board.js）。
+// 4. 讨论区（/forum、/forum/thread、/forum/post、/forum/report、/forum/withdraw）：不用登录，关键词表加 Haiku 审核（forum.js）。
 // API key 和口令只在 Worker secret 里，网页里没有。
 // The site's Cloudflare Worker: (1) the helper at /chat, (2) course reviews at /vote, /ratings and /admin: no login,
 // a human check on every vote, daily caps per address and per browser, suspicious votes counted but flagged for the
 // maintainer. Votes live in a Durable Object's SQLite. (3) the opportunity wall and experience posts at /board: no
-// login, a human check per post, a first look by Haiku (board.js). Keys and the admin token are Worker secrets only.
+// login, a human check per post, a first look by Haiku (board.js). (4) the discussion area at /forum: no login, keyword
+// lists and Haiku check every thread and reply (forum.js). Keys and the admin token are Worker secrets only.
 import Anthropic from "@anthropic-ai/sdk";
 import { SITE, validate, signSession, verifySession, hashKey, answer } from "./core.js";
 import { reviewsApi } from "./reviews.js";
 import { ADMIN_HTML } from "./admin.js";
 import { boardApi, validate as validateBoard, moderate } from "./board.js";
+import { forumGet, forumPost, forumAdmin, isForumAdmin } from "./forum.js";
 
 const MAX_BODY = 20000;
 let cached = { at: 0, index: null, catalog: null, fetcher: null };
@@ -135,6 +138,7 @@ async function adminRoute(request, env, deps) {
   let body;
   try { body = JSON.parse(await request.text()); } catch { return new Response("bad json", { status: 400 }); }
   if (!(await sameSecret(body.token, env.REVIEWS_ADMIN_TOKEN))) return new Response(JSON.stringify({ error: "token" }), { status: 401 });
+  if (isForumAdmin(body.op)) return forumAdmin(request, env, body);
   const boardOps = { board_list: "admin_list", board_approve: "approve", board_remove: "remove" };
   if (boardOps[body.op]) {
     const r = await board(env, { op: boardOps[body.op], ids: body.ids });
@@ -215,6 +219,7 @@ export async function handle(request, env, deps = {}) {
   // public or token-protected routes
   if (path === "/ratings" && request.method === "GET") return ratingsRoute(request, env, deps);
   if (path === "/board" && request.method === "GET") return boardListRoute(request, env);
+  if ((path === "/forum" || path === "/forum/thread") && request.method === "GET") return forumGet(request, env, path);
   if (path === "/admin" && request.method === "GET") {
     return new Response(ADMIN_HTML, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",
                                                  "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer" } });
@@ -225,17 +230,22 @@ export async function handle(request, env, deps = {}) {
   const origin = request.headers.get("Origin") || "";
   if (!allowed.includes(origin)) return new Response("forbidden", { status: 403 });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: headers(origin) });
-  const routes = ["/chat", "/vote", "/board/post", "/board/report"];
+  const routes = ["/chat", "/vote", "/board/post", "/board/report", "/forum/post", "/forum/report", "/forum/withdraw"];
   if (request.method !== "POST" || !routes.includes(path)) return json({ error: "not found" }, 404, origin);
   const raw = await request.text();
   if (raw.length > MAX_BODY) return json({ error: "too large" }, 413, origin);
   let body;
   try { body = JSON.parse(raw); } catch { return json({ error: "bad json" }, 400, origin); }
   if (path.startsWith("/board/")) return boardPostRoute(body, request, env, deps, origin, path);
+  if (path.startsWith("/forum/")) {
+    const client = () => deps.client || new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 30_000 });
+    return forumPost(body, request, env, deps, origin, path, { json, turnstileOk, siteData, client });
+  }
   return path === "/vote" ? voteRoute(body, request, env, deps, origin) : chatRoute(body, request, env, deps, origin);
 }
 
 export default { fetch: (request, env) => handle(request, env) };
+export { Forum } from "./forum.js";   // the discussion area's Durable Object
 
 // One Durable Object counts every helper question: strongly consistent, and it stores only today's counts.
 export class Limiter {

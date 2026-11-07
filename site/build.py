@@ -39,7 +39,7 @@ WORKER_URL = os.environ.get("ASSISTANT_URL", "").strip().rstrip("/") or "https:/
 TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "").strip() or "0x4AAAAAAF1_G8n4iH_6hvtK"
 RATINGS_URL = f"{WORKER_URL}/ratings"
 LEGACY_RATINGS_URL = f"https://raw.githubusercontent.com/{REPO}/data/ratings.json"   # the GitHub form's last file: fallback only
-NEW_POST = f"{GH}/discussions/new?category=general"   # one post per question; discussions/boards.py files it under a board
+# the discussion area's boards (names and icons); assistant/src/forum.js keeps the same keys, check() compares them
 BOARDS_CFG = json.loads((Path(__file__).resolve().parent.parent / "discussions" / "boards.json").read_text(encoding="utf-8"))
 PROGS = {
     "EEE": "电子信息工程 | Electrical & Electronic Engineering",
@@ -208,28 +208,7 @@ class Site:
         self.prefix = prefix
         self.courses = scan(self.root)
         self.by_path = {c.path: c for c in self.courses}
-        self.discussions: list[dict] | None = None   # posts from site/fetch_discussions.py; None = not available
         self.topics: dict[str, dict] = {}            # repo path → {topics, about} from topics/topics.py
-
-
-def posts_with(site: Site, label: str) -> list[dict]:
-    return sorted((d for d in (site.discussions or []) if label in d["labels"]), key=lambda d: d["updated"], reverse=True)
-
-
-def course_label(code: str) -> str:
-    return BOARDS_CFG["course_label_prefix"] + code
-
-
-def request_label() -> str:
-    return next(b["label"] for b in BOARDS_CFG["boards"] if b["key"] == "requests")
-
-
-def post_list_html(posts: list[dict], limit: int | None = None) -> str:
-    def title(t: str) -> str:   # "[新生入门] 宿舍怎么选" reads as "宿舍怎么选" once it sits on its board
-        return re.sub(r"^\s*[\[【][^\]】]{1,12}[\]】]\s*", "", t) or t
-    items = [f'<li><a href="{esc(d["url"])}">{esc(title(d["title"]))}</a> <small>💬 {d["comments"]} · {esc(d["updated"][:10])}</small></li>'
-             for d in posts[:limit]]
-    return f'<ul class="posts">{"".join(items)}</ul>'
 
 
 def url_path(path: str) -> str:
@@ -441,23 +420,7 @@ def wanted_page(site: Site) -> str:
     def section(title: str, items: list[str]) -> str:
         return f"<h3>{title}（{len(items)}）</h3>" + (f"<ul>{''.join(items)}</ul>" if items else "<p>无 | none</p>")
 
-    requests = posts_with(site, request_label())
-    if requests:   # posts on the material-requests board, grouped by the course they name
-        by_course: dict[str, list[dict]] = {}
-        for d in requests:
-            codes = [l[len(BOARDS_CFG["course_label_prefix"]):] for l in d["labels"] if l.startswith(BOARDS_CFG["course_label_prefix"])]
-            for code in codes or [""]:
-                by_course.setdefault(code, []).append(d)
-        rows = []
-        for code, posts in sorted(by_course.items(), key=lambda kv: (-len(kv[1]), kv[0] or "~")):
-            c = next((c for c in site.courses if c.code == code), None)
-            what = (f'<a href="{site.prefix}{c.path}/">{esc(code)} {esc(c.name)}</a>' if c else esc(code)) if code else "没写课程 | no course named"
-            links = "、".join(f'<a href="{esc(d["url"])}">{esc(d["title"])}</a>' for d in posts)
-            rows.append(f"<li>{what} <small>{len(posts)} 人在求 | requests</small>：{links}</li>")
-        parts.append("<h2>同学在求的资料 | Requested by students</h2>"
-                     "<p>讨论区「资料求助」板块里的帖子。手上有的话请上传，并在帖子里回一句。"
-                     "<br>Posts on the material-requests board. If you have it, upload it and reply in the post.</p>"
-                     f'<ul>{"".join(rows)}</ul>')
+    parts.append(forum_html(site, "requests"))   # material requests from the discussion area, filled by static/forum.js
 
     for prog, pname in PROGS.items():
         cs = [c for c in site.courses if c.prog == prog]
@@ -793,14 +756,6 @@ HERE = Path(__file__).resolve().parent
 esc = html_mod.escape
 DEFAULT_DESC = ("厦门大学马来西亚分校 SAIR 学院学生自发整理的开放学习资料库：空白试卷、大纲、作业、实验手册、笔记 | "
                 "Student-run open archive of study material for XMUM SAIR: blank papers, syllabi, assignments, lab manuals, notes")
-GISCUS_REPO_ID = "R_kgDOQ_iF5g"
-GISCUS_COURSE = ("Q&A", "DIC_kwDOQ_iF5s4DKajf")
-GISCUS_GENERAL = ("General", "DIC_kwDOQ_iF5s4DKaje")
-GISCUS_NOTICE = ("发言需登录 GitHub，用户名公开。请勿张贴答案、评分标准、他人个人信息或老师的私人联系方式。"
-                 "评论保存在本仓库的 GitHub Discussions 中，维护者可以删除。<br>"
-                 "Sign in with GitHub to post; your username is public. Do not post answers, marking schemes, "
-                 "other people's personal data or lecturers' private contact details. Comments live in this repo's "
-                 "GitHub Discussions and may be removed by the maintainers.")
 GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 '
                '6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
                '1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 '
@@ -861,15 +816,6 @@ def page(site: Site, title: str, content: str, description: str = "") -> str:
                                  base=site.prefix, nav=nav_html(site), content=content, assistant=assistant_html(site))
 
 
-def giscus_html(category: str, category_id: str, term: str) -> str:
-    return (f'<p class="notice">{GISCUS_NOTICE}</p>'
-            f'<script src="https://giscus.app/client.js" data-repo="{REPO}" data-repo-id="{GISCUS_REPO_ID}" '
-            f'data-category="{esc(category)}" data-category-id="{category_id}" data-mapping="specific" '
-            f'data-term="{esc(term)}" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" '
-            'data-input-position="top" data-theme="preferred_color_scheme" data-lang="zh-CN" '
-            'crossorigin="anonymous" async></script>')
-
-
 def human_size(n: int) -> str:
     return f"{n / 1048576:.1f} MB" if n >= 1048576 else f"{max(1, round(n / 1024))} KB"
 
@@ -909,11 +855,6 @@ def course_page(site: Site, c: Course) -> str:
     if notices:
         top += f'<div class="notice">{render_md(site, notices, src)}</div>'
     parts = ['<h2 id="files">资料 | Files</h2>']
-    wanted = [d for d in posts_with(site, course_label(c.code)) if request_label() in d["labels"]]
-    if wanted:
-        links = "、".join(f'<a href="{esc(d["url"])}">{esc(d["title"])}</a>' for d in wanted)
-        parts.append(f'<p class="notice">📂 有 {len(wanted)} 人在求这门课的资料：{links}。修过的话欢迎<a href="{site.prefix}upload/">上传</a>。'
-                     f'<br>{len(wanted)} request(s) for this course\'s material; if you took it, please <a href="{site.prefix}upload/">upload</a>.</p>')
     if not c.sessions:
         parts.append("<p>⬜ 征集中 / wanted</p>")
     for s, types in c.sessions.items():
@@ -931,10 +872,7 @@ def course_page(site: Site, c: Course) -> str:
             f'<p class="meta">修课学期 | Taken in: {"、".join(c.taken_in) or "—"}</p>']
     if details:
         info.append(render_md(site, details, src))
-    related = posts_with(site, course_label(c.code))
-    qa = ('<h2 id="qa">讨论 | Discussion</h2>'
-          + (f"<h3>相关帖子 | Related posts</h3>{post_list_html(related)}" if related else "")
-          + giscus_html(*GISCUS_COURSE, title))
+    qa = f'<h2 id="qa">讨论 | Discussion</h2><p class="notice">{FORUM_NOTICE}</p>' + forum_html(site, "course", c.code)
     return page(site, title, top + review + "".join(parts) + "".join(info) + qa,
                 f"{title}：{PROGS[c.prog]} 课程资料与讨论 | course material and discussion")
 
@@ -1001,9 +939,6 @@ def home_page(site: Site) -> str:
     with_mat = sum(1 for c in site.courses if c.sessions)
     stats = (f'<p class="stats home-stats">{with_mat} 门课有资料 · {len(files)} 份文件 · 全部免费 | '
              f'{with_mat} courses with material · {len(files)} files · all free</p>')
-    posts = sorted(site.discussions or [], key=lambda d: d["updated"], reverse=True)[:5]
-    talk = (post_list_html(posts) if posts else
-            '<p class="muted">还没有帖子，来发第一帖 | No posts yet: start one</p>')
     content = (
         '<section class="hero"><h1>XMUM SAIR 生存指南 <span>| Survival Guide</span></h1>'
         "<p>SAIR 三个本科专业的开放资料库：空白试卷、大纲、作业、实验手册、笔记，同学自发整理，免费公开。"
@@ -1020,7 +955,7 @@ def home_page(site: Site) -> str:
         '<div class="home-cols">'
         f'<section><h2>🧭 新机会 <small>New opportunities</small></h2>{board_html(site, preview=True)}'
         f'<p class="more"><a href="{site.prefix}opportunities/">机会墙 | All opportunities →</a></p></section>'
-        f'<section><h2>💬 讨论区新帖 <small>Latest posts</small></h2>{talk}'
+        f'<section><h2>💬 讨论区新帖 <small>Latest posts</small></h2>{forum_html(site, "preview")}'
         f'<p class="more"><a href="{site.prefix}qa/">讨论区 | Discussion →</a></p></section>'
         '</div>')
     content += f'<script src="{site.prefix}static/board.js" defer></script>'
@@ -1164,40 +1099,50 @@ def opportunities_page(site: Site) -> str:
     return page(site, "机会 | Opportunities", content, "实习、科研、全职、内推码、比赛和经验分享 | internships, research, jobs, referral codes and experience posts")
 
 
+def forum_html(site: Site, mode: str, course: str = "") -> str:
+    """The discussion area's mount point; static/forum.js fills it from the Worker (assistant/src/forum.js). One per page.
+    mode: full (the discussion page), course (one course's threads), preview (home page), requests (wanted page)."""
+    data = {"boards": [{k: b[k] for k in ("key", "zh", "en", "icon")} for b in BOARDS_CFG["boards"]],
+            "courses": {c.code: {"name": c.name, "url": f"{site.prefix}{c.path}/"} for c in site.courses}}
+    attrs = (f'data-forum="{WORKER_URL}/forum" data-sitekey="{TURNSTILE_SITE_KEY}" data-mode="{mode}"'
+             + (f' data-course="{esc(course)}"' if course else ""))
+    fallback = ('<noscript><p class="muted">讨论区需要打开 JavaScript。| The discussion area needs JavaScript.</p></noscript>'
+                if mode in ("full", "course") else "")
+    blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    return (f'<div class="forum-app" {attrs}>{fallback}</div>'
+            f'<script type="application/json" class="forum-data">{blob}</script>'
+            f'<script src="{site.prefix}static/forum.js" defer></script>')
+
+
+FORUM_NOTICE = ("不用登录就能提问和回复，每条先审核再出现。请勿张贴答案、评分标准、他人个人信息或老师的私人联系方式。"
+                "<br>No login needed; every post is checked before it appears. Do not post answers, marking schemes, "
+                "other people's personal data or lecturers' private contact details.")
+FORUM_RULES = ("<ul><li>不用登录，不用 GitHub 账号；昵称可填可不填，不填显示「匿名同学」。"
+               "<br>No login and no GitHub account; a nickname is optional.</li>"
+               "<li>每条帖子和回复都先审核：关键词表加 AI 初审，没问题的直接出现，拿不准的等维护者看过再出现，不符合规则的会退回并说明原因。"
+               "<br>Every thread and reply is checked first (keyword lists and an automatic check): fine ones appear at once, "
+               "unsure ones wait for a maintainer, and ones that break the rules come back with a reason.</li>"
+               "<li>只谈课程、学习、科研实习和校园生活。不骂人、不人身攻击、不谈政治；不贴答案和评分标准；不写别人的姓名、学号、电话或老师的私人联系方式。"
+               "<br>Courses, study, careers and campus life only. No insults, personal attacks or politics; no answers or "
+               "marking schemes; no one else's name, student ID, phone number or a lecturer's private contact details.</li>"
+               "<li>看到不合适的内容点「举报」：3 个人举报后先隐藏，等维护者处理。自己发的可以在同一个浏览器里「撤回」。"
+               "<br>Report anything that breaks the rules: after three reports it is hidden until a maintainer looks. "
+               "You can withdraw your own posts from the same browser.</li></ul>")
+
+
 def qa_page(site: Site) -> str:
-    """The discussion area: one post per question, listed by board (labels set by discussions/boards.py)."""
-    boards = BOARDS_CFG["boards"]
-    names = "、".join(b["zh"] for b in boards)
+    """The discussion area: threads by board, served by the Worker; no GitHub account needed."""
+    names = "、".join(b["zh"] for b in BOARDS_CFG["boards"])
     head = ("<h1>讨论区 | Discussion</h1>"
-            f"<p>一帖一问，按话题分板块：{names}。点「发新帖」在 GitHub 上发帖（需要账号），机器人会把帖子放进合适的板块；"
-            "提到某门课的帖子也会出现在那门课的页面上。"
-            "<br>One question per post, sorted into boards by topic. Press New post to post on GitHub (needs an account); the bot "
-            "files it under the right board, and a post about one course also shows on that course's page.</p>"
-            f'<p class="rate-cta"><a class="btn big" href="{NEW_POST}">➕ 发新帖 | New post</a> '
-            '<small>标题写清楚问题；只谈课程、学习和校园生活 | a clear title; courses, study and campus life only</small></p>')
-    if site.discussions is None:
-        body = (f'<p class="muted">帖子列表暂时读不到，可以直接去 <a href="{GH}/discussions">GitHub 讨论区</a>看。'
-                f'| The post list is not available right now; see <a href="{GH}/discussions">the discussions on GitHub</a>.</p>')
-    else:
-        board_labels = {b["label"] for b in boards}
-        cards = []
-        for b in boards:
-            if b["key"] == "other":   # posts no board claimed yet go here too
-                posts = sorted((d for d in site.discussions if b["label"] in d["labels"] or not board_labels & set(d["labels"])),
-                               key=lambda d: d["updated"], reverse=True)
-            else:
-                posts = posts_with(site, b["label"])
-            new = f"{NEW_POST}&title={quote('[' + b['zh'] + '] ')}"
-            every = f"{GH}/discussions?discussions_q={quote('label:' + chr(34) + b['label'] + chr(34))}"
-            listing = post_list_html(posts, 6) if posts else '<p class="muted">还没有帖子 | No posts yet</p>'
-            cards.append(f'<section class="board" id="board-{b["key"]}"><h2>{b["icon"]} {esc(b["zh"])} <small>{esc(b["en"])}</small></h2>'
-                         f'{listing}<p class="board-links"><a href="{new}">在这里发帖 | Post here</a> · '
-                         f'<a href="{every}">全部 {len(posts)} 帖 | All {len(posts)}</a></p></section>')
-        body = f'<div class="boards">{"".join(cards)}</div>'
-    earlier = ('<h2 id="earlier">早先的留言 | Earlier comments</h2>'
-               '<p class="muted">改版前的综合留言串，也可以继续在这里留言。| The single thread from before the boards; it still takes comments.</p>'
-               + giscus_html(*GISCUS_GENERAL, "综合问答 | General Q&A"))   # the term finds the existing thread: never change it
-    return page(site, "讨论区 | Discussion", head + body + earlier, "按话题分板块的讨论区 | discussion boards")
+            f"<p>一帖一问，按话题分板块：{names}。提到某门课的帖子也会出现在那门课的页面上。"
+            "<br>One question per thread, sorted into boards by topic; a thread about one course also shows on that course's page.</p>")
+    rules = f'<details class="board-how"><summary>怎么发言、怎么审核 | How posting and checking work</summary>{FORUM_RULES}</details>'
+    archive = ('<h2 id="earlier">旧讨论区 | Earlier discussions</h2>'
+               f'<p class="muted">改版前在 GitHub 上的帖子留作只读存档：<a href="{GH}/discussions">GitHub 讨论区</a>。新问题请在上面发帖。'
+               f'<br>Posts from before, on GitHub, are kept as a read-only archive: <a href="{GH}/discussions">GitHub Discussions</a>. '
+               'Please start new threads above.</p>')
+    return page(site, "讨论区 | Discussion", head + rules + forum_html(site, "full") + archive,
+                "按话题分板块的讨论区，不用登录 | discussion boards, no login")
 
 
 def not_found_page(site: Site) -> str:
@@ -1221,9 +1166,8 @@ def search_index(site: Site) -> dict:
     return {"courses": courses, "lecturers": people, "files": files}
 
 
-def build(root: Path, out: Path, prefix: str, discussions: list[dict] | None = None, topics: dict | None = None) -> Site:
+def build(root: Path, out: Path, prefix: str, topics: dict | None = None) -> Site:
     site = Site(root, prefix)
-    site.discussions = discussions
     site.topics = topics or {}
     out = Path(out)
     if out.exists():
@@ -1304,6 +1248,12 @@ def check_generator_sources() -> list[str]:
     return hits
 
 
+def forum_board_keys(path: Path = HERE.parent / "assistant" / "src" / "forum.js") -> list[str]:
+    """The board keys in the Worker's BOARD_HINTS, in order."""
+    block = re.search(r"export const BOARD_HINTS = \{(.*?)\n\};", path.read_text(encoding="utf-8"), re.S)
+    return re.findall(r"^\s+(\w+):", block.group(1), re.M) if block else []
+
+
 def check(site: Site, out: Path) -> None:
     """Assert the generated site is consistent; content problems only warn."""
     out = Path(out)
@@ -1315,6 +1265,9 @@ def check(site: Site, out: Path) -> None:
         assert (site.root / f["path"]).is_file(), f"search.json path missing: {f['path']}"
     bad = check_generator_sources()
     assert not bad, f"generator sources contain forbidden words: {bad}"
+    worker_boards = forum_board_keys()
+    assert worker_boards == [b["key"] for b in BOARDS_CFG["boards"]], \
+        f"assistant/src/forum.js boards {worker_boards} differ from discussions/boards.json"
     for page_file in out.rglob("*.html"):
         text = page_file.read_text(encoding="utf-8")
         for href in re.findall(r'href="([^"]*)"', text):
@@ -1333,15 +1286,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="_site")
     ap.add_argument("--prefix", default="/", help="URL path the site is served under")
     ap.add_argument("--root", default=str(HERE.parent), help="repository tree to build from")
-    ap.add_argument("--discussions", help="posts written by site/fetch_discussions.py (default: <root>/_data/discussions.json)")
     ap.add_argument("--topics", help="the topic index from topics/topics.py (default: <root>/_data/topics.json)")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
-    dpath = Path(args.discussions) if args.discussions else root / "_data" / "discussions.json"
-    discussions = json.loads(dpath.read_text(encoding="utf-8")) if dpath.is_file() else None
     tpath = Path(args.topics) if args.topics else root / "_data" / "topics.json"
     topics = json.loads(tpath.read_text(encoding="utf-8")) if tpath.is_file() else {}
-    site = build(root, Path(args.out), args.prefix, discussions, topics)
+    site = build(root, Path(args.out), args.prefix, topics)
     try:
         check(site, Path(args.out))
     except AssertionError as e:

@@ -5,19 +5,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  # the discussion page lists posts by board: rebuild when posts, their labels or their comments change
-  discussion:
-    types: [created, edited, deleted, labeled, unlabeled, locked, unlocked]
-  discussion_comment:
-    types: [created, deleted]
 
 permissions:
   contents: read
-  discussions: read
   pages: write
   id-token: write
 
-# pull-request builds get a group each; every deploy of main shares one, and a newer deploy (say, a burst of comments)
+# pull-request builds get a group each; every deploy of main shares one, and a newer deploy (say, a burst of merges)
 # replaces an older one still waiting or running, since both build the same main
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages-deploy' }}
@@ -35,10 +29,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install markdown
-      - if: github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python site/fetch_discussions.py _data/discussions.json
       - if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
