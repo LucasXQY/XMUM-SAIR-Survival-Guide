@@ -594,7 +594,7 @@ def test_apply_decisions_files_each_item_and_registers_each_course():
     g = intake.parse_form(_body().replace(intake.CREDIT_NICK, intake.CREDIT_LOGIN))
     root2 = _repo_copy(); _with_course(root2, "COM103_Electronic_Engineering")
     intake.apply_decisions(root2, g, ds, items, "newbie", 12)
-    assert "2 份 COM107 2022-04 Past-Papers" in (root2 / "CONTRIBUTORS.md").read_text(encoding="utf-8")   # committed files only
+    assert "1 份 COM107 2022-04 Past-Papers、1 份 COM103 unknown Labs / 1 Past-Papers files for COM107 2022-04, 1 Labs files for COM103 unknown" in (root2 / "CONTRIBUTORS.md").read_text(encoding="utf-8")   # committed files only, every course described
 
 
 def test_apply_decisions_no_timeline_row_for_unknown_session_of_other_course():
@@ -656,6 +656,27 @@ def test_apply_decisions_lecturer_weighting_notes_per_course_and_files_override(
     import fitz
     placed = next((root / "EEE/COM103_Electronic_Engineering/2020-01/Labs").glob("*.pdf"))
     assert "REDACTED COPY" in fitz.open(placed)[0].get_text()
+
+
+def test_apply_decisions_lists_a_course_once_and_single_group_wording_is_unchanged():
+    Decision, Check, Item = _decide_bits()
+    root = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
+    items = _mk_items(w, [(1, "a"), (2, "b"), (3, "c")])
+    g = intake.parse_form(_body().replace(intake.CREDIT_NICK, intake.CREDIT_LOGIN))
+    ds = [Decision(1, "commit", "COM107", "", "2020-01", "Labs", "A"), Decision(2, "commit", "COM107", "", "2020-09", "Labs", "B"),
+          Decision(3, "commit", "COM107", "", "2020-09", "Labs", "C")]
+    pl = intake.apply_decisions(root, g, ds, items, "newbie", 5)
+    assert pl.courses == ["EEE/COM107_Circuits_and_Devices"] and pl.course_dir == pl.courses[0]
+    c = (root / "CONTRIBUTORS.md").read_text(encoding="utf-8")
+    assert "1 份 COM107 2020-01 Labs、2 份 COM107 2020-09 Labs / " in c
+    root2 = _repo_copy()
+    intake.apply_decisions(root2, g, [Decision(1, "commit", "COM107", "", "2020-01", "Labs", "A"), Decision(2, "commit", "COM107", "", "2020-01", "Labs", "B")],
+                           items, "newbie", 5)
+    assert "2 份 COM107 2020-01 Labs / 2 Labs files for COM107 2020-01 |" in (root2 / "CONTRIBUTORS.md").read_text(encoding="utf-8")
+    rows = [(1, "COM107", "2022-04", "Labs"), (2, "COM103", "unknown", "Tutorials"), (1, "COM104", "2021-09", "Notes"), (1, "COM105", "2020-01", "Tips")]
+    out = intake.update_contributors((ROOT / "CONTRIBUTORS.md").read_text(encoding="utf-8"), g, "zed", 5, rows)
+    row = next(l for l in out.splitlines() if l.startswith("| zed"))
+    assert "Notes等共 5 份 / " in row and "5 files in all" in row and "COM105" not in row
 
 
 if __name__ == "__main__":

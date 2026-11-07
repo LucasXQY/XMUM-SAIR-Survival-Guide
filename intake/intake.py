@@ -783,7 +783,8 @@ def update_timeline(text: str, f: Form, credit: str, dir_name: str, link: str | 
     return eol.join(lines)
 
 
-def update_contributors(text: str, f: Form, credit: str, n: int) -> str:
+def update_contributors(text: str, f: Form, credit: str, n: int, groups: list | None = None) -> str:
+    """`groups`: optional [(count, code, session, type)] for uploads spanning several courses (at most 3 are spelled out)."""
     if f.credit == CREDIT_ANON:
         return text
     lines, eol = _split_lines(text)
@@ -794,7 +795,17 @@ def update_contributors(text: str, f: Form, credit: str, n: int) -> str:
         heading, intake_cell = f"## {f.intake} 入学", f"{f.intake} 入学（{int(f.intake) + 4} 届）"
     else:
         heading, intake_cell = "## 其他入学年份", "待补充 / tbc"
-    row = f"| {credit} | {intake_cell}| {n} 份 {f.code} {f.session} {f.type} / {n} {f.type} files for {f.code} {f.session} | |"
+    if groups and len(groups) > 1:
+        shown = groups[:3]
+        zh = "、".join(f"{c} 份 {code} {ses} {typ}" for c, code, ses, typ in shown)
+        en = ", ".join(f"{c} {typ} files for {code} {ses}" for c, code, ses, typ in shown)
+        if len(groups) > 3:
+            zh += f"等共 {n} 份"
+            en += f", {n} files in all"
+        what = f"{zh} / {en}"
+    else:
+        what = f"{n} 份 {f.code} {f.session} {f.type} / {n} {f.type} files for {f.code} {f.session}"
+    row = f"| {credit} | {intake_cell}| {what} | |"
     start = next((i for i, l in enumerate(lines) if l.startswith(heading)),
                  next((i for i, l in enumerate(lines) if l.startswith("## 其他入学年份")), None))
     if start is None:
@@ -948,7 +959,7 @@ def apply_decisions(root: Path, form: Form, decisions: list, items: dict, login:
             courses[d.code] = course
             cprog = course.parent.name
             if not (course / "README.md").exists():
-                (course / "README.md").write_bytes(new_course_readme(d.code, d.name or form.name).encode("utf-8"))
+                (course / "README.md").write_bytes(new_course_readme(d.code, d.name or course.name.split("_", 1)[-1].replace("_", " ")).encode("utf-8"))
                 created_any = True
                 notes.append(f"新建了课程目录和 README：{cprog}/{course.name}/ "
                              f"| created the course folder and README: {cprog}/{course.name}/")
@@ -985,7 +996,8 @@ def apply_decisions(root: Path, form: Form, decisions: list, items: dict, login:
         first_fm = first_fm or fm
         cprog = course.parent.name
         rel_course = f"{cprog}/{course.name}"
-        touched.append(rel_course)
+        if rel_course not in touched:
+            touched.append(rel_course)
         if cprog not in progs:
             progs.append(cprog)
         changed = _edit(course / "README.md", lambda t: update_course_readme(t, fm, credit))
@@ -999,8 +1011,9 @@ def apply_decisions(root: Path, form: Form, decisions: list, items: dict, login:
                 registered.append(f"`{tprog}/README.md` 修课时间表：加了 {code} | timeline: {code} row added")
             else:
                 registered.append(f"`{tprog}/README.md` 修课时间表：{code} 已有相同行 | timeline: identical {code} row already there")
+    summary = [(len(ds), code, session, ds[0].type) for (code, session), ds in groups.items()]
     if placed and first_fm is not None:
-        if _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, first_fm, credit, len(placed))):
+        if _edit(root / "CONTRIBUTORS.md", lambda t: update_contributors(t, first_fm, credit, len(placed), summary)):
             registered.append("`CONTRIBUTORS.md`：加了一行 | row added")
         else:
             registered.append("`CONTRIBUTORS.md`：匿名或署名已在表中，未改 | anonymous or already listed, unchanged")
