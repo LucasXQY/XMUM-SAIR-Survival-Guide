@@ -119,6 +119,11 @@ def test_checks_fail_closed():
     assert d.outcome == "commit"
 
 
+def test_unsure_marking_scheme_is_flagged_not_held_back():
+    d = decide.decide(ITEM, S(), replace(CLEAN, marking_scheme="unsure"), FORM, None, None)
+    assert (d.outcome, d.blocking, "marking_unsure" in d.flags) == ("commit", False, True)
+
+
 def test_decision_name_follows_the_course():
     f = replace(FORM, code="COM107", name="Programming Fundamentals")
     d = decide.decide(ITEM, S(confident=False, course_code="COM106", course_name="Data Structures"), CLEAN, f, None, None)

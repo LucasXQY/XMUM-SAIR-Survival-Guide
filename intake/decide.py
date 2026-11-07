@@ -188,7 +188,9 @@ def decide(item, sort, check, form, override, dup) -> Decision:
             flags.append("answers_unsure")
         elif check.answers != "no":
             malformed = ("检查结果无法识别（答案） | unreadable check result (answers)")
-        if check.marking_scheme != "no":
+        if check.marking_scheme == "unsure":
+            flags.append("marking_unsure")
+        elif check.marking_scheme != "no":
             malformed = ("检查结果无法识别（评分标准） | unreadable check result (marking scheme)")
         if check.personal_data not in ("no", "unsure", "yes"):
             malformed = ("检查结果无法识别（个人信息） | unreadable check result (personal data)")
