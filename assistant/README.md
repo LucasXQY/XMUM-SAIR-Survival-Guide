@@ -46,11 +46,13 @@ The "💬 小帮手" button on every page: students ask on the site and it finds
 - Cloudflare 免费计划每天 10 万次请求，超出只会报错，不收费。
 - Anthropic 的费用：被拦下的问题几乎为零；正常问题大约每个几美分（Opus 5.5，低思考强度，系统提示走缓存）。全站每天 150 个上限，再加上 Console 里设的月度花费上限，就是总闸。
 - 美元上限：小帮手每天最多花 2 美元、每月 60 美元（`wrangler.toml` 里的 `HELPER_USD_DAY`、`HELPER_USD_MONTH`，可用同名仓库变量覆盖，在 assistant 工作流里通过 `--var` 传入）。每个问题开始前先预留 0.25 美元，回答完按实际模型和 token 结算多退少补；预留不够就回复额度用完。按次数的上限（全站每天 150、每人每天 15）保留作第二道保险。`llm/prices.json` 改动时会自动重新部署小帮手，使单价保持一致。
+- 讨论区的 Haiku 审核（`src/forum.js`）单独记账：每天 0.5 美元、每月 5 美元（`FORUM_USD_DAY`、`FORUM_USD_MONTH`，同样可用仓库变量覆盖）。每条帖子先预留 0.002 美元，审完按实际结算；额度用完时帖子照收，但都进待审，等维护者在 `/admin` 批准。每天 400 次的按次数上限保留作第二道保险。
 
 - Set the repository variable `BOTS_PAUSED=1`, then run **Actions → assistant** and **Actions → pages**: the button disappears and the Worker answers "paused" without calling any model.
 - Cloudflare's free plan allows 100,000 requests a day; beyond that requests fail, nothing is billed.
 - Anthropic cost: off-topic questions cost next to nothing; a normal question a few cents (Opus 5.5 at low effort, cached system prompt). The site-wide 150-a-day cap and the monthly spend limit in the Console are the backstops.
 - Dollar caps: the helper spends at most 2 USD a day and 60 USD a month (`HELPER_USD_DAY` and `HELPER_USD_MONTH` in `wrangler.toml`, overridden by repository variables of the same name, passed with `--var` in the assistant workflow). Each question reserves 0.25 USD before it starts and is settled against the real model and token usage after the answer; when the reservation does not fit, the reply says the quota is used up. The count caps (150 a day for the site, 15 a day per visitor) stay as a second guard. A change to `llm/prices.json` redeploys the helper so its prices stay in step.
+- The discussion area's Haiku check (`src/forum.js`) has its own caps: 0.5 USD a day and 5 USD a month (`FORUM_USD_DAY`, `FORUM_USD_MONTH`, also overridable by repository variables). Each post reserves 0.002 USD and is settled against the real usage; once a cap is reached posts are still taken but all wait for the maintainer on `/admin`. A count cap of 400 checks a day stays as a second guard.
 
 ## 开发 | Development
 

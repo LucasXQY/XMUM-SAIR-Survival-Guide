@@ -151,8 +151,9 @@ Builds on the upload channel in DESIGN.md and replaces its "Claude pre-check" se
 |---|---|---|---|
 | `upload`（分拣、全文检查、核验、重复比较） | 60 | 15 | 每次上传最多 8 |
 | `helper`（小帮手，Worker 里计） | 60 | 2 | 每人每天 15 个问题不变 |
-| `haiku`（审核、讨论分类、知识点索引） | 10 | 2 | |
-| 备用（不分配） | 20 | | |
+| `haiku`（审核、知识点索引） | 10 | 2 | |
+| `forum`（讨论区发帖审核，Worker 里计，2026-11-07） | 5 | 0.5 | 每天 400 次不变 |
+| 备用（不分配） | 15 | | |
 
 - **记账**：每次调用后按 API 返回的 `usage`（输入、输出、缓存写、缓存读 token）和实际服务的模型（`response.model`）乘单价算出美元。单价表放在 `llm/claude_check.py`（Python）和 `assistant/src/core.js`（Worker）各一份，测试里核对两份一致。
 - **GitHub 上的机器人**：`claude-usage.json`（bot-state 分支）改成按池子记当天和当月的美元数。为了不对 GitHub API 写几百次，采用"先按批预留、跑完一次结算"：每一批调用前按页数估算并预留，超过上限就不预留、这批文件标"额度用完"；跑完按实际花费结算多退少补。
@@ -207,5 +208,5 @@ Builds on the upload channel in DESIGN.md and replaces its "Claude pre-check" se
 ## 14. 需要维护者做的 | For the maintainer
 
 1. 在 Claude Console 给 API 组织设每月 150 美元的支出上限。
-2. 想改各池子上限时，设仓库变量（留空用默认值）：`CLAUDE_USD_DAY_UPLOAD`（默认 15）、`CLAUDE_USD_MONTH_UPLOAD`（60）、`CLAUDE_USD_RUN_UPLOAD`（8）、`CLAUDE_USD_DAY_HAIKU`（2）、`CLAUDE_USD_MONTH_HAIKU`（10）、`HELPER_USD_DAY`（2）、`HELPER_USD_MONTH`（60）。
+2. 想改各池子上限时，设仓库变量（留空用默认值）：`CLAUDE_USD_DAY_UPLOAD`（默认 15）、`CLAUDE_USD_MONTH_UPLOAD`（60）、`CLAUDE_USD_RUN_UPLOAD`（8）、`CLAUDE_USD_DAY_HAIKU`（2）、`CLAUDE_USD_MONTH_HAIKU`（10）、`HELPER_USD_DAY`（2）、`HELPER_USD_MONTH`（60）、`FORUM_USD_DAY`（0.5）、`FORUM_USD_MONTH`（5）。
 3. 审核和合并三个 PR。

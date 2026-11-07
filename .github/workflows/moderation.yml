@@ -1,13 +1,10 @@
 name: moderation
 
-# 评论审核：网站问答的评论（Discussions）、Issue 及其评论，按关键词表折叠辱骂、歧视和政治敏感内容并记日志。见 moderation/DESIGN.md
-# Comment moderation: Discussions (the site's Q&A), issues and their comments are checked against the
-# word lists; abusive, discriminatory or politically sensitive content is folded and logged. See moderation/DESIGN.md
+# 评论审核：Issue 及其评论按关键词表折叠辱骂、歧视和政治敏感内容并记日志（网站讨论区在 Worker 里先审后发，见 assistant/src/forum.js）。见 moderation/DESIGN.md
+# Comment moderation: issues and their comments are checked against the word lists; abusive, discriminatory or
+# politically sensitive content is folded and logged (the site's discussion area is checked in the Worker before
+# anything appears: assistant/src/forum.js). See moderation/DESIGN.md
 on:
-  discussion:
-    types: [created, edited]
-  discussion_comment:
-    types: [created, edited]
   issues:
     types: [opened, edited]
   issue_comment:
@@ -15,13 +12,12 @@ on:
 
 permissions:
   contents: write        # only for the Claude call counter on the bot-state branch (llm/claude_check.py)
-  discussions: write
   issues: write
   pull-requests: write
 
 jobs:
   scan:
-    if: vars.BOTS_PAUSED != '1' && github.actor != 'github-actions[bot]' && github.actor != 'giscus[bot]'
+    if: vars.BOTS_PAUSED != '1' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

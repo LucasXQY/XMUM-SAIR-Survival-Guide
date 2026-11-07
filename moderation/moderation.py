@@ -75,7 +75,7 @@ class Hit:
 
 @dataclass
 class Action:
-    kind: str      # minimize | lock_discussion | lock_issue | label_issue | comment_discussion | comment_issue | log
+    kind: str      # minimize | lock_issue | label_issue | comment_issue | log
     target: str    # node id, issue number or (for log) the URL
     text: str = ""
 
@@ -125,17 +125,8 @@ def scan(text: str, words: dict[str, list[str]] | None = None) -> list[Hit]:
 # ---------------------------------------------------------------- events → actions
 
 def subject(event_name: str, ev: dict) -> dict | None:
-    """What was posted: kind, text, author, association, node id, number, url, parent discussion id."""
-    if event_name == "discussion_comment" and "comment" in ev:
-        c, d = ev["comment"], ev.get("discussion", {})
-        return {"kind": "discussion_comment", "text": c.get("body") or "", "author": c["user"]["login"],
-                "association": c.get("author_association", "NONE"), "node": c["node_id"], "number": d.get("number"),
-                "url": c.get("html_url", ""), "parent": d.get("node_id", "")}
-    if event_name == "discussion" and "discussion" in ev:
-        d = ev["discussion"]
-        return {"kind": "discussion", "text": f"{d.get('title', '')}\n{d.get('body') or ''}", "author": d["user"]["login"],
-                "association": d.get("author_association", "NONE"), "node": d["node_id"], "number": d.get("number"),
-                "url": d.get("html_url", ""), "parent": d["node_id"]}
+    """What was posted on an issue: kind, text, author, association, node id, number, url. (The discussion area moved to the
+    site's Worker on 2026-11-07, where assistant/src/forum.js checks every post before it appears.)"""
     if event_name == "issues" and "issue" in ev:
         i = ev["issue"]
         return {"kind": "issue", "text": f"{i.get('title', '')}\n{i.get('body') or ''}", "author": i["user"]["login"],
@@ -174,11 +165,7 @@ def plan(event_name: str, ev: dict, words: dict[str, list[str]] | None = None, j
         else:
             cats = reason or "、".join(dict.fromkeys(CATEGORY_NAMES.get(h.category, h.category) for h in hits))
         notice = NOTICE.format(cats=cats)
-        if s["kind"] == "discussion_comment":
-            actions += [Action("minimize", s["node"]), Action("comment_discussion", s["parent"], notice)]
-        elif s["kind"] == "discussion":
-            actions += [Action("lock_discussion", s["node"]), Action("comment_discussion", s["parent"], notice)]
-        elif s["kind"] == "issue":
+        if s["kind"] == "issue":
             actions += [Action("lock_issue", str(s["number"])), Action("label_issue", str(s["number"]), LABEL),
                         Action("comment_issue", str(s["number"]), notice)]
         elif s["kind"] == "issue_comment":
@@ -251,11 +238,6 @@ def apply(actions: list[Action], repo: str) -> None:
     for a in actions:
         if a.kind == "minimize":
             graphql("mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: ABUSE}) { minimizedComment { isMinimized } } }", id=a.target)
-        elif a.kind == "lock_discussion":
-            graphql("mutation($id: ID!) { lockLockable(input: {lockableId: $id, lockReason: TOO_HEATED}) { lockedRecord { locked } } }", id=a.target)
-        elif a.kind == "comment_discussion":
-            graphql("mutation($id: ID!, $body: String!) { addDiscussionComment(input: {discussionId: $id, body: $body}) { comment { id } } }",
-                    id=a.target, body=a.text)
         elif a.kind == "lock_issue":
             gh("issue", "lock", a.target, "--repo", repo, "--reason", "too_heated")
         elif a.kind == "label_issue":

@@ -1,8 +1,10 @@
 # 评论审核机器人设计 | Comment moderation bot design
 
-2026-11-05 · 适用于本仓库的 Discussions（网站问答）和 Issues（上传表单等）。
+2026-11-05 · 适用于本仓库的 Issues（上传表单等）。2026-11-07 起网站讨论区搬到 Worker（`assistant/src/forum.js`），每条先审后发，用的是同一份 `moderation/words` 词表；这个机器人不再处理 GitHub Discussions。
 
-For this repository's Discussions (the website's Q&A) and Issues (the upload form and friends).
+For this repository's issues (the upload form and friends). Since 2026-11-07 the site's discussion area lives in the Worker
+(`assistant/src/forum.js`), which checks every post against the same `moderation/words` lists before it appears; this bot
+no longer handles GitHub Discussions.
 
 ## 1. 目的 | Intent
 
@@ -16,12 +18,12 @@ Comments on the site are posted by anyone signed in to GitHub and appear at once
 - **分两档**：`hide`（脏话、攻击、歧视、政治敏感）命中就隐藏；`review`（投诉类词，如"性骚扰""抄袭"）不隐藏，只记日志给维护者看，因为这类内容可能是正当反映。
 - **词表就是仓库里的文本文件**（`moderation/words/*.txt`，一行一个，`#` 注释），改词表走 PR，不用改代码。
 - **动作**：
-  - Discussion 评论 / Issue 评论命中 `hide` → 用 GraphQL `minimizeComment(classifier: ABUSE)` 折叠，并在同一串里回复一句双语说明。
-  - Discussion 正文或 Issue 正文命中 `hide` → 锁定该串（`lockLockable` / `gh issue lock`），加标签 `moderation`，回复说明。正文无法折叠，锁定能阻止继续发酵，维护者再决定删除。
+  - Issue 评论命中 `hide` → 用 GraphQL `minimizeComment(classifier: ABUSE)` 折叠，并在同一串里回复一句双语说明。
+  - Issue 正文命中 `hide` → 锁定该串（`gh issue lock`），加标签 `moderation`，回复说明。正文无法折叠，锁定能阻止继续发酵，维护者再决定删除。
   - 任何命中（含 `review`）→ 在置顶的「审核记录 | Moderation log」Issue 下追加一条：时间、位置链接、类别、命中词。日志里不复述整段原文，只给链接。
-- **跳过机器人**：`github-actions[bot]`、`giscus[bot]`，以及维护者自己（仓库 admin / write 权限的账号不审）。
+- **跳过机器人**：`github-actions[bot]`，以及维护者自己（仓库 admin / write 权限的账号不审）。
 - **匹配规则**：全部小写；全角转半角；中文词在去掉空白和标点后的文本上做子串匹配（"傻 逼""傻~逼"都算）；英文词按单词边界匹配（`assess` 不会命中 `ass`）。允许表 `allow.txt` 里的词先从文本里去掉再匹配。
-- **触发**：`discussion` / `discussion_comment` 的 created、edited，`issues` opened、edited，`issue_comment` created、edited。权限 `discussions: write`、`issues: write`、`pull-requests: write`。
+- **触发**：`issues` opened、edited，`issue_comment` created、edited。权限 `issues: write`、`pull-requests: write`。
 - 没有 pip 依赖，只用标准库和 `gh`。
 
 ## 3. 不做 | Not doing

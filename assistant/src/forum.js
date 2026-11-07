@@ -1,12 +1,12 @@
 // 讨论区（/forum）：不用登录，发帖和回帖都不用 GitHub 账号。每个浏览器一小时过一次人机验证；
 // 每条内容先过 moderation/words 的关键词表，再由 Haiku 决定直接发布、留给维护者看，还是退回并说明原因。
-// 关键词表命中「折叠」类的，模型说可以发也只放进待审；模型出错、超时或今天的模型额度用完，一律留给维护者，从不直接发布。
+// 关键词表命中「折叠」类的，模型说可以发也只放进待审；模型出错、超时或今天、本月的美元额度用完，一律留给维护者，从不直接发布。
 // 帖子和回复存在一个 Durable Object 的 SQLite 里（下面的 ForumStore）。板块和 discussions/boards.json 一致（网站读那个文件）。
 // The discussion area (/forum): no login and no GitHub account. One human check per browser per hour; every thread and reply
 // goes through the keyword lists in moderation/words, then Haiku publishes it, holds it for the maintainer, or sends it
 // back with a reason. A hit in a "fold" list is never published straight away, and a model error, a timeout or a used-up
-// daily model allowance always means "hold". Threads and replies live in one Durable Object's SQLite (ForumStore below).
-import { signSession, verifySession, hashKey } from "./core.js";
+// daily or monthly dollar cap always means "hold". Threads and replies live in one Durable Object's SQLite (ForumStore below).
+import { signSession, verifySession, hashKey, costUsd } from "./core.js";
 
 export const FORUM_MODEL = "claude-haiku-5-5";
 // The boards in the order of discussions/boards.json, which holds their names and icons for the site; site/build.py checks
@@ -23,13 +23,16 @@ export const BOARDS = Object.keys(BOARD_HINTS);
 export const LIMITS = {
   perIpDaily: 60,        // threads and replies per network per day (a campus shares one address)
   perDeviceDaily: 20,    // per browser per day
-  modelDaily: 400,       // Haiku looks per day for the whole site (about US$0.5); past it, everything waits for the maintainer
+  usdDay: 0.5,           // dollars per UTC day and month for Haiku's looks (FORUM_USD_DAY / FORUM_USD_MONTH override them);
+  usdMonth: 5,           // past either, everything waits for the maintainer (intake/AI-PIPELINE.md §8, the "forum" pool)
+  modelDaily: 400,       // and a count of looks per day as a second guard
   reportsToHide: 3,      // reports from different browsers before a live post goes back to the maintainer
   reportsPerDevice: 10,
   title: 80, body: 4000, reply: 2000, author: 30,
   listed: 300,           // threads in the public list, newest activity first
 };
 const SESSION_SECONDS = 3600;
+export const RESERVE_USD = 0.002;   // held per look until its real cost is known (a look costs about US$0.0003)
 const COURSE_RE = /^[A-Z]{1,5}\d{1,4}[A-Z]?(\.\d{1,2})?$/;   // COM107, G0191, GE0227, MPU1.1
 
 const clean = (s, n) => String(s ?? "").normalize("NFC").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim().slice(0, n);
@@ -157,23 +160,25 @@ export function modPrompt(item, { hits = [], thread = null, codes = [] } = {}) {
 
 const HOLD = { decision: "hold", reason_zh: "自动审核暂时不可用，等维护者看过再发布。", reason_en: "The automatic check is unavailable; a maintainer will look first." };
 
-// → { decision, board, course, reason_zh, reason_en }. client null (paused, or today's allowance used) means "hold".
+// → { decision, board, course, reason_zh, reason_en, cost }. client null (paused, or over the caps) means "hold".
+// cost: dollars for the call, 0 without one, null when the call failed and its cost is unknown (the reservation stays).
 export async function moderate(client, item, ctx = {}) {
   const hits = ctx.hits || [];
   const keep = { board: item.board || (ctx.thread && ctx.thread.board) || "other", course: item.course || (ctx.thread && ctx.thread.course) || "" };
-  if (!client) return { ...HOLD, ...keep };
-  let v;
+  if (!client) return { ...HOLD, ...keep, cost: 0 };
+  let v, cost = null;
   try {
     const r = await client.messages.create({
       model: FORUM_MODEL, max_tokens: 400, system: MOD_SYSTEM,
       messages: [{ role: "user", content: modPrompt(item, ctx) }],
       output_config: { effort: "low", format: { type: "json_schema", schema: MOD_SCHEMA } },
     });
-    if (r.stop_reason !== "end_turn") return { ...HOLD, ...keep };
+    cost = costUsd(r.model || FORUM_MODEL, r.usage);
+    if (r.stop_reason !== "end_turn") return { ...HOLD, ...keep, cost };
     v = JSON.parse((r.content || []).filter((b) => b.type === "text").map((b) => b.text).join(""));
   } catch (e) {
     console.log("forum moderation failed:", e && e.message);
-    return { ...HOLD, ...keep };
+    return { ...HOLD, ...keep, cost };
   }
   let decision = ["publish", "hold", "reject"].includes(v.decision) ? v.decision : "hold";
   let reason_zh = clean(v.reason_zh, 200), reason_en = clean(v.reason_en, 300);
@@ -182,12 +187,12 @@ export async function moderate(client, item, ctx = {}) {
     reason_zh = "内容里有需要人工确认的词，等维护者看过再发布。";
     reason_en = "Some words need a person to check; a maintainer will look first.";
   }
-  if (item.kind === "reply") return { decision, reason_zh, reason_en, ...keep };
+  if (item.kind === "reply") return { decision, reason_zh, reason_en, ...keep, cost };
   // the poster's own choices win; the model fills only what they left blank
   const guess = clean(v.course, 20).toUpperCase().replace(/\s+/g, "");
   const known = COURSE_RE.test(guess) && (!ctx.codes?.length || ctx.codes.includes(guess));
   return { decision, reason_zh, reason_en, board: item.board || (BOARDS.includes(v.board) ? v.board : "other"),
-           course: item.course || (known ? guess : "") };
+           course: item.course || (known ? guess : ""), cost };
 }
 
 // ---------------------------------------------------------------- the Durable Object's API (any store)
@@ -217,15 +222,20 @@ const adminItem = (p, threads) => ({ id: p.id, kind: p.parent ? "reply" : "threa
 
 // msg: { op, ... } → { status, data }. ip and device arrive already hashed.
 export async function forumApi(store, msg, now = Date.now()) {
-  const day = new Date(now).toISOString().slice(0, 10);
+  const day = new Date(now).toISOString().slice(0, 10), month = day.slice(0, 7);
   switch (msg.op) {
-    case "reserve": {   // before the model looks: per-network and per-browser caps, and one model look from today's allowance
+    case "reserve": {   // before the model looks: per-network and per-browser caps, then RESERVE_USD under the dollar caps
       if ((await store.count(`ip:${msg.ip}`, day)) >= LIMITS.perIpDaily) return { status: 429, data: { reason: "ip" } };
       if ((await store.count(`dev:${msg.device}`, day)) >= LIMITS.perDeviceDaily) return { status: 429, data: { reason: "device" } };
       await store.bump(`ip:${msg.ip}`, day);
       await store.bump(`dev:${msg.device}`, day);
-      const model = (await store.count("model", day)) < (msg.modelDaily ?? LIMITS.modelDaily);
-      if (model) await store.bump("model", day);
+      const spentDay = await store.spent(`d:${day}`), spentMonth = await store.spent(`m:${month}`);
+      const model = (await store.count("model", day)) < (msg.modelDaily ?? LIMITS.modelDaily)
+        && spentDay + RESERVE_USD <= (msg.usdDay ?? LIMITS.usdDay) && spentMonth + RESERVE_USD <= (msg.usdMonth ?? LIMITS.usdMonth);
+      if (model) {   // reserved at once, so posts arriving together cannot all slip under the cap
+        await store.bump("model", day);
+        await store.addSpend({ [`d:${day}`]: RESERVE_USD, [`m:${month}`]: RESERVE_USD });
+      }
       let thread = null;
       if (msg.parent) {
         const t = await store.get(String(msg.parent));
@@ -236,6 +246,8 @@ export async function forumApi(store, msg, now = Date.now()) {
     }
     case "post": {
       const it = msg.item, m = msg.verdict;
+      // settle: the real cost replaces the reservation; an unknown cost (a failed call) keeps it
+      if (msg.reserved && typeof m.cost === "number") await store.addSpend({ [`d:${day}`]: m.cost - msg.reserved, [`m:${month}`]: m.cost - msg.reserved });
       if (it.parent) {
         const t = await store.get(it.parent);
         if (!t || t.parent || t.status !== "live") return { status: 404, data: { error: "thread" } };
@@ -300,7 +312,9 @@ export async function forumApi(store, msg, now = Date.now()) {
 }
 
 export class MemoryForum {   // for tests
-  constructor() { this.posts = new Map(); this.counters = new Map(); this.reports = new Set(); }
+  constructor() { this.posts = new Map(); this.counters = new Map(); this.reports = new Set(); this.usd = new Map(); }
+  async spent(key) { return this.usd.get(key) || 0; }
+  async addSpend(add) { for (const [k, v] of Object.entries(add)) this.usd.set(k, Math.max(0, (this.usd.get(k) || 0) + v)); }
   async get(id) { const p = this.posts.get(id); return p && { ...p }; }
   async put(p) { this.posts.set(p.id, { ...p }); }
   async all() { return [...this.posts.values()].map((p) => ({ ...p })); }
@@ -317,6 +331,17 @@ export class ForumStore {
     sql.exec("CREATE INDEX IF NOT EXISTS posts_parent ON posts (parent)");
     sql.exec("CREATE TABLE IF NOT EXISTS counters (k TEXT PRIMARY KEY, n INTEGER NOT NULL)");
     sql.exec("CREATE TABLE IF NOT EXISTS reports (id TEXT NOT NULL, device TEXT NOT NULL, PRIMARY KEY (id, device))");
+    sql.exec("CREATE TABLE IF NOT EXISTS spend (k TEXT PRIMARY KEY, usd REAL NOT NULL)");   // d:<day> and m:<month>, in dollars
+  }
+
+  async spent(key) { return this.sql.exec("SELECT usd FROM spend WHERE k = ?", key).toArray()[0]?.usd || 0; }
+
+  async addSpend(add) {   // keys are this day and this month; older ones are dropped
+    for (const [k, v] of Object.entries(add)) {
+      this.sql.exec("INSERT INTO spend (k, usd) VALUES (?, MAX(0, ?)) ON CONFLICT (k) DO UPDATE SET usd = MAX(0, usd + excluded.usd)", k, v);
+    }
+    const keys = Object.keys(add);
+    this.sql.exec(`DELETE FROM spend WHERE k NOT IN (${keys.map(() => "?").join(", ")})`, ...keys);
   }
 
   async get(id) { return this.sql.exec("SELECT * FROM posts WHERE id = ?", id).toArray()[0]; }
@@ -420,7 +445,8 @@ export async function forumPost(body, request, env, deps, origin, path, h) {
   const v = validate(body, codes);
   if (!v.ok) return h.json({ error: "invalid", message: say(`还差：${v.problems.join("、")}`, "Some fields need fixing."), problems: v.problems, session }, 400, origin);
   const ipHash = await hashKey("ip", ip, salt);
-  const res = await forum(env, { op: "reserve", ip: ipHash, device, parent: v.item.parent, modelDaily: Number(env.FORUM_MODEL_DAILY || LIMITS.modelDaily) });
+  const res = await forum(env, { op: "reserve", ip: ipHash, device, parent: v.item.parent, modelDaily: Number(env.FORUM_MODEL_DAILY || LIMITS.modelDaily),
+                                  usdDay: Number(env.FORUM_USD_DAY || LIMITS.usdDay), usdMonth: Number(env.FORUM_USD_MONTH || LIMITS.usdMonth) });
   if (res.status === 429) {
     const message = res.data.reason === "ip"
       ? say("这个网络今天发言次数已到上限，明天再来。", "This network has reached today's posting limit; please come back tomorrow.")
@@ -432,7 +458,7 @@ export async function forumPost(body, request, env, deps, origin, path, h) {
   const hits = scanWords(`${v.item.title}\n${v.item.body}\n${v.item.author}`, words);
   const client = env.PAUSED === "1" || !res.data.model ? null : h.client();
   const verdict = await moderate(client, v.item, { hits, thread: res.data.thread, codes: codes || [] });
-  const r = await forum(env, { op: "post", item: v.item, verdict, ip: ipHash, device });
+  const r = await forum(env, { op: "post", item: v.item, verdict, ip: ipHash, device, reserved: res.data.model ? RESERVE_USD : 0 });
   if (r.status === 200 && r.data.status === "live") await forget(request, v.item.parent);
   return h.json({ ...r.data, session }, r.status, origin);
 }

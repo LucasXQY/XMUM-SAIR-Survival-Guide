@@ -8,9 +8,9 @@ WORDS = m.load_words()
 
 
 def _comment_event(body, login="someone", association="NONE"):
-    return {"comment": {"body": body, "node_id": "DC_1", "html_url": "https://github.com/x/y/discussions/5#discussioncomment-1",
+    return {"comment": {"body": body, "node_id": "IC_1", "html_url": "https://github.com/x/y/issues/5#issuecomment-1",
                         "user": {"login": login}, "author_association": association},
-            "discussion": {"node_id": "D_5", "number": 5, "title": "COM107 Circuits and Devices", "html_url": "https://github.com/x/y/discussions/5"}}
+            "issue": {"number": 5, "title": "[上传 | Upload] COM107", "html_url": "https://github.com/x/y/issues/5"}}
 
 
 def test_word_lists_load():
@@ -40,34 +40,34 @@ def test_sensitive_and_review_categories():
     assert {h.category for h in m.scan("我想举报这位老师性骚扰", WORDS)} == {"review"}
 
 
-def test_plan_hides_a_discussion_comment_and_logs():
-    actions = m.plan("discussion_comment", _comment_event("你个傻逼"), WORDS)
+def test_plan_hides_an_issue_comment_and_logs():
+    actions = m.plan("issue_comment", _comment_event("你个傻逼"), WORDS)
     kinds = [a.kind for a in actions]
-    assert kinds == ["minimize", "comment_discussion", "log"]
-    assert actions[0].target == "DC_1" and actions[1].target == "D_5"
+    assert kinds == ["minimize", "comment_issue", "log"]
+    assert actions[0].target == "IC_1" and actions[1].target == "5"
     assert "不允许" in actions[1].text and "disallowed" in actions[1].text      # the reply is bilingual
-    assert "someone" in actions[2].text and "zh_profanity" in actions[2].text and "discussioncomment-1" in actions[2].target
+    assert "someone" in actions[2].text and "zh_profanity" in actions[2].text and "issuecomment-1" in actions[2].target
 
 
 def test_plan_review_only_logs():
-    actions = m.plan("discussion_comment", _comment_event("他性骚扰学生，我要举报"), WORDS)
+    actions = m.plan("issue_comment", _comment_event("他性骚扰学生，我要举报"), WORDS)
     assert [a.kind for a in actions] == ["log"]
 
 
 def test_plan_skips_bots_maintainers_and_clean_text():
-    assert m.plan("discussion_comment", _comment_event("傻逼", login="giscus[bot]"), WORDS) == []
-    assert m.plan("discussion_comment", _comment_event("傻逼", association="OWNER"), WORDS) == []
-    assert m.plan("discussion_comment", _comment_event("傻逼", association="MEMBER"), WORDS) == []
-    assert m.plan("discussion_comment", _comment_event("谢谢老师，讲得很清楚"), WORDS) == []
+    assert m.plan("issue_comment", _comment_event("傻逼", login="giscus[bot]"), WORDS) == []
+    assert m.plan("issue_comment", _comment_event("傻逼", association="OWNER"), WORDS) == []
+    assert m.plan("issue_comment", _comment_event("傻逼", association="MEMBER"), WORDS) == []
+    assert m.plan("issue_comment", _comment_event("谢谢老师，讲得很清楚"), WORDS) == []
 
 
-def test_plan_issue_and_discussion_bodies_are_locked_not_minimized():
+def test_plan_issue_bodies_are_locked_not_minimized_and_discussions_are_ignored():
     ev = {"issue": {"number": 9, "title": "[上传 | Upload] COM107", "body": "fuck this", "node_id": "I_9",
                     "html_url": "https://github.com/x/y/issues/9", "user": {"login": "someone"}, "author_association": "NONE"}}
     assert [a.kind for a in m.plan("issues", ev, WORDS)] == ["lock_issue", "label_issue", "comment_issue", "log"]
     ev = {"discussion": {"number": 5, "title": "六四", "body": "", "node_id": "D_5", "html_url": "https://github.com/x/y/discussions/5",
                          "user": {"login": "someone"}, "author_association": "NONE"}}
-    assert [a.kind for a in m.plan("discussion", ev, WORDS)] == ["lock_discussion", "comment_discussion", "log"]
+    assert m.plan("discussion", ev, WORDS) == []                              # GitHub Discussions are no longer the site's discussion area
     ev = {"comment": {"body": "retard", "node_id": "IC_3", "html_url": "https://github.com/x/y/issues/9#issuecomment-3",
                       "user": {"login": "someone"}, "author_association": "CONTRIBUTOR"}, "issue": {"number": 9}}
     assert [a.kind for a in m.plan("issue_comment", ev, WORDS)] == ["minimize", "comment_issue", "log"]
@@ -86,37 +86,37 @@ def _judge(verdict, reason="理由 | reason"):
 
 def test_claude_can_clear_a_keyword_hit():
     j = _judge("ok", "引用课程材料里的原话，不是骂人 | quoting course material, not abuse")
-    actions = m.plan("discussion_comment", _comment_event("What the FUCK is this"), WORDS, judge=j)
+    actions = m.plan("issue_comment", _comment_event("What the FUCK is this"), WORDS, judge=j)
     assert [a.kind for a in actions] == ["log"] and j.calls and j.calls[0][1] == ["en_profanity"]
     assert "Claude" in actions[0].text and "未折叠" in actions[0].text and "quoting course material" in actions[0].text
 
 
 def test_claude_confirms_or_cannot_tell_and_the_hit_still_folds():
     for verdict in ("hide", "human", None):     # None: no key, daily limit reached, error or refusal → the keyword rule
-        actions = m.plan("discussion_comment", _comment_event("你个傻逼"), WORDS, judge=_judge(verdict))
-        assert [a.kind for a in actions] == ["minimize", "comment_discussion", "log"], verdict
-    assert "Claude 未给出判断" in m.plan("discussion_comment", _comment_event("你个傻逼"), WORDS, judge=_judge(None))[-1].text
+        actions = m.plan("issue_comment", _comment_event("你个傻逼"), WORDS, judge=_judge(verdict))
+        assert [a.kind for a in actions] == ["minimize", "comment_issue", "log"], verdict
+    assert "Claude 未给出判断" in m.plan("issue_comment", _comment_event("你个傻逼"), WORDS, judge=_judge(None))[-1].text
 
 
 def test_suspect_words_only_ask_claude():
     assert "suspect" in WORDS and m.scan("讨论一下政府的政策", WORDS)[0].category == "suspect"
     text = "讨论一下政府的政策"
-    assert m.plan("discussion_comment", _comment_event(text), WORDS) == []                          # no Claude: nothing happens
-    assert m.plan("discussion_comment", _comment_event(text), WORDS, judge=_judge("ok")) == []
-    actions = m.plan("discussion_comment", _comment_event(text), WORDS, judge=_judge("hide", "谈论政治 | politics"))
-    assert [a.kind for a in actions] == ["minimize", "comment_discussion", "log"] and "politics" in actions[1].text
-    assert [a.kind for a in m.plan("discussion_comment", _comment_event(text), WORDS, judge=_judge("human"))] == ["log"]
+    assert m.plan("issue_comment", _comment_event(text), WORDS) == []                          # no Claude: nothing happens
+    assert m.plan("issue_comment", _comment_event(text), WORDS, judge=_judge("ok")) == []
+    actions = m.plan("issue_comment", _comment_event(text), WORDS, judge=_judge("hide", "谈论政治 | politics"))
+    assert [a.kind for a in actions] == ["minimize", "comment_issue", "log"] and "politics" in actions[1].text
+    assert [a.kind for a in m.plan("issue_comment", _comment_event(text), WORDS, judge=_judge("human"))] == ["log"]
 
 
 def test_review_hits_stay_logged_and_claude_can_fold_them():
     text = "他性骚扰学生，我要举报"
-    assert [a.kind for a in m.plan("discussion_comment", _comment_event(text), WORDS, judge=_judge("ok"))] == ["log"]
-    assert [a.kind for a in m.plan("discussion_comment", _comment_event(text), WORDS, judge=_judge("hide"))][0] == "minimize"
+    assert [a.kind for a in m.plan("issue_comment", _comment_event(text), WORDS, judge=_judge("ok"))] == ["log"]
+    assert [a.kind for a in m.plan("issue_comment", _comment_event(text), WORDS, judge=_judge("hide"))][0] == "minimize"
 
 
 def test_claude_is_not_asked_about_clean_text():
     j = _judge("hide")
-    assert m.plan("discussion_comment", _comment_event("谢谢老师，讲得很清楚"), WORDS, judge=j) == [] and j.calls == []
+    assert m.plan("issue_comment", _comment_event("谢谢老师，讲得很清楚"), WORDS, judge=j) == [] and j.calls == []
 
 
 def test_judge_prompt_fences_the_comment():
@@ -130,11 +130,11 @@ def test_cli_dry_run_prints_actions_without_gh():
     w = pathlib.Path(tempfile.mkdtemp())
     (w / "event.json").write_text(json.dumps(_comment_event("傻逼")), encoding="utf-8")
     r = subprocess.run([sys.executable, str(pathlib.Path(__file__).parent / "moderation.py"), "--event", str(w / "event.json"),
-                        "--event-name", "discussion_comment", "--dry-run"], capture_output=True, text=True, encoding="utf-8")
-    assert r.returncode == 0 and "minimize DC_1" in r.stdout and "log " in r.stdout, r.stdout + r.stderr
+                        "--event-name", "issue_comment", "--dry-run"], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0 and "minimize IC_1" in r.stdout and "log " in r.stdout, r.stdout + r.stderr
     (w / "clean.json").write_text(json.dumps(_comment_event("谢谢")), encoding="utf-8")
     r = subprocess.run([sys.executable, str(pathlib.Path(__file__).parent / "moderation.py"), "--event", str(w / "clean.json"),
-                        "--event-name", "discussion_comment", "--dry-run"], capture_output=True, text=True, encoding="utf-8")
+                        "--event-name", "issue_comment", "--dry-run"], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0 and "nothing to do" in r.stdout
 
 

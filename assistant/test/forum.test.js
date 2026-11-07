@@ -120,6 +120,31 @@ test("caps: per browser, per network, and the model allowance", async () => {
   assert.deepEqual([r1.data.model, r2.data.model], [true, false]);                    // past the allowance: no model, so "hold"
 });
 
+test("dollar caps: each look reserves first, the real cost settles it, a failed call keeps the reservation", async () => {
+  const s = new fm.MemoryForum();
+  const day = new Date(NOW).toISOString().slice(0, 10), month = day.slice(0, 7);
+  const reserve = (over = {}) => fm.forumApi(s, { op: "reserve", ip: "i", device: crypto.randomUUID(), usdDay: 0.005, usdMonth: 1, ...over }, NOW);
+  assert.equal((await reserve()).data.model, true);
+  assert.equal((await reserve()).data.model, true);
+  assert.equal((await reserve()).data.model, false);                                  // 2 × 0.002 held; a third would pass 0.005
+  assert.ok(Math.abs((await s.spent(`d:${day}`)) - 0.004) < 1e-9);
+  const it = fm.validate(thread()).item;
+  const post = (cost) => fm.forumApi(s, { op: "post", item: it, ip: "i", device: "d", reserved: fm.RESERVE_USD,
+    verdict: { decision: "hold", board: "study", course: "", reason_zh: "z", reason_en: "e", cost } }, NOW);
+  await post(0.0003);                                                                 // settled: 0.004 - 0.002 + 0.0003
+  assert.ok(Math.abs((await s.spent(`d:${day}`)) - 0.0023) < 1e-9);
+  assert.ok(Math.abs((await s.spent(`m:${month}`)) - 0.0023) < 1e-9);
+  await post(null);                                                                   // cost unknown: the reservation stays
+  assert.ok(Math.abs((await s.spent(`d:${day}`)) - 0.0023) < 1e-9);
+  assert.equal((await reserve({ usdDay: 1, usdMonth: 0.003 })).data.model, false);    // the month's cap counts too
+  // the model's real usage is priced by core.js
+  const priced = { messages: { create: async () => ({ stop_reason: "end_turn", model: "claude-haiku-5-5", usage: { input_tokens: 2000, output_tokens: 200 },
+    content: [{ type: "text", text: JSON.stringify({ decision: "publish", board: "study", course: "", reason_zh: "z", reason_en: "e" }) }] }) } };
+  assert.ok(Math.abs((await fm.moderate(priced, it)).cost - (2000 * 0.1 + 200 * 0.5) / 1e6) < 1e-12);
+  assert.equal((await fm.moderate(null, it)).cost, 0);
+  assert.equal((await fm.moderate({ messages: { create: async () => { throw new Error("x"); } } }, it)).cost, null);
+});
+
 // ---------------------------------------------------------------- the Worker's routes
 
 const ORIGIN = "https://xmum-sair.github.io";
@@ -189,5 +214,8 @@ test("routes: paused or out of allowance, posts wait for the maintainer and the 
   const e2 = { ...forumEnv(), FORUM_MODEL_DAILY: "0" };
   const r2 = await (await handle(req("/forum/post", { ...thread(), device: "x", turnstile: "t" }), e2, deps)).json();
   assert.equal(r2.status, "pending");
+  const e3 = { ...forumEnv(), FORUM_USD_DAY: "0.001" };                                    // less than one reservation
+  const r3 = await (await handle(req("/forum/post", { ...thread(), device: "x", turnstile: "t" }), e3, deps)).json();
+  assert.equal(r3.status, "pending");
   assert.equal(calls.length, 0);
 });
