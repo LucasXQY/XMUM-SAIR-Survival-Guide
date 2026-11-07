@@ -25,6 +25,25 @@ DEFAULT_MODELS = {"moderation": "claude-haiku-5-5", "classify": "claude-haiku-5-
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 STATE_BRANCH, STATE_FILE = "bot-state", "claude-usage.json"
 
+# USD per million tokens; the Cloudflare Worker reads the same file, so it stays plain JSON
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prices.json"), encoding="utf-8") as _f:
+    PRICES = json.load(_f)
+
+
+def cost_usd(model: str, usage) -> float:
+    """Dollar cost of one call. `usage` is an SDK object or a dict; a missing or None count is 0. An unknown model is
+    priced as the dearest known one; a long prompt (input + cache write + cache read over the tier limit) uses the long rates."""
+    def n(key: str) -> int:
+        v = usage.get(key) if isinstance(usage, dict) else getattr(usage, key, None)
+        return v or 0
+    inp, out, cw, cr = n("input_tokens"), n("output_tokens"), n("cache_creation_input_tokens"), n("cache_read_input_tokens")
+    table = PRICES["usd_per_million"]
+    rates = table.get(model) or table[PRICES["unknown_model"]]
+    tier = PRICES["long_prompt"].get(model)
+    if tier and inp + cw + cr > tier["over_tokens"]:
+        rates = tier
+    return (inp * rates["input"] + out * rates["output"] + cw * rates["cache_write"] + cr * rates["cache_read"]) / 1_000_000
+
 
 def model_for(task: str) -> str:
     return os.environ.get(f"CLAUDE_MODEL_{task.upper()}", "").strip() or DEFAULT_MODELS.get(task, DEFAULT_MODEL)

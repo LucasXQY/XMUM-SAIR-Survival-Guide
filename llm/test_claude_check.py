@@ -114,6 +114,15 @@ def test_model_and_limit_come_from_repository_variables():
         os.environ.pop("CLAUDE_MODEL_UPLOAD"); os.environ.pop("CLAUDE_DAILY_UPLOAD")
 
 
+def test_cost_usd_uses_the_price_table():
+    u = {"input_tokens": 1_000_000, "output_tokens": 100_000}
+    assert round(cc.cost_usd("claude-opus-5-5", u), 4) == 6.0
+    assert round(cc.cost_usd("claude-haiku-5-5", {"input_tokens": 50_000, "output_tokens": 1000}), 6) == 0.0055
+    assert round(cc.cost_usd("claude-haiku-5-5", {"input_tokens": 200_000, "output_tokens": 1000}), 6) == 0.1025
+    assert round(cc.cost_usd("claude-opus-5-5", {"cache_read_input_tokens": 1_000_000}), 4) == 0.2
+    assert cc.cost_usd("claude-new-thing", u) == cc.cost_usd("claude-fable-5-1", u)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
