@@ -23,6 +23,7 @@ Want to be listed? See [CONTRIBUTING.md](CONTRIBUTING.md) or email `xieqiyi@ieee
 | Joyce | 2021 入学（2025 届）| COM108 / COM110 2025-04 期末复习题（含手写解答）、COM110 微积分习题与 tutorial 手写解答 30 份、带笔记的 COM110 课件 9 份、微积分与线性代数期中复习讲义、马来语期末复习资料 / COM108 & COM110 2025-04 final revision sets with worked solutions, 30 handwritten COM110 exercise & tutorial solution sets, 9 annotated COM110 lecture decks, calculus & linear algebra midterm revision notes, Bahasa Melayu final revision notes | zhongyuanjing0410@gmail.com |
 | [nsd-chen](https://github.com/nsd-chen) | 2021 入学（2025 届）| 38 门课 180 份资料：空白试卷、习题、作业题、实验手册、封面模板与各类指南、大纲 / 180 files across 38 courses: blank papers, tutorials, assignment briefs, lab manuals, cover templates and guidelines, syllabi | |
 | MXZ | 2021 入学（2025 届）| EEE308 2023-09 微波校准实验说明、EEE305 2024-04 期末项目说明 / EEE308 2023-09 lab brief, EEE305 2024-04 final project brief | |
+| [WeiChenNg](https://github.com/WeiChenNg) | 2021 入学（2025 届）| 1 份 AIT304 2024-04 Assignments / 1 Assignments files for AIT304 2024-04 | |
 | [Name] | 2021 入学（2025 届）| [贡献 / Contribution] | [可选 / optional] |
 
 ## 2022 入学（2026 届）| 2022 intake (Class of 2026)
