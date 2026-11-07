@@ -8,13 +8,13 @@ import intake
 
 SKIP_REASONS = ("lecture_slides", "textbook", "answers", "marking_scheme", "student_work", "not_course_material", "other")
 SKIP_TEXT = {
-    "lecture_slides": "讲义 | lecture slides",
-    "textbook": "课本 | textbook",
-    "answers": "含答案 | contains answers",
-    "marking_scheme": "评分标准 | marking scheme",
-    "student_work": "学生作业 | student work",
-    "not_course_material": "不是课程资料 | not course material",
-    "other": "其他原因 | other reason",
+    "lecture_slides": ("讲义", "lecture slides"),
+    "textbook": ("课本", "textbook"),
+    "answers": ("含答案", "contains answers"),
+    "marking_scheme": ("评分标准", "marking scheme"),
+    "student_work": ("学生作业", "student work"),
+    "not_course_material": ("不是课程资料", "not course material"),
+    "other": ("其他原因", "other reason"),
 }
 LABEL_MAX = 40
 
@@ -71,11 +71,11 @@ def validate_sort(raw, cat_codes: set[str]) -> Sort | None:
         return None
     confident = raw.get("confident") is True
     code = str(raw.get("course_code") or "").strip().upper()
-    if not intake.CODE_RE.match(code):
+    if not intake.CODE_RE.fullmatch(code):
         code, confident = "", False
     session = str(raw.get("session") or "").strip()
-    if not intake.SESSION_RE.match(session):
-        session = "unknown"
+    if session != "unknown" and not intake.SESSION_RE.fullmatch(session):
+        session, confident = "unknown", False
     typ = str(raw.get("type") or "").strip()
     if typ not in intake.SUBS:
         typ, confident = "", False
@@ -85,18 +85,24 @@ def validate_sort(raw, cat_codes: set[str]) -> Sort | None:
         reason = ""
     elif reason not in SKIP_REASONS:
         reason = "other"
+    parts = {}
+    for key in ("label", "assessment", "set"):
+        text = str(raw.get(key) or "")
+        if any(bad in text for bad in ("/", "\\", "..")):
+            confident = False
+        parts[key] = _label(text)
     return Sort(course_code=code, course_name=str(raw.get("course_name") or "").strip()[:80], session=session,
-                type=typ, label=_label(raw.get("label")), assessment=_label(raw.get("assessment")),
-                set=_label(raw.get("set")), keep=keep, skip_reason=reason, confident=confident,
+                type=typ, label=parts["label"], assessment=parts["assessment"],
+                set=parts["set"], keep=keep, skip_reason=reason, confident=confident,
                 note=str(raw.get("note") or "").strip()[:200])
 
 
 def resolve_session(sort: Sort, form) -> str:
-    if intake.SESSION_RE.match(sort.session or ""):
+    if intake.SESSION_RE.fullmatch(sort.session or ""):
         return sort.session
     if sort.course_code and sort.course_code == form.code:
         for hint in (form.session, form.taken):
-            if intake.SESSION_RE.match(hint or ""):
+            if intake.SESSION_RE.fullmatch(hint or ""):
                 return hint
     return "unknown"
 
@@ -106,7 +112,13 @@ def _strip_set(value: str) -> str:
 
 
 def file_name(code, session, type, label, set, ext, taken: set[str]) -> str:
-    when = session.replace("-", "") if intake.SESSION_RE.match(session or "") else "unknown"
+    if not isinstance(code, str) or not intake.CODE_RE.fullmatch(code):
+        raise ValueError("bad course code")
+    if not isinstance(session, str) or not (session == "unknown" or intake.SESSION_RE.fullmatch(session)):
+        raise ValueError("bad session")
+    if type not in intake.SUBS:
+        raise ValueError("bad type")
+    when = session.replace("-", "")
     label = _label(label)
     if type == "Past-Papers":
         label = re.sub(r"_?Question$", "", label, flags=re.I).strip("_.") or "PastPaper"
@@ -128,9 +140,9 @@ def _usable_place(p) -> dict | None:
     code = str(p.get("code") or "").strip().upper()
     session = str(p.get("session") or "").strip()
     typ = str(p.get("type") or "").strip()
-    if not intake.CODE_RE.match(code) or typ not in intake.SUBS:
+    if not intake.CODE_RE.fullmatch(code) or typ not in intake.SUBS:
         return None
-    if not intake.SESSION_RE.match(session):
+    if not intake.SESSION_RE.fullmatch(session):
         session = "unknown"
     return {"code": code, "session": session, "type": typ, "label": _label(p.get("label"))}
 
@@ -161,11 +173,12 @@ def decide(item, sort, check, form, override, dup) -> Decision:
         flags.append("placed_by_maintainer")
 
     if not s.keep:
-        text = SKIP_TEXT.get(s.skip_reason, SKIP_TEXT["other"])
+        zh, en = SKIP_TEXT.get(s.skip_reason, SKIP_TEXT["other"])
         if s.confident:
-            return done("skip", f"不收：{text} | not accepted: {text}")
-        return done("maybe_skip", f"可能误判，不收：{text}；可用 /keep 捞回 | maybe wrongly skipped: {text}; /keep restores it")
+            return done("skip", f"不收：{zh} | not accepted: {en}")
+        return done("maybe_skip", f"可能误判，不收：{zh}；可用 /keep 捞回 | maybe wrongly skipped: {en}; /keep restores it")
 
+    malformed = None
     if check is not None:
         if check.answers == "yes":
             return done("skip", "含答案，不收 | contains answers, not accepted")
@@ -173,8 +186,14 @@ def decide(item, sort, check, form, override, dup) -> Decision:
             return done("skip", "评分标准，不收 | marking scheme, not accepted")
         if check.answers == "unsure":
             flags.append("answers_unsure")
+        elif check.answers != "no":
+            malformed = ("检查结果无法识别（答案） | unreadable check result (answers)")
+        if check.marking_scheme != "no":
+            malformed = ("检查结果无法识别（评分标准） | unreadable check result (marking scheme)")
+        if check.personal_data not in ("no", "unsure", "yes"):
+            malformed = ("检查结果无法识别（个人信息） | unreadable check result (personal data)")
 
-    fcode = form.code if intake.CODE_RE.match(form.code or "") else ""
+    fcode = form.code if intake.CODE_RE.fullmatch(form.code or "") else ""
     code = session = typ = ""
     if place or (s.confident and s.course_code):
         code, typ = s.course_code, s.type
@@ -184,24 +203,28 @@ def decide(item, sort, check, form, override, dup) -> Decision:
     elif fcode:
         code = fcode
         typ = form.type if form.type in intake.SUBS else s.type
-        session = next((h for h in (form.session, form.taken) if intake.SESSION_RE.match(h or "")), "")
-        session = session or (s.session if intake.SESSION_RE.match(s.session or "") else "unknown")
+        session = next((h for h in (form.session, form.taken) if intake.SESSION_RE.fullmatch(h or "")), "")
+        session = session or (s.session if intake.SESSION_RE.fullmatch(s.session or "") else "unknown")
         flags.append("ai_unsure")
         if typ not in intake.SUBS:
             code = ""
     label = (s.assessment or s.label) if typ == "Past-Papers" else s.label
-    placed = dict(code=code, name=s.course_name, session=session or "unknown", type=typ, label=label, set=s.set) if code else {}
+    name = sort.course_name if sort and code == sort.course_code else (form.name if code == fcode else "")
+    placed = dict(code=code, name=name, session=session or "unknown", type=typ, label=label, set=s.set) if code else {}
 
     problem = None
     if check is None:
         problem = "没被检查 | not checked"
+    elif malformed:
+        problem = malformed
     elif check.personal_data == "unsure":
         problem = "不确定有没有个人信息 | unsure whether it holds personal data"
     elif check.personal_data == "yes":
         problem = "有个人信息，未处理 | holds personal data, not redacted"
     if problem:
         if not approved:
-            return done("review", f"需要你看：{problem} | needs a look: {problem}", **placed)
+            zh, _, en = problem.partition(" | ")
+            return done("review", f"需要你看：{zh} | needs a look: {en}", **placed)
         flags.append(f"approved_by:{approved}")
 
     if not code:

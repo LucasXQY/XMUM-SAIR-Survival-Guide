@@ -46,10 +46,19 @@ def test_each_row_of_the_table():
 
 
 def test_blocking_and_reason_shape():
-    for s, c in [(S(), CLEAN), (S(confident=False), CLEAN), (S(keep=False, skip_reason="textbook"), None), (S(), None)]:
+    cases = [(S(), CLEAN), (S(confident=False), CLEAN), (S(keep=False, skip_reason="textbook"), None), (S(), None),
+             (S(keep=False, confident=False, skip_reason="lecture_slides"), None),
+             (S(), replace(CLEAN, answers="yes")), (S(), replace(CLEAN, marking_scheme="yes")),
+             (S(), replace(CLEAN, personal_data="unsure")), (S(), replace(CLEAN, personal_data="yes")),
+             (S(), replace(CLEAN, personal_data="maybe")), (None, None)]
+    for s, c in cases:
         d = decide.decide(ITEM, s, c, FORM, None, None)
         assert d.blocking == (d.outcome in ("inbox", "review"))
-        assert " | " in d.reason
+        assert d.reason.count(" | ") == 1, d.reason
+    for ov in ({"skip": True}, {"approved_by": "x"}):
+        assert decide.decide(ITEM, S(), CLEAN, FORM, ov, None).reason.count(" | ") == 1
+    assert decide.decide(ITEM, S(), CLEAN, FORM, None, "EEE/COM107_x/a.pdf").reason.count(" | ") == 1
+    assert decide.decide(ITEM, None, None, FORM, {"approved_by": "x"}, None).reason.count(" | ") == 1
     d = decide.decide(ITEM, S(), CLEAN, FORM, None, None)
     assert (d.k, d.code, d.session, d.type, d.label, d.set) == (1, "COM107", "2022-04", "Past-Papers", "Final", "A")
 
@@ -89,12 +98,56 @@ def test_overrides():
 
 
 def test_hostile_fields_never_shape_a_path():
-    s = decide.validate_sort(dict(SORT_OK, course_code="../../x", session="2022/04", type="Exams", label="a/b\c"), CAT)
+    s = decide.validate_sort(dict(SORT_OK, course_code="../../x", session="2022/04", type="Exams", label="a/b\\c"), CAT)
     assert s.course_code == "" and s.session == "unknown" and not s.confident and "/" not in s.label and "\\" not in s.label
     s = decide.validate_sort(dict(SORT_OK, skip_reason="whatever", keep=False, label="x" * 80), CAT)
     assert s.skip_reason == "other" and len(s.label) <= 40
     assert decide.validate_sort(None, CAT) is None
     assert decide.validate_sort(dict(SORT_OK), CAT).course_code == "COM107"
+
+
+def test_checks_fail_closed():
+    for bad in ("yes", "Yes", "", "maybe", None):
+        d = decide.decide(ITEM, S(), replace(CLEAN, personal_data=bad), FORM, None, None)
+        assert (d.outcome, d.blocking) == ("review", True), bad
+    for field in ("answers", "marking_scheme"):
+        for bad in ("Yes", "", "maybe", None):
+            d = decide.decide(ITEM, S(), replace(CLEAN, **{field: bad}), FORM, None, None)
+            assert d.outcome == "review", (field, bad)
+    assert decide.decide(ITEM, S(), replace(CLEAN, marking_scheme="yes"), FORM, None, None).outcome == "skip"
+    d = decide.decide(ITEM, S(), replace(CLEAN, personal_data="maybe"), FORM, {"approved_by": "LucasXQY"}, None)
+    assert d.outcome == "commit"
+
+
+def test_decision_name_follows_the_course():
+    f = replace(FORM, code="COM107", name="Programming Fundamentals")
+    d = decide.decide(ITEM, S(confident=False, course_code="COM106", course_name="Data Structures"), CLEAN, f, None, None)
+    assert (d.code, d.name) == ("COM107", "Programming Fundamentals")
+    d = decide.decide(ITEM, S(course_name="Programming"), CLEAN, f, None, None)
+    assert d.name == "Programming"
+    place = {"code": "EEE999", "session": "2021-09", "type": "Notes"}
+    d = decide.decide(ITEM, S(course_name="Programming"), CLEAN, f, {"place": place}, None)
+    assert (d.code, d.name) == ("EEE999", "")
+
+
+def test_any_failed_field_makes_the_sort_unsure():
+    assert not decide.validate_sort(dict(SORT_OK, session="2022/04"), CAT).confident
+    s = decide.validate_sort(dict(SORT_OK, session="2022/04"), CAT)
+    assert s.session == "unknown"
+    assert not decide.validate_sort(dict(SORT_OK, label="a/b"), CAT).confident
+    assert not decide.validate_sort(dict(SORT_OK, assessment="a..b"), CAT).confident
+    assert not decide.validate_sort(dict(SORT_OK, set="a\\b"), CAT).confident
+    assert decide.validate_sort(dict(SORT_OK, label="Week 3 notes", session="unknown"), CAT).confident
+
+
+def test_file_name_guards_its_inputs():
+    for args in (("../..", "2022-04", "Notes"), ("COM107", "2022-04\n", "Notes"), ("COM107", "2022-04", "Exams"),
+                 ("COM107\n", "2022-04", "Notes"), ("COM107", "2022/04", "Notes")):
+        try:
+            decide.file_name(*args, "x", "", "pdf", set())
+        except ValueError:
+            continue
+        raise AssertionError(args)
 
 
 def test_session_rule():
