@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import html as html_mod
 import json
 import os
@@ -1153,11 +1154,14 @@ def qa_page(site: Site) -> str:
 
 
 def community_tabs(site: Site, here: str) -> str:
-    """Two tabs over the discussion area and the blog; both sit under the header's Discussion block."""
-    tabs = [("qa", "💬 讨论区", "Discussion"), ("blog", "📝 博客", "Blog")]
-    links = "".join(f'<a href="{site.prefix}{k}/"' + (' aria-current="page"' if k == here else "") + f'>{zh} <small>{en}</small></a>'
-                    for k, zh, en in tabs)
-    return f'<nav class="tabs" aria-label="社区 | Community">{links}</nav>'
+    """A two-part switch over the discussion area and the blog (both sit under the header's Discussion block), each half
+    saying in one line what it is for."""
+    parts = [("qa", "💬", "讨论区", "Discussion", "提问、回答、求资料 | Ask, answer, find material"),
+             ("blog", "📝", "博客", "Blog", "经验长文，可以放图 | Write-ups with images")]
+    links = "".join(f'<a class="sw" href="{site.prefix}{k}/"' + (' aria-current="page"' if k == here else "")
+                    + f'><span class="sw-ic" aria-hidden="true">{icon}</span><span class="sw-t"><b>{zh} <small>{en}</small></b>'
+                    f'<span class="sw-d">{desc}</span></span></a>' for k, icon, zh, en, desc in parts)
+    return f'<nav class="switch" aria-label="社区 | Community">{links}</nav>'
 
 
 BLOG_RULES = ("<ul><li>写你自己的经历：科研、实习、求职面经、升学申请、比赛、校园生活。可以写公司、实验室、学校的名字和面试题。"
@@ -1210,6 +1214,23 @@ def search_index(site: Site) -> dict:
     return {"courses": courses, "lecturers": people, "files": files}
 
 
+ASSET_RE = re.compile(r'(static/([\w.-]+\.(?:css|js)))"')
+
+
+def asset_version(name: str, _cache: dict = {}) -> str:
+    """The first 8 hex characters of a static file's sha256: a new file, a new address."""
+    if name not in _cache:
+        path = HERE / "static" / name
+        _cache[name] = hashlib.sha256(path.read_bytes()).hexdigest()[:8] if path.is_file() else ""
+    return _cache[name]
+
+
+def versioned_assets(html: str) -> str:
+    """static/x.css → static/x.css?v=<hash>: GitHub Pages lets browsers keep static files 10 minutes, so without this a
+    release could show new pages with the old stylesheet and scripts."""
+    return ASSET_RE.sub(lambda m: f'{m.group(1)}?v={asset_version(m.group(2))}"' if asset_version(m.group(2)) else m.group(0), html)
+
+
 def build(root: Path, out: Path, prefix: str, topics: dict | None = None) -> Site:
     site = Site(root, prefix)
     site.topics = topics or {}
@@ -1224,6 +1245,7 @@ def build(root: Path, out: Path, prefix: str, topics: dict | None = None) -> Sit
         p.parent.mkdir(parents=True, exist_ok=True)
         if rel.endswith(".html"):   # the template's canonical placeholder becomes this page's public address
             text = text.replace("__CANONICAL__", SITE_URL + (rel[:-len("index.html")] if rel.endswith("index.html") else rel))
+            text = versioned_assets(text)
         p.write_text(text, encoding="utf-8")
 
     site.recent = recent_entries(site)
