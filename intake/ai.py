@@ -3,6 +3,7 @@ No personal data leaves here: files are named to Claude by `Item.source` only, n
 from __future__ import annotations
 
 import base64
+import re
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,9 @@ cc.DEFAULT_MODELS.setdefault("sort", "claude-haiku-5-5")   # maintainer: Haiku s
 PAGES_SENT = 3
 RESERVE_PER_ITEM = 0.002
 WORKERS = 4
+SORT_MAX_CHARS = 12000      # file text sent per item, so the 0.002 reservation stays meaningful
+HINT_MAX = 200
+_FILE_TAG = re.compile(r"<(\s*/?\s*file)", re.I)
 PROGS = ("EEE", "AIT", "ROBO", "GE")
 
 
@@ -142,12 +146,17 @@ def _first_pages_pdf(path: Path) -> str:
         return base64.b64encode(out.tobytes()).decode()
 
 
+def _line(v, limit: int = HINT_MAX) -> str:
+    """One flat line: control whitespace to spaces, runs collapsed, capped."""
+    return re.sub(r"\s+", " ", str(v)).strip()[:limit]
+
+
 def sort_content(item, form, cat: list[dict]) -> list[dict]:
     """The user turn for one file. The catalogue block comes first and is identical for every file (prompt caching);
     only `item.source` names the file, never its path."""
     hints = [(label, v) for label, v in (("course code", form.code), ("course name", form.name), ("session", form.session),
                                         ("type", form.type), ("assessment", form.assessment), ("lecturer", form.lecturer)) if v]
-    head = [f"File: {item.source}", "Form hints: " + ("; ".join(f"{a}: {b}" for a, b in hints) or "none"),
+    head = [f"File: {_line(item.source)}", "Form hints: " + ("; ".join(f"{a}: {_line(b)}" for a, b in hints) or "none"),
             f"Pages: {item.pages}"]
     blocks = [{"type": "text", "text": _catalogue_text(cat), "cache_control": {"type": "ephemeral"}}]
     if item.scanned and item.ext == "pdf" and item.pages > 0:
@@ -159,7 +168,10 @@ def sort_content(item, form, cat: list[dict]) -> list[dict]:
             return blocks
         except Exception:
             pass
-    text = "\n\n".join(item.page_text[:PAGES_SENT]).replace("</file", "<\\/file")
+    text = "\n\n".join(item.page_text[:PAGES_SENT])
+    if len(text) > SORT_MAX_CHARS:
+        text = text[:SORT_MAX_CHARS] + "\n[truncated]"
+    text = _FILE_TAG.sub(r"‹\1", text)
     blocks.append({"type": "text", "text": "\n".join(head + [f"First {PAGES_SENT} pages of text:", f"<file>{text}</file>"])})
     return blocks
 
