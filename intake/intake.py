@@ -394,8 +394,8 @@ def inspect_file(path: Path) -> dict:
 
 PRECHECK_PAGES = 40           # PDF pages sent to Claude; the PR says when a file was longer
 PRECHECK_CHARS = 60000        # characters of text sent for other files
-PRECHECK_MAX_FILES = 20       # per run; any more are left to the maintainer
-PRECHECK_DEFAULT_LIMIT = 30   # files per day unless the repository variable CLAUDE_DAILY_UPLOAD says otherwise
+PRECHECK_BASE_USD = 0.04      # reserved per file before the call, plus PRECHECK_PAGE_USD per page sent; settled against the real cost
+PRECHECK_PAGE_USD = 0.025
 PRECHECK_KEYS = ("summary", "answers", "personal_data", "marking_scheme", "notes")
 PRECHECK_ENUM = ("no", "yes", "unsure")
 PRECHECK_SYSTEM = """You check one file that a student uploaded to XMUM SAIR Survival Guide, a public archive of course \
@@ -422,8 +422,7 @@ PRECHECK_SCHEMA = {"type": "object", "additionalProperties": False, "required": 
 PRECHECK_CACHE_RE = re.compile(r"<!-- claude-precheck ([A-Za-z0-9+/=]*) -->")
 PRECHECK_STATUS = {
     "off": "未运行：没有配置 ANTHROPIC_API_KEY | not run: no ANTHROPIC_API_KEY",
-    "limit": "今天的预检次数已用完，编辑 Issue 明天可重跑 | today's pre-check limit is used up; edit the issue tomorrow to rerun",
-    "skipped": f"一次超过 {PRECHECK_MAX_FILES} 个文件，这份没有预检 | over {PRECHECK_MAX_FILES} files in one upload, not checked",
+    "limit": "今天的预检额度已用完，编辑 Issue 明天可重跑 | today's pre-check budget is used up; edit the issue tomorrow to rerun",
     "unsupported": "旧格式（doc/ppt/xls）不预检 | old Office format, not checked",
     "error": "Claude 没有给出结果，请照常检查 | no answer from Claude; check as usual",
 }
@@ -464,10 +463,27 @@ def precheck_input(path: Path) -> tuple[dict, str]:
     return {"type": "text", "text": "<file>\n" + text.replace("</file", "<\\/file") + "\n</file>"}, note
 
 
+def precheck_estimate(files: list[Path]) -> float:
+    """USD to reserve before checking these files: a base plus a per-page rate for the pages Claude would read
+    (at most PRECHECK_PAGES per PDF; any other file counts as one page)."""
+    total = 0.0
+    for path in files:
+        pages = 1
+        if Path(path).suffix.lower() == ".pdf":
+            try:
+                import fitz
+                with fitz.open(path) as doc:
+                    pages = len(doc)
+            except Exception:
+                pages = PRECHECK_PAGES   # unreadable: reserve the most; precheck_input will report the error
+        total += PRECHECK_BASE_USD + PRECHECK_PAGE_USD * min(max(pages, 1), PRECHECK_PAGES)
+    return total
+
+
 def precheck(files: dict[str, Path], cache: dict, ask=None, take=None) -> dict[str, dict]:
     """rel path → {"status", "sha", and the verdict fields when there is one}. Verdicts are cached by the hash of the
     uploaded bytes (the cache rides in the PR body), so the rebuild on every push to main sends nothing twice.
-    `take(n)` books n calls against the daily limit; `ask(content)` returns a verdict or None."""
+    `take(paths)` reserves the dollars for checking those files and says whether they fit; `ask(content)` returns a verdict or None."""
     import hashlib
     out: dict[str, dict] = {}
     todo = []
@@ -484,12 +500,10 @@ def precheck(files: dict[str, Path], cache: dict, ask=None, take=None) -> dict[s
     if ask is None or take is None:
         out.update({rel: {"status": "off", "sha": sha} for rel, _, sha in todo})
         return out
-    now, later = todo[:PRECHECK_MAX_FILES], todo[PRECHECK_MAX_FILES:]
-    out.update({rel: {"status": "skipped", "sha": sha} for rel, _, sha in later})
-    if not take(len(now)):
-        out.update({rel: {"status": "limit", "sha": sha} for rel, _, sha in now})
+    if not take([src for _, src, _ in todo]):
+        out.update({rel: {"status": "limit", "sha": sha} for rel, _, sha in todo})
         return out
-    for rel, src, sha in now:
+    for rel, src, sha in todo:
         try:
             block, note = precheck_input(src)
         except Exception as e:
@@ -546,21 +560,32 @@ def precheck_lines(placed: list[tuple[str, str]], prechecks: dict[str, dict] | N
 
 
 def make_prechecker(repo: str):
-    """(ask, take) backed by Claude and the daily counter, or None without an API key."""
+    """(ask, take, settle) backed by Claude and the dollar ledger, or None without an API key.
+    `take(files)` reserves the estimate; `ask` adds up what the calls really cost; `settle()` books the difference, once."""
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return None
     sys.path.insert(0, str(HERE.parent / "llm"))
     import claude_check as cc
     budget = cc.Budget(repo)
+    reserved, spent = [0.0], []
 
     def ask(content):
-        v = cc.ask("upload", PRECHECK_SYSTEM, content, PRECHECK_SCHEMA, max_tokens=4000)
+        v = cc.ask("upload", PRECHECK_SYSTEM, content, PRECHECK_SCHEMA, max_tokens=4000, on_cost=spent.append)
         ok = v and all(v.get(k) in PRECHECK_ENUM for k in ("answers", "personal_data", "marking_scheme"))
         return v if ok else None
 
-    def take(n: int) -> bool:
-        return budget.take("upload", n, cc.daily_limit("upload", PRECHECK_DEFAULT_LIMIT))
-    return ask, take
+    def take(files: list[Path]) -> bool:
+        usd = precheck_estimate(files)
+        ok = budget.reserve(cc.pool_of("upload"), usd)
+        if ok:
+            reserved[0] += usd
+        return ok
+
+    def settle() -> None:
+        if reserved[0] or spent:
+            budget.settle(cc.pool_of("upload"), sum(spent) - reserved[0])
+        reserved[0], spent[:] = 0.0, []
+    return ask, take, settle
 
 
 def thumbnails(pdfs: list[Path], out_png: Path, cols: int = 5, cell: tuple[int, int] = (120, 160)) -> int:
@@ -965,7 +990,7 @@ def pr_body(f: Form, pl: Placement, rejected: list[tuple[str, str]], inspections
 def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list[Path] | None = None,
             base_sha: str = "dry-run", run_url: str | None = None, branch: str = "",
             checker=None, precheck_cache: dict | None = None) -> tuple[Placement, str, list[tuple[str, str]]]:
-    """Download (unless files are given), unpack, place, inspect, pre-check with Claude (when `checker` = (ask, take)),
+    """Download (unless files are given), unpack, place, inspect, pre-check with Claude (when `checker` = (ask, take, settle)),
     build; returns the placement and the PR body."""
     work.mkdir(parents=True, exist_ok=True)
     if files is None:
@@ -979,8 +1004,12 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
     pl = apply(repo, f, accepted, login)
     inspections = {rel: inspect_file(repo / rel) for _, rel in pl.placed}
     sources = {rel: src for (_, src), (_, rel) in zip(accepted, pl.placed)}   # apply() keeps the order of `accepted`
-    ask, take = checker or (None, None)
-    prechecks = precheck(sources, precheck_cache or {}, ask, take)
+    ask, take, settle = checker or (None, None, None)
+    try:
+        prechecks = precheck(sources, precheck_cache or {}, ask, take)
+    finally:
+        if settle:
+            settle()    # book the real cost against the estimate, whatever happened
     pdfs = [repo / rel for _, rel in pl.placed if rel.lower().endswith(".pdf")]
     thumbnails(pdfs, work.parent / "thumbs" / f"issue-{issue}.png")
     r = subprocess.run([sys.executable, str(HERE.parent / "site" / "build.py"), "--root", str(repo), "--out", str(work / "site")],

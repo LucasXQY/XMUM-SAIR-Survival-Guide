@@ -244,8 +244,9 @@ class Budget:
             return float("inf"), float("inf")
 
 
-def ask(task: str, system: str, content, schema: dict, max_tokens: int = 4000, client=None, model: str | None = None) -> dict | None:
-    """Claude's answer as a dict matching `schema`, or None. `content` is the user turn: a string or content blocks."""
+def ask(task: str, system: str, content, schema: dict, max_tokens: int = 4000, client=None, model: str | None = None, on_cost=None) -> dict | None:
+    """Claude's answer as a dict matching `schema`, or None. `content` is the user turn: a string or content blocks.
+    `on_cost(usd)` is called once whenever the API returned a response (answer or not), never when the call raised."""
     try:
         import anthropic
     except ImportError:
@@ -275,6 +276,8 @@ def ask(task: str, system: str, content, schema: dict, max_tokens: int = 4000, c
             why = f"{type(e).__name__}: {e}"
         print(f"claude ({task}): no answer, {why}", file=sys.stderr)
         return None
+    if on_cost:
+        on_cost(cost_usd(r.model, r.usage))
     if r.stop_reason != "end_turn":   # refusal (even after the fallback), max_tokens, ...
         print(f"claude ({task}): no answer, stop_reason={r.stop_reason}", file=sys.stderr)
         return None

@@ -436,14 +436,61 @@ def test_precheck_caches_by_file_hash_and_respects_the_limit():
     def ask(content):
         asked.append(content)
         return dict(VERDICT)
-    out = intake.precheck(files, {}, ask=ask, take=lambda n: True)
+    out = intake.precheck(files, {}, ask=ask, take=lambda files: True)
     assert len(asked) == 2 and {r["status"] for r in out.values()} == {"ok"} and out["X/a.pdf"]["answers"] == "yes"
     cache = {r["sha"]: {k: r[k] for k in VERDICT} for r in out.values()}
-    again = intake.precheck(files, cache, ask=ask, take=lambda n: True)             # a rebuild: nothing is sent again
+    again = intake.precheck(files, cache, ask=ask, take=lambda files: True)             # a rebuild: nothing is sent again
     assert len(asked) == 2 and {r["status"] for r in again.values()} == {"cached"}
-    assert {r["status"] for r in intake.precheck(files, {}, ask=ask, take=lambda n: False).values()} == {"limit"}
-    assert {r["status"] for r in intake.precheck(files, {}, ask=lambda c: None, take=lambda n: True).values()} == {"error"}
+    assert {r["status"] for r in intake.precheck(files, {}, ask=ask, take=lambda files: False).values()} == {"limit"}
+    assert {r["status"] for r in intake.precheck(files, {}, ask=lambda c: None, take=lambda files: True).values()} == {"error"}
     assert {r["status"] for r in intake.precheck(files, {}).values()} == {"off"}    # no API key
+
+
+def test_precheck_has_no_file_count_cap_and_asks_for_the_files_it_will_send():
+    w = pathlib.Path(tempfile.mkdtemp())
+    files = {}
+    for i in range(25):
+        _pdf(w / f"p{i}.pdf", text=f"page {i}"); files[f"X/p{i}.pdf"] = w / f"p{i}.pdf"
+    seen = []
+    out = intake.precheck(files, {}, ask=lambda c: dict(VERDICT), take=lambda fs: seen.append(list(fs)) or True)
+    assert {r["status"] for r in out.values()} == {"ok"} and len(out) == 25          # no "skipped" any more
+    assert len(seen) == 1 and sorted(seen[0]) == sorted(files.values())             # one reservation for the whole upload
+
+
+def test_precheck_estimate_is_a_base_plus_a_rate_per_page_up_to_forty():
+    import fitz
+    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "one.pdf"); _docx(w / "a.docx")
+    long = fitz.open(); [long.new_page() for _ in range(90)]; long.save(w / "long.pdf"); long.close()
+    assert round(intake.precheck_estimate([w / "one.pdf"]), 6) == 0.065 and round(intake.precheck_estimate([w / "a.docx"]), 6) == 0.065
+    assert round(intake.precheck_estimate([w / "long.pdf"]), 6) == 1.04              # 0.04 + 0.025 x 40
+    assert round(intake.precheck_estimate([w / "one.pdf", w / "long.pdf"]), 6) == 1.105 and intake.precheck_estimate([]) == 0
+
+
+def test_the_prechecker_reserves_by_pages_and_settles_the_difference_once():
+    import os
+    sys.path.insert(0, str(ROOT / "llm"))
+    import claude_check as cc
+    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf")
+    calls = []
+
+    class FakeBudget:
+        def __init__(self, repo): pass
+        def reserve(self, pool, usd): calls.append(("reserve", pool, round(usd, 6))); return usd < 1
+        def settle(self, pool, delta): calls.append(("settle", pool, round(delta, 6)))
+    real = (cc.Budget, cc.ask, os.environ.get("ANTHROPIC_API_KEY"))
+    cc.Budget = FakeBudget
+    cc.ask = lambda task, system, content, schema, max_tokens=0, on_cost=None: (on_cost(0.01), dict(VERDICT))[1]
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+    try:
+        ask, take, settle = intake.make_prechecker("r/r")
+        assert take([w / "a.pdf"]) and ask([]) is not None
+        settle(); settle()                                                            # the second call has nothing left to book
+        assert calls == [("reserve", "upload", 0.065), ("settle", "upload", round(0.01 - 0.065, 6))]
+        calls.clear(); assert take([w / "a.pdf"] * 20) is False                      # 1.3 USD does not fit; nothing reserved
+        settle(); assert calls == [("reserve", "upload", 1.3)]
+    finally:
+        cc.Budget, cc.ask = real[0], real[1]
+        os.environ.pop("ANTHROPIC_API_KEY", None) if real[2] is None else os.environ.__setitem__("ANTHROPIC_API_KEY", real[2])
 
 
 def test_pr_body_shows_the_precheck_and_carries_its_cache():

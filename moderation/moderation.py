@@ -58,6 +58,7 @@ repeat slurs, insults or personal data in the reason."""
 JUDGE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["verdict", "reason"],
                 "properties": {"verdict": {"type": "string", "enum": ["ok", "hide", "human"]}, "reason": {"type": "string"}}}
 JUDGE_DEFAULT_LIMIT = 100
+JUDGE_ESTIMATE_USD = 0.002    # reserved before each call, settled against the real cost
 
 
 def judge_prompt(text: str, hits: list) -> str:
@@ -207,9 +208,13 @@ def make_judge(repo: str):
     budget = cc.Budget(repo)
 
     def judge(text: str, hits: list) -> dict | None:
-        if not budget.take("moderation", 1, cc.daily_limit("moderation", JUDGE_DEFAULT_LIMIT)):
+        if not budget.take("moderation", 1, cc.daily_limit("moderation", JUDGE_DEFAULT_LIMIT), usd=JUDGE_ESTIMATE_USD):
             return None
-        out = cc.ask("moderation", JUDGE_SYSTEM, judge_prompt(text, hits), JUDGE_SCHEMA, max_tokens=2000)
+        spent = []
+        try:
+            out = cc.ask("moderation", JUDGE_SYSTEM, judge_prompt(text, hits), JUDGE_SCHEMA, max_tokens=2000, on_cost=spent.append)
+        finally:
+            budget.settle(cc.pool_of("moderation"), sum(spent) - JUDGE_ESTIMATE_USD)
         return out if out and out.get("verdict") in ("ok", "hide", "human") else None
     return judge
 

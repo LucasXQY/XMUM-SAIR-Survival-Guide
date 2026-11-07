@@ -143,14 +143,14 @@ def test_a_run_that_started_before_midnight_never_rolls_the_ledger_back():
 
 
 class FakeClient:
-    def __init__(self, text='{"verdict": "hide"}', stop="end_turn", error=None):
+    def __init__(self, text='{"verdict": "hide"}', stop="end_turn", error=None, usage=None):
         self.kw, self.path = None, None
         def create(path):
             def f(**kw):
                 self.kw, self.path = kw, path
                 if error:
                     raise error
-                return SimpleNamespace(stop_reason=stop, content=[SimpleNamespace(type="thinking", thinking=""),
+                return SimpleNamespace(stop_reason=stop, model=kw["model"], usage=usage or {"input_tokens": 10, "output_tokens": 5}, content=[SimpleNamespace(type="thinking", thinking=""),
                                                                   SimpleNamespace(type="text", text=text)])
             return f
         self.messages = SimpleNamespace(create=create("messages"))
@@ -166,6 +166,15 @@ def test_ask_returns_json_with_schema_low_effort_and_refusal_fallback():
     h = FakeClient()
     assert cc.ask("moderation", "sys", "hi", SCHEMA, client=h, model="claude-haiku-5-5") == {"verdict": "hide"}
     assert h.path == "messages" and "fallbacks" not in h.kw                   # Haiku has no server-side fallback
+
+
+def test_ask_reports_the_cost_even_when_there_is_no_answer():
+    seen = []
+    cc.ask("moderation", "sys", "hi", SCHEMA, client=FakeClient(usage={"input_tokens": 1000, "output_tokens": 100}), on_cost=seen.append)
+    cc.ask("moderation", "sys", "hi", SCHEMA, client=FakeClient(stop="refusal", usage={"input_tokens": 1000}), on_cost=seen.append)
+    assert len(seen) == 2 and round(seen[0], 6) == round(cc.cost_usd("claude-haiku-5-5", {"input_tokens": 1000, "output_tokens": 100}), 6)
+    cc.ask("moderation", "sys", "hi", SCHEMA, client=FakeClient(error=RuntimeError("down")), on_cost=seen.append)
+    assert len(seen) == 2                                                   # no response, no cost
 
 
 def test_ask_gives_none_whenever_the_answer_cannot_be_trusted():
