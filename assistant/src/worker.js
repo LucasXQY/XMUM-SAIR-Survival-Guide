@@ -7,12 +7,11 @@
 // a human check on every vote, daily caps per address and per browser, suspicious votes counted but flagged for the
 // maintainer. Votes live in a Durable Object's SQLite. Keys and the admin token are Worker secrets only.
 import Anthropic from "@anthropic-ai/sdk";
-import { SITE, validate, signSession, verifySession, hashKey, answer } from "./core.js";
+import { SITE, validate, signSession, verifySession, hashKey, answer, RESERVE_USD } from "./core.js";
 import { reviewsApi } from "./reviews.js";
 import { ADMIN_HTML } from "./admin.js";
 
 const MAX_BODY = 20000;
-export const RESERVE_USD = 0.25;   // held per question until its real cost is known
 let cached = { at: 0, index: null, catalog: null, fetcher: null };
 
 export async function siteData(fetcher = fetch, now = Date.now()) {   // the site's search index and course/lecturer list, kept 10 minutes

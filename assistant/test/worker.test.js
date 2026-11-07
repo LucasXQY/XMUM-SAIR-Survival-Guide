@@ -1,8 +1,8 @@
 // Checks for src/worker.js request handling with fakes for Turnstile, the limiter and Claude: npm test.
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { handle, Limiter, RESERVE_USD } from "../src/worker.js";
-import { signSession, costUsd, answer } from "../src/core.js";
+import { handle, Limiter } from "../src/worker.js";
+import { signSession, costUsd, answer, RESERVE_USD } from "../src/core.js";
 
 const ORIGIN = "https://xmum-sair.github.io";
 
@@ -78,7 +78,7 @@ test("dollar caps stop the helper for the day, then the month", async (t) => {
                                                  usage: { input_tokens: 300_000, output_tokens: 0 } });   // opus: $1.20 an answer
   const status = async () => (await handle(ask({ ...Q, session: await signSession("ts|session") }), e, d)).status;
   assert.equal(await status(), 200);
-  assert.equal(await status(), 200);          // 1.2 spent < 2 before the call
+  assert.equal(await status(), 200);          // 1.2 spent + 0.25 reserve <= 2 before the call
   const third = await handle(ask({ ...Q, session: await signSession("ts|session") }), e, d);
   assert.equal(third.status, 429);
   const data = await third.json();
@@ -129,6 +129,14 @@ test("a new day clears hundreds of old keys within the storage delete limit", as
   for (let i = 0; i < 300; i++) await st.put(`u:2026-11-05:v${i}`, 1);
   assert.equal((await take(l, {})).ok, true);
   assert.equal([...st.m.keys()].some((k) => k.includes("2026-11-05")), false);
+});
+
+test("costUsd matches the shared price table", () => {
+  assert.equal(costUsd("claude-opus-5-5", { input_tokens: 1_000_000, output_tokens: 100_000 }), 6);
+  assert.equal(costUsd("claude-mystery", { input_tokens: 1_000_000 }), costUsd("claude-fable-5-1", { input_tokens: 1_000_000 }));
+  assert.equal(costUsd("claude-opus-5-5", { input_tokens: null, cache_read_input_tokens: 1_000_000 }), 0.2);
+  assert.equal(costUsd("claude-opus-5-5", undefined), 0);
+  assert.equal(costUsd("claude-haiku-5-5", { input_tokens: 200_000, output_tokens: 1000 }), 0.1025);
 });
 
 test("the cost is priced for the model that answered", async () => {

@@ -173,6 +173,8 @@ ${catalogText}`;
 
 const textOf = (content) => (content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
 
+export const RESERVE_USD = 0.25;   // the Limiter holds this per question until its real cost is known
+
 export function costUsd(model, usage) {   // dollars for one call; same rules as cost_usd in llm/claude_check.py
   const n = (k) => (usage && usage[k]) || 0;
   const inp = n("input_tokens"), out = n("output_tokens"), cw = n("cache_creation_input_tokens"), cr = n("cache_read_input_tokens");
