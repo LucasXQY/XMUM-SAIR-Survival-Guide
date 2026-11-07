@@ -322,7 +322,7 @@ def _tables_hold(text):
 
 
 def test_dry_run_end_to_end():
-    import os, subprocess, sys
+    import os, shutil, subprocess, sys
     tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "final.pdf"); _docx(w / "sheet.docx")
     form = w / "form.md"; form.write_text(_body().replace("Past-Papers", "Tutorials").replace("Final", "_No response_"), encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}             # no key: the stand-in AI
@@ -331,11 +331,17 @@ def test_dry_run_end_to_end():
                        capture_output=True, text=True, encoding="utf-8", env=env)
     assert r.returncode == 0, r.stderr
     body = (w / "work/PR_BODY.md").read_text(encoding="utf-8")
-    assert _in_order(body, SECTIONS + ("Closes #7",)), body
-    assert "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/COM107_202204_Tutorials.pdf" in body and "COM107_202204_Tutorials.docx" in body
+    assert "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/COM107_202204_Tutorials.pdf" in body
     assert "EEE2109300" not in body                                       # a keyword hit is counted, never quoted
     assert "python site/build.py" in body and "/approve #k" in body and "/retry" in body
-    assert (tmp / "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/COM107_202204_Tutorials.docx").is_file()
+    docx = tmp / "EEE/COM107_Circuits_and_Devices/2022-04/Tutorials/COM107_202204_Tutorials.docx"
+    if shutil.which("soffice") or shutil.which("libreoffice"):           # the check reads the converted PDF
+        assert _in_order(body, SECTIONS + ("Closes #7",)), body
+        assert "COM107_202204_Tutorials.docx" in body and docx.is_file()
+    else:                                                                 # nothing for Claude to read: held back, unchecked
+        assert _in_order(body, SECTIONS + ("Refs #7",)), body
+        needs = body.split("## 需要你看")[1].split("## 打码记录")[0]
+        assert "#2" in needs and "没能转成 PDF" in needs and not docx.exists()
     b = subprocess.run([sys.executable, str(ROOT / "site/build.py"), "--root", str(tmp), "--out", str(w / "site2")], capture_output=True, text=True, encoding="utf-8")
     assert b.returncode == 0 and "not indexed" not in b.stderr, b.stderr
 
@@ -464,89 +470,25 @@ def test_git_errors_carry_stderr():
         assert "repository" in str(e).lower()
 
 
-# ---- Claude pre-check (llm/claude_check.py does the call; here: what is sent, caching, limits, the PR section)
+# ---- the full check's answer as a decide.Check (ai.check_items does the calls; see test_ai.py)
 
-VERDICT = {"summary": "期末试卷 | final paper", "answers": "yes", "personal_data": "no", "marking_scheme": "unsure",
-           "notes": "第 3 页有手写答案 | handwritten answers on page 3"}
-
-
-def test_precheck_input_sends_pdfs_whole_and_other_files_as_text():
-    import fitz
-    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf"); _docx(w / "b.docx", body="Question 2 only")
-    blocks, note = intake.precheck_input(w / "a.pdf")
-    assert blocks["type"] == "document" and blocks["source"]["media_type"] == "application/pdf" and note == ""
-    long = fitz.open(); [long.new_page() for _ in range(intake.PRECHECK_PAGES + 5)]; long.save(w / "long.pdf"); long.close()
-    blocks, note = intake.precheck_input(w / "long.pdf")
-    import base64
-    assert len(fitz.open(stream=base64.b64decode(blocks["source"]["data"]), filetype="pdf")) == intake.PRECHECK_PAGES
-    assert str(intake.PRECHECK_PAGES) in note                                     # the PR says only part was read
-    blocks, note = intake.precheck_input(w / "b.docx")
-    assert blocks["type"] == "text" and "Question 2 only" in blocks["text"]
+FULL = {"answers": "no", "marking_scheme": "no", "personal_data": "no", "summary": "期末试卷 | final paper", "notes": "",
+        "lecturers": ["Dr Tan"], "weighting": "Final 60%", "redactions": []}
 
 
-def test_precheck_caches_by_file_hash_and_respects_the_limit():
-    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf"); _pdf(w / "b.pdf", text="other")
-    files = {"X/a.pdf": w / "a.pdf", "X/b.pdf": w / "b.pdf"}
-    asked = []
-
-    def ask(content):
-        asked.append(content)
-        return dict(VERDICT)
-    out = intake.precheck(files, {}, ask=ask, take=lambda files: True)
-    assert len(asked) == 2 and {r["status"] for r in out.values()} == {"ok"} and out["X/a.pdf"]["answers"] == "yes"
-    cache = {r["sha"]: {k: r[k] for k in VERDICT} for r in out.values()}
-    again = intake.precheck(files, cache, ask=ask, take=lambda files: True)             # a rebuild: nothing is sent again
-    assert len(asked) == 2 and {r["status"] for r in again.values()} == {"cached"}
-    assert {r["status"] for r in intake.precheck(files, {}, ask=ask, take=lambda files: False).values()} == {"limit"}
-    assert {r["status"] for r in intake.precheck(files, {}, ask=lambda c: None, take=lambda files: True).values()} == {"error"}
-    assert {r["status"] for r in intake.precheck(files, {}).values()} == {"off"}    # no API key
-
-
-def test_precheck_has_no_file_count_cap_and_asks_for_the_files_it_will_send():
-    w = pathlib.Path(tempfile.mkdtemp())
-    files = {}
-    for i in range(25):
-        _pdf(w / f"p{i}.pdf", text=f"page {i}"); files[f"X/p{i}.pdf"] = w / f"p{i}.pdf"
-    seen = []
-    out = intake.precheck(files, {}, ask=lambda c: dict(VERDICT), take=lambda fs: seen.append(list(fs)) or True)
-    assert {r["status"] for r in out.values()} == {"ok"} and len(out) == 25          # no "skipped" any more
-    assert seen == [[f] for f in files.values()]                                     # one reservation per file, in order
-
-
-def test_precheck_estimate_is_a_base_plus_a_rate_per_page_up_to_forty():
-    import fitz
-    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "one.pdf"); _docx(w / "a.docx")
-    long = fitz.open(); [long.new_page() for _ in range(90)]; long.save(w / "long.pdf"); long.close()
-    assert round(intake.precheck_estimate([w / "one.pdf"]), 6) == 0.065 and round(intake.precheck_estimate([w / "a.docx"]), 6) == 0.065
-    assert round(intake.precheck_estimate([w / "long.pdf"]), 6) == 1.04              # 0.04 + 0.025 x 40
-    assert round(intake.precheck_estimate([w / "one.pdf", w / "long.pdf"]), 6) == 1.105 and intake.precheck_estimate([]) == 0
-
-
-def test_the_prechecker_reserves_by_pages_and_settles_the_difference_once():
-    import os
-    sys.path.insert(0, str(ROOT / "llm"))
-    import claude_check as cc
-    w = pathlib.Path(tempfile.mkdtemp()); _pdf(w / "a.pdf")
-    calls = []
-
-    class FakeBudget:
-        def __init__(self, repo): pass
-        def reserve(self, pool, usd): calls.append(("reserve", pool, round(usd, 6))); return usd < 1
-        def settle(self, pool, delta): calls.append(("settle", pool, round(delta, 6)))
-    real = (cc.Budget, cc.ask, os.environ.get("ANTHROPIC_API_KEY"))
-    cc.Budget = FakeBudget
-    cc.ask = lambda task, system, content, schema, max_tokens=0, on_cost=None: (on_cost(0.01), dict(VERDICT))[1]
-    os.environ["ANTHROPIC_API_KEY"] = "test"
-    try:
-        ask, take, settle = intake.make_prechecker("r/r")
-        assert take([w / "a.pdf"]) and ask([]) is not None
-        assert settle() == 0.01 and settle() == 0                                     # the second call has nothing left to book
-        assert calls == [("reserve", "upload", 0.065), ("settle", "upload", round(0.01 - 0.065, 6))]
-        calls.clear(); assert take([w / "a.pdf"] * 20) is False                      # 1.3 USD does not fit; nothing reserved
-        settle(); assert calls == [("reserve", "upload", 1.3)]
-    finally:
-        cc.Budget, cc.ask = real[0], real[1]
-        os.environ.pop("ANTHROPIC_API_KEY", None) if real[2] is None else os.environ.__setitem__("ANTHROPIC_API_KEY", real[2])
+def test_check_results_map_to_check_only_with_every_schema_key():
+    from decide import Check
+    c = intake._check_of(dict(FULL, extra="dropped"))
+    assert isinstance(c, Check) and c == Check(**FULL)                                    # only the schema's keys
+    for k in FULL:                                                                        # a missing key: no check at all
+        assert intake._check_of({x: v for x, v in FULL.items() if x != k}) is None, k
+    for bad in ({"lecturers": "Dr Tan"}, {"lecturers": [3]}, {"redactions": {"page": 1}}, {"redactions": ["x"]},
+                {"summary": None}, {"weighting": 50}, {"answers": ["no"]}):
+        assert intake._check_of(dict(FULL, **bad)) is None, bad
+    assert intake._check_of(None) is None and intake._check_of("no") is None
+    box = {"page": 1, "kind": "box", "box": [0, 0, 9, 9], "text": "", "what": "签名 | signature"}
+    assert intake._check_of(dict(FULL, redactions=[box])).personal_data == "yes"          # something to black out
+    assert intake._check_of(dict(FULL, answers="maybe")).answers == "maybe"               # decide() calls it unreadable
 
 
 # ---- the whole run with fakes: GitHub, git, the bot-state cache and Claude all in memory
@@ -554,7 +496,8 @@ def test_the_prechecker_reserves_by_pages_and_settles_the_difference_once():
 SORT_OK = {"course_code": "COM107", "course_name": "Circuits and Devices", "session": "2022-04", "type": "Past-Papers",
            "label": "Final", "assessment": "Final", "set": "", "keep": True, "skip_reason": "", "confident": True,
            "note": "期末试卷 | final paper"}
-CHECK_OK = {"summary": "期末试卷 | final paper", "answers": "no", "personal_data": "no", "marking_scheme": "no", "notes": ""}
+CHECK_OK = {"summary": "期末试卷 | final paper", "answers": "no", "personal_data": "no", "marking_scheme": "no", "notes": "",
+            "lecturers": [], "weighting": "", "redactions": []}
 # four files from "papers.zip": 1 clean COM107 final, 2 course unsure, 3 personal data unsure, 4 lecture slides
 SORTS = {1: SORT_OK, 2: dict(SORT_OK, course_code="", course_name="", confident=False),
          3: dict(SORT_OK, label="Midterm", assessment="Midterm"),
@@ -564,12 +507,15 @@ TEXTS = {1: "COM107 Final Examination April 2022", 2: "Quiz on resistors", 3: "C
 _BYTES = {}
 
 
-def _pdf_bytes(k):
+def _pdf_bytes(k, pages=1):
     """One fixed PDF per number (PyMuPDF output is not byte-stable, so each is made once)."""
-    if k not in _BYTES:
+    if (k, pages) not in _BYTES:
         import fitz
-        d = fitz.open(); d.new_page().insert_text((72, 72), TEXTS.get(k, f"file {k}")); _BYTES[k] = d.tobytes(); d.close()
-    return _BYTES[k]
+        d = fitz.open()
+        for _ in range(pages):
+            d.new_page().insert_text((72, 72), TEXTS.get(k, f"file {k}"))
+        _BYTES[k, pages] = d.tobytes(); d.close()
+    return _BYTES[k, pages]
 
 
 SHA1 = __import__("hashlib").sha256(_pdf_bytes(1)).hexdigest()
@@ -646,8 +592,9 @@ class FakeBudget:
 
 
 def fake_claude(gh, sorts, checks, during=None):
-    """(asks, checker) answering from the tables by file number; every question is logged in gh.ai_calls.
-    `during()` runs once, on the first question: something that happens while the rebuild is under way."""
+    """asks {"sort", "check"} answering from the tables by file number (read from the "File: <zip> › <n>" line); every
+    question is logged in gh.ai_calls. `during()` runs once, on the first question: something that happens while the
+    rebuild is under way."""
     hooks = [during] if during else []
 
     def text(content):
@@ -655,35 +602,42 @@ def fake_claude(gh, sorts, checks, during=None):
             hooks.pop()()
         return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
 
+    def number(content):
+        m = re.search(r"^File: .* › (\d+)$", text(content), re.M)
+        return int(m.group(1)) if m else 1
+
     def sort(content, on_cost=None):
-        m = re.search(r"^File: .* › (\d+)$", text(content), re.M); k = int(m.group(1)) if m else 1
+        k = number(content)
         gh.ai_calls.append(("sort", k)); gh.ai_text.append(text(content))
         if on_cost: on_cost(0.001)
         return __import__("copy").deepcopy(sorts.get(k))
 
-    def ask(content):
-        m = re.search(r"File: item-(\d+)\.", text(content)); k = int(m.group(1)) if m else 1
+    def check(content, on_cost=None):
+        k = number(content)
         gh.ai_calls.append(("check", k)); gh.ai_text.append(text(content))
+        if on_cost: on_cost(0.02)
         return __import__("copy").deepcopy(checks.get(k))
-    return {"sort": sort}, (ask, lambda files: True, lambda: 0.02)
+    return {"sort": sort, "check": check}
 
 
-def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=(), during=None):
-    """Issue #5 with one attachment, a zip holding files 1..n (n = the highest number in the tables, at least 1)."""
+def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=(), during=None, pages=None):
+    """Issue #5 with one attachment, a zip holding files 1..n (n = the highest number in the tables, at least 1);
+    `pages` gives some of them more than one page. The run's ledger is gh.budget."""
     import zipfile
     tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
     z = w / "upload.zip"
     with zipfile.ZipFile(z, "w") as zf:
-        for k in range(1, max([*sorts, *checks, 1]) + 1):
-            zf.writestr(f"d{k}/{member}" if member else f"orig_{k}.pdf", _pdf_bytes(k))
+        for k in range(1, max([*sorts, *checks, *(pages or {}), 1]) + 1):
+            zf.writestr(f"d{k}/{member}" if member else f"orig_{k}.pdf", _pdf_bytes(k, (pages or {}).get(k, 1)))
     gh = gh or FakeGH()
     gh.body = gh.body or FORM_BODY
+    gh.budget = FakeBudget()
     git = FakeGit()
-    asks, checker = fake_claude(gh, sorts, checks, during)
+    asks = fake_claude(gh, sorts, checks, during)
     real = intake.download
     intake.download = lambda links, work: ([(zip_name, z)], list(failed))
     try:
-        intake.run_issue(5, tmp, gh, git, "https://run", w / "work", asks=asks, checker=checker, budget=FakeBudget())
+        intake.run_issue(5, tmp, gh, git, "https://run", w / "work", asks=asks, budget=gh.budget)
     finally:
         intake.download = real
     return git, gh, tmp
@@ -781,12 +735,29 @@ def test_overrides_steer_the_next_run():
     assert "`m-1`" in body and "@m-1" not in body and "Closes #5" in body and ("draft", 1, False) in gh.calls
 
 
-def test_a_partly_checked_file_is_held_back():
-    gh = FakeGH(cache={"sort": {SHA1: SORT_OK}, "check": {SHA1: dict(CHECK_OK, partial="only the first 40 of 90 pages")}})
-    git, gh, _ = run_with_fakes({}, {}, gh=gh)
-    assert gh.ai_calls == [] and git.calls == [("reset", "upload/issue-5")]
+def test_a_file_over_100_pages_is_held_back_unchecked():
+    git, gh, _ = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, pages={1: 101})
+    assert gh.ai_calls == [("sort", 1)] and git.calls == [("reset", "upload/issue-5")]   # never sent to the check
     text = next(c[2] for c in gh.calls if c[0] == "upsert_comment")
-    assert "#1" in text.split("## 需要你看")[1].split("## 打码记录")[0] and "只检查了前面一部分" in text
+    assert "#1" in text.split("## 需要你看")[1].split("## 打码记录")[0] and "超过 100 页，没有检查 | over 100 pages, not checked" in text
+    (sha,) = gh.cache["check_skipped"]
+    assert gh.cache["check_skipped"][sha] == "too_long" and not gh.cache.get("check")
+
+
+def test_the_check_shares_the_sorting_meter_and_its_spend_is_shown():
+    git, gh, _ = run_with_fakes({1: SORT_OK, 2: SORT_OK}, {1: CHECK_OK, 2: CHECK_OK}, pages={2: 3})
+    reserves = [round(c[2], 6) for c in gh.budget.calls if c[0] == "reserve"]
+    assert reserves == [0.004, 0.065, 0.115]                     # sorting 2 x 0.002, then 0.04 + 0.025 x pages per file
+    settles = [round(c[2], 6) for c in gh.budget.calls if c[0] == "settle"]
+    assert settles == [round(0.042 - 0.184, 6)] and abs(gh.cache["spent_usd"] - 0.042) < 1e-9   # one settlement for both
+    assert "分拣 | Sorting: $0.0020 · 检查 | Checks: $0.0400" in pr_body_of(gh)
+
+
+def test_an_old_pre_check_result_is_checked_again():
+    old = {"summary": "s", "answers": "no", "personal_data": "no", "marking_scheme": "no", "notes": ""}
+    gh = FakeGH(cache={"sort": {SHA1: SORT_OK}, "check": {SHA1: old}})
+    git, gh, _ = run_with_fakes({}, {1: CHECK_OK}, gh=gh)
+    assert gh.ai_calls == [("check", 1)] and gh.cache["check"][SHA1] == CHECK_OK and "Closes #5" in pr_body_of(gh)
 
 
 def test_comment_event_applies_a_command():
@@ -909,41 +880,12 @@ def test_fork_prs_never_name_an_upload():
 
 def test_run_issue_leaves_issues_without_the_upload_label_alone():
     gh = FakeGH(_body(), labels=("question",)); git = FakeGit()
-    asks, checker = fake_claude(gh, {1: SORT_OK}, {1: CHECK_OK})
-    intake.run_issue(5, _repo_copy(), gh, git, None, pathlib.Path(tempfile.mkdtemp()), asks=asks, checker=checker, budget=FakeBudget())
+    asks = fake_claude(gh, {1: SORT_OK}, {1: CHECK_OK})
+    intake.run_issue(5, _repo_copy(), gh, git, None, pathlib.Path(tempfile.mkdtemp()), asks=asks, budget=FakeBudget())
     assert gh.calls == [] and git.calls == [] and gh.cache_writes == [] and gh.cache is None and gh.ai_calls == []
     bad = FakeGH(_body().replace("2022-04", "soon"), labels=())                # an invalid "form" on a stray issue: still silent
     intake.run_issue(6, _repo_copy(), bad, FakeGit(), None, pathlib.Path(tempfile.mkdtemp()), asks={})
     assert bad.calls == []
-
-
-def test_the_precheck_checks_what_fits_and_leaves_the_rest_for_later():
-    import os
-    sys.path.insert(0, str(ROOT / "llm"))
-    import claude_check as cc
-    w = pathlib.Path(tempfile.mkdtemp()); files = {}
-    for i in range(1, 6):
-        _pdf(w / f"p{i}.pdf", text=f"page {i}"); files[f"item-{i}.pdf"] = w / f"p{i}.pdf"
-    booked, settled = [], []
-
-    class FakeBudget:                                   # room for three one-page files (0.065 each) today
-        def __init__(self, repo): pass
-        def reserve(self, pool, usd):
-            if round(sum(booked) + usd, 6) > 0.195: return False
-            booked.append(usd); return True
-        def settle(self, pool, delta): settled.append(round(delta, 6))
-    real = (cc.Budget, cc.ask, os.environ.get("ANTHROPIC_API_KEY"))
-    cc.Budget = FakeBudget
-    cc.ask = lambda task, system, content, schema, max_tokens=0, on_cost=None: (on_cost(0.01), dict(VERDICT))[1]
-    os.environ["ANTHROPIC_API_KEY"] = "test"
-    try:
-        ask, take, settle = intake.make_prechecker("r/r")
-        out = intake.precheck(files, {}, ask=ask, take=take)
-        assert [out[k]["status"] for k in files] == ["ok", "ok", "ok", "limit", "limit"]
-        assert round(settle(), 6) == 0.03 and settled == [round(0.03 - 0.195, 6)]       # settled once, at the end
-    finally:
-        cc.Budget, cc.ask = real[0], real[1]
-        os.environ.pop("ANTHROPIC_API_KEY", None) if real[2] is None else os.environ.__setitem__("ANTHROPIC_API_KEY", real[2])
 
 
 def test_claude_text_cannot_close_issues_or_ping():
@@ -971,8 +913,8 @@ def test_run_issue_glue_with_fakes():
     intake.download = lambda links, work: ([("paper.pdf", w / "paper.pdf")], [("dead.pdf", "下载失败 | download failed: 404")])
     try:
         gh = FakeGH(_body().replace("EEE\n", "AIT\n").replace("com107", "MPU3.1").replace(intake.CREDIT_NICK, intake.CREDIT_ANON)); git = FakeGit()
-        asks, checker = fake_claude(gh, {1: dict(SORT_OK, course_code="MPU3.1", course_name="")}, {1: CHECK_OK})
-        intake.run_issue(5, tmp, gh, git, "https://run", w / "work", asks=asks, checker=checker, budget=FakeBudget())
+        asks = fake_claude(gh, {1: dict(SORT_OK, course_code="MPU3.1", course_name="")}, {1: CHECK_OK})
+        intake.run_issue(5, tmp, gh, git, "https://run", w / "work", asks=asks, budget=FakeBudget())
         assert git.calls[0] == ("reset", "upload/issue-5") and git.calls[-1] == ("push", "upload/issue-5")
         assert git.calls[1][2] == intake.BOT_AUTHOR and git.calls[1][1].startswith("content: add files from #5\n")
         assert "GE/MPU3.1_Introduction_to_the_Constitution_of_Malaysia" in git.calls[1][1]
@@ -983,7 +925,7 @@ def test_run_issue_glue_with_fakes():
         assert "https://example/pr/1" in first[1] and "dead.pdf" in first[1]
         assert ("label", ("pr-opened",), ()) in gh.calls and "comment_pr" not in [c[0] for c in gh.calls]
         n_ai, n_comments = len(gh.ai_calls), [c[0] for c in gh.calls].count("comment")
-        intake.run_issue(5, _repo_copy(), gh, FakeGit(), "https://run", w / "work2", asks=asks, checker=checker, budget=FakeBudget())
+        intake.run_issue(5, _repo_copy(), gh, FakeGit(), "https://run", w / "work2", asks=asks, budget=FakeBudget())
         assert len(gh.ai_calls) == n_ai and [c[0] for c in gh.calls].count("comment") == n_comments   # a rebuild: quiet, free
         gh2 = FakeGH(_body().replace("2022-04", "soon")); git2 = FakeGit()                    # invalid form
         intake.run_issue(6, tmp, gh2, git2, None, w / "work", asks={})

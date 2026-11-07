@@ -124,6 +124,173 @@ def test_schema_and_default_model():
     assert ai.cc.DEFAULT_MODELS["sort"] == "claude-haiku-5-5" and callable(ai.make_asks()["sort"])
 
 
+# ---- the full check (Opus): what is read, what is sent, reservations, ranges, merging
+
+CHECK_OK = {"answers": "no", "marking_scheme": "no", "personal_data": "no", "summary": "期末试卷 | final paper",
+            "notes": "", "lecturers": [], "weighting": "", "redactions": []}
+
+
+def fake_ask(asked, result):
+    """Records each call's content, books 0.01 per call, answers with a copy of `result` (a function of the content
+    when callable)."""
+    import copy
+
+    def ask(content, on_cost=None):
+        asked.append(content)
+        if on_cost: on_cost(0.01)
+        return copy.deepcopy(result(content) if callable(result) else result)
+    return ask
+
+
+def _part(content):
+    """The part number named in a check call's text block (1 when the file was sent whole)."""
+    import re
+    text = "\n".join(b.get("text", "") for b in content)
+    m = re.search(r"Part (\d+) of (\d+)", text)
+    return int(m.group(1)) if m else 1
+
+
+def _docs(content):
+    import fitz
+    return [fitz.open("pdf", base64.b64decode(b["source"]["data"])) for b in content if b.get("type") == "document"]
+
+
+W = tmp()
+ITEMS3 = [Item(1, "papers.zip › 1", pdf(W / "张三_EEE2109300.pdf", ["Final Exam EEE202", "Q2"]), "1" * 64, "pdf", 2, False,
+               ["Final Exam EEE202", "Q2"]),
+          Item(2, "b.pdf", pdf(W / "b.pdf", ["Midterm"]), "2" * 64, "pdf", 1, False, ["Midterm"]),
+          Item(3, "long.pdf", W / "long.pdf", "3" * 64, "pdf", 120, False, [""] * 120)]
+ITEMS3[0].view, ITEMS3[1].view, ITEMS3[2].view = ITEMS3[0].path, ITEMS3[1].path, ITEMS3[2].path
+BIG_60_PAGES = Item(1, "big.pdf", pdf(W / "big.pdf", [f"page {i + 1}" for i in range(60)]), "6" * 64, "pdf", 60, False,
+                    [f"page {i + 1}" for i in range(60)])
+BIG_60_PAGES.view = BIG_60_PAGES.path
+
+
+def test_check_items_only_reads_files_to_keep_and_caps_pages():
+    asked = []
+    cache = {"check": {}}
+    out = ai.check_items(ITEMS3, {1, 3}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), cache)   # item 3 has 120 pages
+    assert set(out) == {1, 3} and out[3] is None and len(asked) == 1
+    assert out[1] == CHECK_OK and cache["check"][ITEMS3[0].sha] == CHECK_OK
+    assert cache["check_skipped"] == {ITEMS3[2].sha: "too_long"} and ITEMS3[2].sha not in cache["check"]
+
+
+def test_big_pdfs_are_sent_in_page_ranges_and_merged():
+    asked = []
+    out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, dict(CHECK_OK, redactions=[{"page": 2, "kind": "box", "box": [0, 0, 10, 10], "text": "", "what": "学号"}])),
+                         ai.Meter(FakeBudget(ok=True)), {"check": {}}, max_b64=1_000)
+    assert len(asked) == 3 and sorted(r["page"] for r in out[1]["redactions"]) == [2, 27, 52]
+    assert sorted(len(d) for c in asked for d in _docs(c)) == [10, 25, 25]                # at most 25 pages per call
+
+
+def test_a_small_pdf_is_sent_whole_with_its_source_only():
+    asked = []
+    ai.check_items(ITEMS3, {1}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), {})
+    (content,) = asked
+    assert [b["type"] for b in content] == ["document", "text"] and content[0]["source"]["media_type"] == "application/pdf"
+    assert base64.b64decode(content[0]["source"]["data"]) == ITEMS3[0].path.read_bytes()
+    assert content[1]["text"] == "File: papers.zip › 1"
+
+
+def test_cached_results_are_reused_without_a_call():
+    asked = []
+    b = FakeBudget(ok=True)
+    out = ai.check_items(ITEMS3, {1, 2}, fake_ask(asked, CHECK_OK), ai.Meter(b),
+                         {"check": {ITEMS3[0].sha: dict(CHECK_OK, summary="cached"), ITEMS3[1].sha: dict(CHECK_OK, summary="c2")}})
+    assert asked == [] and out[1]["summary"] == "cached" and out[2]["summary"] == "c2" and b.reserved == []
+
+
+def test_an_old_cache_entry_without_the_new_fields_is_checked_again():
+    asked = []
+    old = {"summary": "s", "answers": "no", "personal_data": "no", "marking_scheme": "no", "notes": ""}   # the pre-check's
+    cache = {"check": {ITEMS3[0].sha: old}}
+    out = ai.check_items(ITEMS3, {1}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), cache)
+    assert len(asked) == 1 and out[1] == CHECK_OK == cache["check"][ITEMS3[0].sha]
+
+
+def test_a_refused_reservation_skips_that_file_only():
+    class SecondRefused(FakeBudget):
+        def reserve(self, pool, usd):
+            self.reserved.append((pool, round(usd, 6)))
+            return len(self.reserved) != 2
+    three = [ITEMS3[0], ITEMS3[1], Item(3, "c.pdf", pdf(W / "c.pdf", ["Quiz"]), "4" * 64, "pdf", 1, False, ["Quiz"])]
+    three[2].view = three[2].path
+    asked, b, cache = [], SecondRefused(ok=True), {"check": {}}
+    out = ai.check_items(three, {1, 2, 3}, fake_ask(asked, CHECK_OK), ai.Meter(b), cache)
+    assert out[1] == CHECK_OK and out[2] is None and out[3] == CHECK_OK and len(asked) == 2
+    assert set(cache["check"]) == {three[0].sha, three[2].sha}                                 # the refused one: not cached
+    assert b.reserved == [("upload", 0.09), ("upload", 0.065), ("upload", 0.065)]             # 0.04 + 0.025 x pages, in order
+
+
+def test_no_original_file_name_is_sent():
+    asked = []
+    ai.check_items(ITEMS3, {1}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), {})
+    ai.check_items([ITEMS3[0]], {1}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), {}, max_b64=10)   # in parts
+    assert len(asked) == 2 and "EEE2109300" in ITEMS3[0].path.name and "EEE2109300" in ITEMS3[0].view.name
+    sent = json.dumps(asked, ensure_ascii=False)
+    assert "EEE2109300" not in sent and "张三" not in sent
+    assert all(b"EEE2109300" not in base64.b64decode(b["source"]["data"]) for c in asked for b in c if b["type"] == "document")
+
+
+def test_ranges_merge_by_severity_and_join_the_text():
+    by_part = {1: dict(CHECK_OK, personal_data="unsure", summary="试卷 | paper", lecturers=["Dr A"], weighting=""),
+               2: dict(CHECK_OK, answers="unsure", personal_data="yes", summary="试卷 | paper", lecturers=["Dr B", "Dr A"], weighting="Final 60%",
+                       notes="第 3 页 | page 3", redactions=[{"page": 3, "kind": "text", "text": "EEE2109300", "box": [0, 0, 0, 0], "what": "学号 | student ID"}]),
+               3: dict(CHECK_OK, marking_scheme="unsure", answers="yes", summary="附录 | appendix", weighting="Final 50%")}
+    asked = []
+    out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, lambda c: by_part[_part(c)]), ai.Meter(FakeBudget(ok=True)),
+                         {"check": {}}, max_b64=1_000)[1]
+    assert len(asked) == 3 and sorted(_part(c) for c in asked) == [1, 2, 3]
+    assert (out["answers"], out["marking_scheme"], out["personal_data"]) == ("yes", "unsure", "yes")   # yes > unsure > no
+    assert out["summary"] == "试卷 | paper / 附录 | appendix" and out["lecturers"] == ["Dr A", "Dr B"] and out["weighting"] == "Final 60%"
+    assert out["redactions"] == [{"page": 28, "kind": "text", "text": "EEE2109300", "box": [0, 0, 0, 0], "what": "学号 | student ID"}]
+    assert set(out) == set(CHECK_OK) and out["notes"] == "第 28 页 | page 28"            # notes count from the file's start
+    assert ai._shift_pages("pages 3–5, p. 2 · 第 1 页", 25) == "pages 28–30, p. 27 · 第 26 页"
+
+
+def test_a_missing_range_result_fails_the_whole_file():
+    asked, b, cache = [], FakeBudget(ok=True), {"check": {}}
+    meter = ai.Meter(b)
+    out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, lambda c: None if _part(c) == 2 else CHECK_OK), meter, cache,
+                         max_b64=1_000)
+    assert out == {1: None} and len(asked) == 3 and cache["check"] == {} and abs(meter.spent - 0.03) < 1e-9
+    asked = []                                                     # an answer missing a field counts as no answer
+    out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, {k: v for k, v in CHECK_OK.items() if k != "redactions"}),
+                         ai.Meter(FakeBudget(ok=True)), cache)
+    assert out == {1: None} and len(asked) == 1 and cache["check"] == {}
+
+
+def test_files_without_a_view_or_unreadable_are_not_sent():
+    no_view = Item(1, "a.docx", W / "a.docx", "7" * 64, "docx", 1, False, ["text"])                 # conversion failed
+    broken = Item(2, "x.pdf", W / "x.pdf", "8" * 64, "pdf", 0, True, [], view=W / "x.pdf")          # PyMuPDF cannot open it
+    asked, b = [], FakeBudget(ok=True)
+    assert ai.check_items([no_view, broken], {1, 2}, fake_ask(asked, CHECK_OK), ai.Meter(b), {}) == {1: None, 2: None}
+    assert asked == [] and b.reserved == []
+
+
+def test_check_schema_prompt_and_ask():
+    s = ai.CHECK_SCHEMA
+    assert s["additionalProperties"] is False and set(s["required"]) == set(s["properties"]) == set(CHECK_OK)
+    assert all(s["properties"][k]["enum"] == ["no", "yes", "unsure"] for k in ("answers", "marking_scheme", "personal_data"))
+    r = s["properties"]["redactions"]["items"]
+    assert r["additionalProperties"] is False and set(r["required"]) == set(r["properties"]) == {"page", "kind", "text", "box", "what"}
+    assert r["properties"]["kind"]["enum"] == ["text", "box"] and r["properties"]["box"]["items"]["type"] == "integer"
+    assert s["properties"]["lecturers"]["items"]["type"] == "string"
+    flat = json.dumps(s)
+    assert not any(w in flat for w in ("minItems", "maxItems", "minimum", "maximum"))   # not supported by structured outputs
+    p = ai.CHECK_SYSTEM
+    for need in ("@xmu.edu.my", "untrusted", "EXACTLY", "0–1000", "学号 | student ID", "redactions", "weighting", "lecturers"):
+        assert need in p, need
+    seen = []
+    real = ai.cc.ask
+    ai.cc.ask = lambda task, system, content, schema, max_tokens=0, on_cost=None: seen.append((task, system, schema, max_tokens)) or {}
+    try:
+        ai.make_asks()["check"]([{"type": "text", "text": "x"}])
+    finally:
+        ai.cc.ask = real
+    assert seen == [("upload", ai.CHECK_SYSTEM, ai.CHECK_SCHEMA, 8000)] and ai.cc.model_for("upload") == "claude-opus-5-5"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests: t()
