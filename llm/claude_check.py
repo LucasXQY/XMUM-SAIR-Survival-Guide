@@ -5,6 +5,8 @@ and the caller falls back to its own rules.
 - 每类任务每天有调用上限，计数放在 bot-state 分支的 claude-usage.json（用文件的 sha 做乐观写入，并发也不会多算）。
   Each task has a daily call limit; the count lives in claude-usage.json on the bot-state branch (optimistic writes keyed
   on the file's sha, so concurrent runs cannot overspend).
+- 同一个文件还按池（pool）记美元：每天、每月各有上限（POOL_CAPS，可用 CLAUDE_USD_<PERIOD>_<POOL> 改）。
+  The same file also keeps US dollars per pool, with day and month caps (POOL_CAPS; override with CLAUDE_USD_<PERIOD>_<POOL>).
 - 模型和上限都可以用仓库变量改：CLAUDE_MODEL_<TASK>、CLAUDE_DAILY_<TASK>（TASK = MODERATION / UPLOAD）。
   Model and limit per task come from repository variables CLAUDE_MODEL_<TASK> and CLAUDE_DAILY_<TASK>.
 - 需要 ANTHROPIC_API_KEY；没有、额度用完、出错、Claude 拒答，一律返回 None。
@@ -111,33 +113,131 @@ class StateFile:
                 input=json.dumps({"ref": f"refs/heads/{STATE_BRANCH}", "sha": c}))
 
 
+# which spending pool a task draws on, and the dollar caps per pool (USD); repository variables CLAUDE_USD_<PERIOD>_<POOL> override
+TASK_POOLS = {"moderation": "haiku", "classify": "haiku", "topics": "haiku", "sort": "upload", "upload": "upload"}
+POOL_CAPS = {"upload": {"day": 15, "month": 60, "run": 8}, "haiku": {"day": 2, "month": 10}}
+
+
+def pool_of(task: str) -> str:
+    return TASK_POOLS.get(task, task)
+
+
+def usd_cap(pool: str, period: str) -> float:
+    """Dollar cap of a pool for "day", "month" or "run"; a bad variable falls back to the default, no cap at all is inf."""
+    raw = os.environ.get(f"CLAUDE_USD_{period.upper()}_{pool.upper()}", "").strip()
+    try:
+        v = float(raw)
+        if v >= 0 and v != float("inf"):
+            return v
+    except ValueError:
+        pass
+    return float(POOL_CAPS.get(pool, {}).get(period, float("inf")))
+
+
+def _amount(v) -> float:
+    """A stored total: a number, clamped at 0. Anything else means the file cannot be trusted."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+        raise ValueError(f"bad amount in usage file: {v!r}")
+    return max(0.0, float(v))
+
+
+def _table(v) -> dict:
+    if not isinstance(v, dict):
+        raise ValueError("bad table in usage file")
+    return {str(k): _amount(x) for k, x in v.items()}
+
+
 class Budget:
-    """Today's call count per task. take() says whether n more calls fit under the limit and records them if so;
-    anything unexpected counts as no (a broken counter must not mean unlimited calls)."""
+    """What Claude may still cost today: calls per task (today only) and US dollars per pool (today and this month),
+    all in one file, so one write changes both. take() and reserve() record the spend only if it fits under every cap;
+    anything unexpected counts as no (a broken ledger must not mean unlimited spending). settle() corrects a reservation
+    with what the call really cost; it never raises, but a failed settle shuts the ledger for the rest of the run."""
 
     def __init__(self, repo: str, gh=_gh, today: str | None = None):
         self.file = StateFile(repo, STATE_FILE, gh)
         self.today = today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        self.month = self.today[:7]
+        self.broken = False
 
-    def take(self, task: str, n: int, limit: int) -> bool:
-        if n <= 0:
+    def _load(self) -> tuple[dict, str | None]:
+        """The ledger for today; a file from an earlier day or month has those parts cleared, an old-shape file is empty."""
+        data, sha = self.file.read()
+        if not isinstance(data, dict):
+            raise ValueError("usage file is not an object")
+        same_day, same_month = data.get("day") == self.today, data.get("month") == self.month
+        return {"day": self.today, "month": self.month,
+                "calls": _table(data.get("calls", {})) if same_day else {},
+                "usd_day": _table(data.get("usd_day", {})) if same_day else {},
+                "usd_month": _table(data.get("usd_month", {})) if same_month else {}}, sha
+
+    def _update(self, change) -> bool:
+        """Read, let change(ledger) edit it (False = refuse), write with the sha; read again on a Conflict."""
+        for _ in range(5):
+            ledger, sha = self._load()
+            if not change(ledger):
+                return False
+            try:
+                self.file.write(ledger, sha, f"claude usage {self.today}")
+                return True
+            except Conflict:
+                continue                                      # someone else wrote first: read again
+        raise Conflict("usage file kept changing")
+
+    def take(self, task: str, n: int, limit: int, usd: float = 0.0) -> bool:
+        """Count n calls of the task against limit and reserve usd in its pool, in one write; False if either would exceed."""
+        return self._spend(task, pool_of(task), n, limit, usd)
+
+    def _spend(self, task: str, pool: str, n: int, limit: int, usd: float) -> bool:
+        if n <= 0 and usd == 0:
+            return True
+        if self.broken or not usd >= 0:
+            return False
+
+        def change(ledger: dict) -> bool:
+            if n > 0 and ledger["calls"].get(task, 0) + n > limit:
+                print(f"claude ({task}): daily limit {limit} reached", file=sys.stderr)
+                return False
+            day, month = round(ledger["usd_day"].get(pool, 0) + usd, 6), round(ledger["usd_month"].get(pool, 0) + usd, 6)
+            if day > usd_cap(pool, "day") or month > usd_cap(pool, "month"):
+                print(f"claude ({task}): dollar cap of pool {pool} reached", file=sys.stderr)
+                return False
+            if n > 0:
+                ledger["calls"][task] = ledger["calls"].get(task, 0) + n
+            if usd > 0:
+                ledger["usd_day"][pool], ledger["usd_month"][pool] = day, month
             return True
         try:
-            for _ in range(5):
-                data, sha = self.file.read()
-                day = dict(data.get(self.today, {}))
-                if day.get(task, 0) + n > limit:
-                    print(f"claude ({task}): daily limit {limit} reached", file=sys.stderr)
-                    return False
-                day[task] = day.get(task, 0) + n
-                try:
-                    self.file.write({self.today: day}, sha, f"claude usage {self.today}")   # only today is kept: tiny file
-                    return True
-                except Conflict:
-                    continue                                  # someone else wrote first: read again
+            return self._update(change)
         except Exception as e:
             print(f"claude ({task}): usage counter unavailable, not calling Claude: {e}", file=sys.stderr)
         return False
+
+    def reserve(self, pool: str, usd: float) -> bool:
+        """Set aside usd in the pool before a call; True if it fits under the day and month caps."""
+        return self._spend(pool, pool, 0, 0, usd)
+
+    def settle(self, pool: str, delta: float) -> None:
+        """Add delta (negative = give back) to the pool's totals, never below 0. Never raises."""
+        def change(ledger: dict) -> bool:
+            for key in ("usd_day", "usd_month"):
+                ledger[key][pool] = max(0.0, round(ledger[key].get(pool, 0) + delta, 6))
+            return True
+        try:
+            if not delta == delta or delta in (float("inf"), float("-inf")):
+                raise ValueError(f"bad delta {delta!r}")
+            self._update(change)
+        except Exception as e:
+            self.broken = True
+            print(f"claude ({pool}): could not settle {delta} USD, no more calls this run: {e}", file=sys.stderr)
+
+    def spent(self, pool: str) -> tuple[float, float]:
+        """(today, this month) dollars in the pool; (inf, inf) if the ledger cannot be read."""
+        try:
+            ledger, _ = self._load()
+            return ledger["usd_day"].get(pool, 0.0), ledger["usd_month"].get(pool, 0.0)
+        except Exception as e:
+            print(f"claude ({pool}): usage counter unavailable: {e}", file=sys.stderr)
+            return float("inf"), float("inf")
 
 
 def ask(task: str, system: str, content, schema: dict, max_tokens: int = 4000, client=None, model: str | None = None) -> dict | None:
