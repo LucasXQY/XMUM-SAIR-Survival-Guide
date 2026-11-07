@@ -1067,7 +1067,8 @@ def test_a_cached_check_without_text_or_rectangles_is_held_until_retry():
     assert gh.cache["check"][sha]["redactions_ok"] is False                   # kept, marked failed
     git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text="ID: EEE2109300 Final Examination COM107")
     assert gh.ai_calls == [] and committed_pdfs(tmp) == []                    # an ordinary rebuild pays nothing
-    assert intake.store_commands(_event("/retry"), gh) == 5 and sha not in gh.cache["check"]
+    assert intake.store_commands(_event("/retry"), gh) == 5 and gh.cache["overrides"]["_retry"] == {"seq": 1}
+    assert sha in gh.cache["check"]                                            # the next run drops it, not the command
     git, gh, tmp = run_with_fakes({}, {1: dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)}, gh=gh,
                                   pdf_text="ID: EEE2109300 Final Examination COM107")
     assert gh.ai_calls == [("check", 1)] and committed_pdfs(tmp) == [FINAL]
@@ -1226,10 +1227,18 @@ VALUE_LABELS = ["学号 2109300123", "身份证 990101-14-5678", "电话 012-345
 
 def test_value_re_matches_values_not_words():
     for v in ("2109300123", "990101-14-5678", "012-345 6789", "EEE2109300", "eee2109300", "a.b@gmail.com", "+6012-3456789",
-              "13812345678", "12 34 56"):
+              "13812345678", "123 45 67", "1234567", "学号2109300123", "AB12345678", "No.0123456789", "COM107 2109300123"):
         assert intake.VALUE_RE.search(v), v
-    for v in PROMPT_LABELS + ["签名 | signature", "COM107", "Final 60%, Midterm 40%", "tan@xmu.edu.my", "第 12 页", "12345"]:
+    for v in PROMPT_LABELS + ["签名 | signature", "COM107", "Final 60%, Midterm 40%", "tan@xmu.edu.my", "第 12 页", "12345",
+                              "2022-04", "Final 50%", "Quiz 1 10%", "123456", "COM107 2022-04 期末 | COM107 final, 2022-04",
+                              "MPU3.1 2022-04", "60.5 2022-04"]:
         assert not intake.VALUE_RE.search(v), v
+    from cache import scrub
+    kept = scrub({"check": {"s": {"summary": "COM107 2022-04 期末试卷 | COM107 final, 2022-04", "weighting": "Quiz 1 10%, Final 50%",
+                                  "notes": "身份证 990101-14-5678", "redactions": [{"page": 1, "what": "学号 2109300123"},
+                                                                                   {"page": 1, "what": "电话 012-345 6789"}]}}})
+    assert kept["check"]["s"]["summary"].startswith("COM107 2022-04") and kept["check"]["s"]["weighting"] == "Quiz 1 10%, Final 50%"
+    assert kept["check"]["s"]["notes"] == "" and [r["what"] for r in kept["check"]["s"]["redactions"]] == ["", ""]
 
 
 def test_redaction_labels_are_kept_or_blanked_by_value_in_the_pr_and_the_cache():
@@ -1259,7 +1268,7 @@ def test_a_failed_redaction_waits_for_retry_and_retry_checks_it_again():
     git, gh, tmp = run_with_fakes({}, {1: found}, gh=gh, pdf_text=page)              # an ordinary rebuild
     assert gh.ai_calls == [("sort", 1), ("check", 1)] and committed_pdfs(tmp) == []   # no new check, still held
     assert "打码没完成" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
-    assert intake.store_commands(_event("/retry"), gh) == 5 and _sha_of(gh, 1) not in gh.cache["check"]
+    assert intake.store_commands(_event("/retry"), gh) == 5 and gh.cache["overrides"]["_retry"] == {"seq": 1}
     git, gh, tmp = run_with_fakes({}, {1: dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID)}, gh=gh, pdf_text=page)
     assert gh.ai_calls[-1] == ("check", 1) and committed_pdfs(tmp) == [FINAL] and "EEE2109300" not in text(tmp / FINAL, 1)
 
@@ -1272,9 +1281,9 @@ def test_a_re_check_that_did_not_pass_stays_held_without_paying_again_until_retr
     assert [c for c in gh.ai_calls if c[0] == "verify"] == [("verify", 1)] and committed_pdfs(tmp) == []
     assert "打码后复查没通过" in _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
     assert intake.store_commands(_event("/retry"), gh) == 5
-    assert _sha_of(gh, 1) not in gh.cache["check"] and _sha_of(gh, 1) not in gh.cache["verify"]
     git, gh, tmp = run_with_fakes({}, {1: found}, gh=gh, scanned=True, verify="no")     # checked and re-checked again
     assert gh.ai_calls[-2:] == [("check", 1), ("verify", 1)] and committed_pdfs(tmp) == [FINAL]
+    assert gh.cache["retry_done"] == 1 and gh.cache["verify"][_sha_of(gh, 1)] == "no"
 
 
 def test_a_re_check_that_could_not_run_is_tried_by_the_next_rebuild():
@@ -1287,13 +1296,50 @@ def test_a_re_check_that_could_not_run_is_tried_by_the_next_rebuild():
     assert [c for c in gh.ai_calls if c[0] == "verify"] == [("verify", 1), ("verify", 1)] and committed_pdfs(tmp) == [FINAL]
 
 
-def test_retry_clears_only_failed_redactions_and_unconfirmed_re_checks():
+def test_retry_is_a_number_in_the_overrides_and_the_run_drops_only_failed_results():
     good = dict(CHECK_OK, redactions_rects=[{"page": 1, "rect": [0, 0, 9, 9]}], redactions_ok=True)
-    gh = FakeGH(cache={"check": {"ok": good, "plain": CHECK_OK, "bad": dict(good, redactions_ok=False), "unsure": good},
-                       "verify": {"ok": "no", "unsure": "unsure"}, "items": []})
+    checks = {"ok": good, "plain": CHECK_OK, "bad": dict(good, redactions_ok=False), "unsure": good}
+    gh = FakeGH(cache={"check": checks, "verify": {"ok": "no", "unsure": "unsure"}, "items": [], "overrides": {"s": {"skip": True}}})
     assert intake.store_commands(_event("/retry"), gh) == 5
-    assert sorted(gh.cache["check"]) == ["ok", "plain"] and gh.cache["verify"] == {"ok": "no"} and len(gh.cache_writes) == 1
-    assert intake.store_commands(_event("/retry"), gh) == 5 and len(gh.cache_writes) == 1   # nothing left: nothing written
+    assert gh.cache["overrides"] == {"s": {"skip": True}, "_retry": {"seq": 1}} and gh.cache["check"] == checks   # nothing dropped yet
+    data = json.loads(json.dumps(gh.cache))
+    assert intake.apply_retry(data) and sorted(data["check"]) == ["ok", "plain"] and data["verify"] == {"ok": "no"}
+    assert data["retry_done"] == 1
+    again = json.loads(json.dumps(dict(data, check=checks, verify={"ok": "no", "unsure": "unsure"})))
+    assert not intake.apply_retry(again) and again["check"] == checks           # no new number: nothing is dropped
+    assert intake.store_commands(_event("/retry"), gh) == 5 and gh.cache["overrides"]["_retry"] == {"seq": 2}
+    for broken in ({"_retry": "x"}, {"_retry": {"seq": "2"}}, {}):
+        assert not intake.apply_retry({"overrides": broken, "check": dict(checks)})
+
+
+def test_a_retry_stored_while_a_rebuild_runs_still_re_checks_on_the_next_run():
+    two = [dict(TEXT_ID[0]), {"page": 1, "kind": "text", "text": "Nobody Here", "what": "姓名"}]
+    page = "ID: EEE2109300 Final Examination COM107"
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: dict(CHECK_OK, personal_data="yes", redactions=two)}, pdf_text=page)
+    sha = _sha_of(gh, 1)
+    assert gh.cache["check"][sha]["redactions_ok"] is False
+    stored = []                                  # file 2 is new, so this rebuild asks Claude: /retry lands meanwhile
+    git, gh, tmp = run_with_fakes({2: dict(SORT_OK, label="Midterm", assessment="Midterm")}, {2: CHECK_OK}, gh=gh,
+                                  pdf_text=page, during=lambda: stored.append(intake.store_commands(_event("/retry"), gh)))
+    assert stored == [5] and gh.ai_calls.count(("check", 1)) == 1              # this run did not act on it
+    assert gh.cache["check"][sha]["redactions_ok"] is False and gh.cache["overrides"]["_retry"] == {"seq": 1}
+    assert gh.cache.get("retry_done", 0) == 0                                  # its save kept the number, not acted on
+    git, gh, tmp = run_with_fakes({}, {1: dict(CHECK_OK, personal_data="yes", redactions=TEXT_ID), 2: CHECK_OK}, gh=gh, pdf_text=page)
+    assert gh.ai_calls.count(("check", 1)) == 2 and gh.cache["retry_done"] == 1 and FINAL in committed_pdfs(tmp)
+    git, gh, tmp = run_with_fakes({}, {}, gh=gh, pdf_text=page)                 # no new number: nothing asked again
+    assert gh.ai_calls.count(("check", 1)) == 2 and gh.ai_calls.count(("check", 2)) == 1
+
+
+def test_overrides_keys_that_are_not_files_never_reach_decide():
+    import decide
+    seen, real = [], decide.decide
+    decide.decide = lambda *a, **k: seen.append(a[4]) or real(*a, **k)
+    try:
+        gh = FakeGH(cache={"overrides": {"_retry": {"seq": 3, "skip": True, "approved_by": "x"}}})
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, gh=gh)
+    finally:
+        decide.decide = real
+    assert seen and all(o is None for o in seen) and committed_pdfs(tmp) == [FINAL]
 
 
 def test_bookkeeping_keys_in_a_fresh_answer_are_never_trusted():
@@ -1352,7 +1398,7 @@ def test_comment_event_on_the_pr_retry_and_mistakes():
     assert "#7" in reply and " | " in reply and not gh.cache_writes and ("react", 3, "+1") not in gh.calls and ran == []
     ran, gh = [], FakeGH(cache=dict(items))
     intake.handle_comment(event("/retry", number=5, pr=False, labels=("upload",)), gh, FakeGit(), tmp_repo(), run=ran.append)
-    assert ran == [5] and not gh.cache_writes and ("react", 3, "+1") in gh.calls
+    assert ran == [5] and gh.cache["overrides"] == {"_retry": {"seq": 1}} and ("react", 3, "+1") in gh.calls
     for ev, head in ((event("/skip #2", number=5, pr=False), "upload/issue-5"),               # not an upload issue
                      (event("/skip #2"), "feature/x"),                                         # PR from another branch
                      (event("please /skip #2", number=5, pr=False, labels=("upload",)), "upload/issue-5"),
@@ -1382,9 +1428,10 @@ def test_commands_are_stored_and_answered_before_any_rebuild():
     gh = FakeGH(cache={"items": [{"k": 2, "sha": "s2", "source": "b.pdf"}], "check": {"s2": CHECK_OK}})
     assert intake.store_commands(_event("/skip #2"), gh) == 5
     assert gh.cache["overrides"] == {"s2": {"skip": True}} and gh.cache["check"] == {"s2": CHECK_OK} and ("react", 4, "+1") in gh.calls
-    assert intake.store_commands(_event("/retry"), gh) == 5 and len(gh.cache_writes) == 1        # nothing failed: nothing cleared
-    assert intake.store_commands(_event("/skip #9"), gh) is None and len(gh.cache_writes) == 1   # nothing applied
-    assert intake.store_commands(_event("/skip #2", who="NONE"), gh) is None and len(gh.cache_writes) == 1
+    assert intake.store_commands(_event("/retry"), gh) == 5 and len(gh.cache_writes) == 2        # a number in the overrides
+    assert gh.cache["overrides"] == {"s2": {"skip": True}, "_retry": {"seq": 1}} and gh.cache["check"] == {"s2": CHECK_OK}
+    assert intake.store_commands(_event("/skip #9"), gh) is None and len(gh.cache_writes) == 2   # nothing applied
+    assert intake.store_commands(_event("/skip #2", who="NONE"), gh) is None and len(gh.cache_writes) == 2
     assert intake.store_commands(_event("hello"), gh) is None
     out = pathlib.Path(tempfile.mkdtemp()) / "out"
     os.environ["GITHUB_OUTPUT"] = str(out)

@@ -296,7 +296,10 @@ VALUE_RE = re.compile(
     r"\b[A-Z]{3}\d{7,10}\b"                                  # student id
     r"|[\w.+-]+@(?!xmu\.edu\.my\b)[\w-]+(?:\.[\w-]+)+"       # any email except the university's
     r"|\b(?:\+?6?01\d[- ]?\d{7,8}|1[3-9]\d{9})\b"            # Malaysian / Chinese mobile numbers
-    r"|\d(?:[ -]?\d){5,}",                                   # 6+ digits, single spaces or hyphens between groups
+    r"|(?<![A-Za-z0-9])(?<!\d\.)\d(?:[ -]?\d){6,}"            # 7+ digits, single spaces or hyphens between groups (an
+                                                             # IC or phone number; not "2022-04", "Quiz 1 10%"), never
+                                                             # starting inside a word ("COM107 2022-04", "MPU3.1 2022-04")
+    r"|(?<=[A-Za-z])\d{7,}",                                 # 7+ digits glued to letters ("ID2109300123")
     re.I)
 
 
@@ -1485,7 +1488,7 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
     items = make_items(named, origins)
     cache["items"] = [{"k": it.k, "sha": it.sha, "source": it.source} for it in items]
     stored = cache.get("overrides") if isinstance(cache.get("overrides"), dict) else {}
-    overrides = {sha: o for sha, o in stored.items() if isinstance(o, dict)}
+    overrides = {sha: o for sha, o in stored.items() if isinstance(o, dict) and not str(sha).startswith("_")}   # files only
     dups = exact_duplicates(items, repo)
     live = [it for it in items if it.k not in dups and not (overrides.get(it.sha) or {}).get("skip")]
 
@@ -1833,6 +1836,7 @@ def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: P
         store = gh.intake_cache(n)
         cache = store.load()            # a broken cache raises: without the maintainers' overrides nothing is safe to rebuild
         before = json.dumps(cache, sort_keys=True, ensure_ascii=False)
+        apply_retry(cache)              # a new /retry: failed redactions and unconfirmed re-checks are asked again
         try:
             res = process(f, n, iss["login"], repo, work / f"issue-{n}", base_sha=base, run_url=run_url, branch=branch,
                           asks=asks, meter=meter, cache=cache, budget=budget)
@@ -1887,19 +1891,32 @@ UNAUTHORIZED = ("只有仓库的 OWNER、MEMBER 或 COLLABORATOR 能用这些指
                 "| Only the repository's owners, members and collaborators can use these commands; nothing was done.")
 
 
-def retry_failed(data: dict) -> dict | None:
-    """What `/retry` changes in the cache: the checks whose redaction failed (`redactions_ok` False) and the checks with
-    a re-check verdict other than "no" are dropped, with their verdicts, so the rebuild checks those files again from
-    scratch (ordinary rebuilds keep them and pay nothing). Everything else, overrides included, stays as read. None
-    when there is nothing to drop."""
-    checks = data.get("check") if isinstance(data.get("check"), dict) else {}
-    verdicts = data.get("verify") if isinstance(data.get("verify"), dict) else {}
+RETRY_KEY = "_retry"     # overrides[RETRY_KEY] = {"seq": n}: the n-th /retry (not a file: file keys are sha256 hex)
+
+
+def _retry_seq(overrides) -> int:
+    r = overrides.get(RETRY_KEY) if isinstance(overrides, dict) else None
+    seq = r.get("seq") if isinstance(r, dict) else 0
+    return seq if type(seq) is int and seq > 0 else 0
+
+
+def apply_retry(cache: dict) -> bool:
+    """At the start of a run: a /retry not acted on yet (overrides["_retry"]["seq"] above cache["retry_done"]) drops
+    every check whose redaction failed (`redactions_ok` False) and every check whose re-check verdict is not "no",
+    with that verdict, so this run checks those files again from scratch; then retry_done = seq, saved with the run's
+    results. Ordinary runs drop nothing. True when it acted."""
+    seq = _retry_seq(cache.get("overrides"))
+    done = cache.get("retry_done")
+    if not seq or (type(done) is int and seq <= done):
+        return False
+    checks, verdicts = _found(cache, "check"), _found(cache, "verify")
     drop = {sha for sha, v in checks.items() if isinstance(v, dict) and v.get("redactions_ok") is False}
     drop |= {sha for sha, v in verdicts.items() if v != "no"}
-    if not drop:
-        return None
-    return {**data, "check": {s: v for s, v in checks.items() if s not in drop},
-            "verify": {s: v for s, v in verdicts.items() if s not in drop}}
+    for sha in drop:
+        checks.pop(sha, None)
+        verdicts.pop(sha, None)
+    cache["retry_done"] = seq
+    return True
 
 
 def store_commands(event: dict, gh) -> int | None:
@@ -1909,9 +1926,10 @@ def store_commands(event: dict, gh) -> int | None:
     issue nor a PR from `upload/issue-<n>`. An author who is not OWNER / MEMBER / COLLABORATOR gets one bilingual reply
     and nothing else. Commands are compare-and-swapped into the cache's `overrides` by file hash (`#k` resolved through
     cache["items"] of the same read), retried on a Conflict; every other key stays as stored. The comment gets 👍, or
-    a reply naming what could not be done. `/retry` asks for the rebuild: failed or unbudgeted AI results were never
-    cached, so those are asked again; and it compare-and-swaps out of the cache every check whose redaction failed and
-    every re-check verdict that is not "no" (retry_failed), so those files are checked again from scratch."""
+    a reply naming what could not be done. `/retry` asks for the rebuild (failed or unbudgeted AI results were never
+    cached, so those are asked again) and bumps overrides["_retry"]["seq"] in the same compare-and-swap: the next run
+    then drops failed redactions and unconfirmed re-checks (apply_retry). Runs never write overrides, so a rebuild that
+    is already running cannot undo it."""
     import commands
     c = event.get("comment") or {}
     if not str(c.get("body") or "").lstrip().startswith("/"):
@@ -1934,7 +1952,8 @@ def store_commands(event: dict, gh) -> int | None:
         gh.comment(where, UNAUTHORIZED)
         return None
     login = str((c.get("user") or {}).get("login") or "")
-    rebuild = any(x.kind == "retry" for x in cmds)
+    retry = any(x.kind == "retry" for x in cmds)
+    rebuild = retry
     todo = [x for x in cmds if x.kind != "retry"]
     unknown: list[str] = []
 
@@ -1956,11 +1975,12 @@ def store_commands(event: dict, gh) -> int | None:
                 continue
             overrides[sha] = commands.merge(overrides.get(sha), x, login)
             changed = True
+        if retry:
+            overrides[RETRY_KEY] = {"seq": _retry_seq(overrides) + 1}
+            changed = True
         return overrides if changed else None
-    if todo and gh.intake_cache(n).update_overrides(apply) is not None:
+    if (todo or retry) and gh.intake_cache(n).update_overrides(apply) is not None:
         rebuild = True
-    if any(x.kind == "retry" for x in cmds):
-        gh.intake_cache(n).update(retry_failed)
     errors = parse_errors + unknown
     if errors:
         done = "\n\n其余指令已执行 | The other commands were applied." if rebuild else ""

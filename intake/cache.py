@@ -114,23 +114,6 @@ class IntakeCache:
                 continue
         raise cc.Conflict(f"{self.name} kept changing")
 
-    def update(self, change) -> dict | None:
-        """Compare-and-swap of the whole file, for `/retry`: `change(data)` gets a copy of the stored file and returns
-        the new contents (None: nothing to write), written scrubbed with the sha that copy was read with. On a Conflict
-        the file is read again and `change` applied again, up to TRIES times. Returns what was written, or None."""
-        msg = f"intake-cache: /retry on issue {int(self.issue)}"
-        for _ in range(TRIES):
-            stored, sha = self._file.read()
-            new = change(copy.deepcopy(stored))
-            if new is None:
-                return None
-            try:
-                self._file.write(scrub(new), sha, msg)
-                return new
-            except cc.Conflict:
-                continue
-        raise cc.Conflict(f"{self.name} kept changing")
-
     def delete(self) -> None:
         _, sha = self._file.read()
         if not sha:
