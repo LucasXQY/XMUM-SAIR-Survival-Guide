@@ -64,9 +64,10 @@ def to_pdf(path: Path, out_dir: Path, soffice: str | list[str] | None = None) ->
         if not soffice:
             return None
         cmd = [soffice] if isinstance(soffice, str) else list(soffice)
+        out_dir = Path(out_dir).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
         sub = Path(tempfile.mkdtemp(dir=out_dir))
-        r = subprocess.run(cmd + ["--headless", "--convert-to", "pdf", "--outdir", str(sub), str(path)],
+        r = subprocess.run(cmd + ["--headless", "--convert-to", "pdf", "--outdir", str(sub), str(Path(path).resolve())],
                            timeout=CONVERT_TIMEOUT, capture_output=True)
         pdf = sub / f"{path.stem}.pdf"
         return pdf if r.returncode == 0 and pdf.exists() else None
@@ -99,6 +100,9 @@ def make_items(accepted: list[tuple[str, Path]], origins: list[str], soffice: st
         if ext in OFFICE_EXTS:
             view = to_pdf(path, work or path.parent / "_view", soffice)
         pages, text = _read(view or path, "pdf" if view else ext)
+        if ext in OFFICE_EXTS and view and pages == 0:   # converter said fine but the PDF is unreadable
+            view = None
+            pages, text = _read(path, ext)
         out.append(Item(k, source, path, _sha256(path), ext, pages, _is_scanned(text), text, view))
     return out
 

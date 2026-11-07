@@ -1,5 +1,5 @@
 """Checks for intake/items.py. Run from the repo root: python intake/test_items.py (no network needed)."""
-import shutil, sys, pathlib, tempfile
+import os, shutil, sys, pathlib, tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import intake
@@ -110,6 +110,22 @@ def test_pdf_view_is_itself_and_text_files_have_none():
     w = tmp(); a = pdf(w / "a.pdf", ["one"]); t = w / "n.txt"; t.write_text("hi", encoding="utf-8")
     x, y = items_mod.make_items([("a.pdf", a), ("n.txt", t)], ["a.pdf", "n.txt"])
     assert x.view == a and y.view is None
+
+
+def test_converter_gets_an_absolute_path_and_unreadable_pdf_falls_back():
+    w = tmp(); old = os.getcwd(); os.chdir(w)
+    try:
+        rec = w / "argv.txt"
+        (w / "rec.py").write_text("""import sys, pathlib
+a = sys.argv[1:]; pathlib.Path(%r).write_text(a[-1])
+pathlib.Path(a[a.index('--outdir') + 1], pathlib.Path(a[-1]).stem + '.pdf').write_bytes(b'not a pdf')
+""" % str(rec), encoding="utf-8")
+        d = docx(pathlib.Path("-x.docx"), "some words")
+        it = items_mod.make_items([("-x.docx", d)], ["-x.docx"], soffice=[sys.executable, str(w / "rec.py")])[0]
+        assert pathlib.Path(rec.read_text()).is_absolute()
+        assert it.view is None and it.pages == 1 and it.page_text == ["some words"]
+    finally:
+        os.chdir(old)
 
 
 if __name__ == "__main__":
