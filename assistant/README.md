@@ -85,3 +85,19 @@ Since 2026-11-06 this Worker also takes the course reviews; the GitHub form is g
 **设置 | Setup**：在仓库 Secrets 里加 `REVIEWS_ADMIN_TOKEN`（一长串随机字符，自己保存好，管理页要用），然后运行一次 **Actions → assistant**。
 
 Add the `REVIEWS_ADMIN_TOKEN` secret (a long random string you keep for the admin page), then run **Actions → assistant** once.
+
+## 机会墙与经验帖 | Opportunity wall and experience posts
+
+- 网站 `/opportunities/` 的便签墙和经验帖（`src/board.js`，Durable Object `Board`，migration v3）。不用登录；每帖一次人机验证；同一网络每天最多 20 帖、同一浏览器 5 帖。
+- 每帖由 Haiku 5.5 看一遍（结构化输出）：`publish` 直接上墙，`hold` 进管理页待审，`reject` 退回并告诉发帖人原因。模型出错、超时或 `BOTS_PAUSED=1` 一律 `hold`，从不因此直接发布。每帖约 1–2 千 token，按 Haiku 价格每千帖不到 1 美元。
+- 被 3 个不同浏览器举报的帖子自动隐藏，回到待审。
+- 管理页 `/admin` 下半部分是帖子队列：「发布」「删除」；也列出最近已发布和被退回的帖子。口令同课程评价（`REVIEWS_ADMIN_TOKEN`）。
+- 公开列表 `GET /board`（缓存 60 秒，新帖上墙、举报隐藏和管理操作后立即刷新）；发帖 `POST /board/post`；举报 `POST /board/report`。
+- 维护者长期条目和入门指南仍写在仓库的 `Research-Opportunities.md`，网站把它们显示为带 📌 的便签和置顶帖。
+
+- The wall and posts on the site's `/opportunities/` (`src/board.js`, Durable Object `Board`, migration v3). No login; a human check per post; at most 20 posts per network and 5 per browser a day.
+- Haiku 5.5 reads each post (structured output): `publish` goes up at once, `hold` waits on the admin page, `reject` goes back to the poster with the reason. A model error, a timeout or `BOTS_PAUSED=1` always means `hold`, never publish. About 1–2k tokens per post: under $1 per thousand posts at Haiku prices.
+- A post reported by three different browsers is hidden and goes back to the queue.
+- The lower half of `/admin` is the post queue (Publish / Remove), with recent live and rejected posts; same token as the reviews.
+- Public list `GET /board` (cached 60 s, refreshed after a new live post, a hide or an admin action); `POST /board/post`; `POST /board/report`.
+- Maintainers' long-running entries and the getting-started guide stay in the repository's `Research-Opportunities.md`; the site shows them as pinned notes and a pinned post.

@@ -2,14 +2,17 @@
 // 1. 小帮手（/chat）：只收本站请求，每次会话第一次提问做一次人机验证，每人每天、全站每天有次数上限，由 core.js 回答。
 // 2. 课程评价（/vote、/ratings、/admin）：不用登录；每一票都要过人机验证；同一 IP 每天最多 100 票、同一浏览器每天最多 20 票；
 //    突增和名单外的老师或课程照常计入但标记待审（reviews.js）。票存在 Durable Object 的 SQLite 里。
+// 3. 机会墙与经验帖（/board、/board/post、/board/report）：不用登录，每帖一次人机验证，Haiku 初审（board.js）。
 // API key 和口令只在 Worker secret 里，网页里没有。
 // The site's Cloudflare Worker: (1) the helper at /chat, (2) course reviews at /vote, /ratings and /admin: no login,
 // a human check on every vote, daily caps per address and per browser, suspicious votes counted but flagged for the
-// maintainer. Votes live in a Durable Object's SQLite. Keys and the admin token are Worker secrets only.
+// maintainer. Votes live in a Durable Object's SQLite. (3) the opportunity wall and experience posts at /board: no
+// login, a human check per post, a first look by Haiku (board.js). Keys and the admin token are Worker secrets only.
 import Anthropic from "@anthropic-ai/sdk";
 import { SITE, validate, signSession, verifySession, hashKey, answer } from "./core.js";
 import { reviewsApi } from "./reviews.js";
 import { ADMIN_HTML } from "./admin.js";
+import { boardApi, validate as validateBoard, moderate } from "./board.js";
 
 const MAX_BODY = 20000;
 let cached = { at: 0, index: null, catalog: null, fetcher: null };
@@ -54,6 +57,61 @@ async function sameSecret(a, b) {   // compare without leaking the length or pos
   return d === 0 && Boolean(b);
 }
 
+async function board(env, msg) {
+  const stub = env.BOARD.get(env.BOARD.idFromName("board"));
+  const r = await stub.fetch("https://board/api", { method: "POST", body: JSON.stringify(msg) });
+  return { status: r.status, data: await r.json() };
+}
+
+const boardKey = (request) => new Request(new URL("/board", request.url).toString());
+
+async function forgetBoard(request) {   // after a new live post, a hidden one or an admin change, the next load reads fresh posts
+  if (typeof caches !== "undefined") await caches.default.delete(boardKey(request));
+}
+
+async function boardListRoute(request, env) {
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = boardKey(request);
+  const hit = cache && (await cache.match(key));
+  if (hit) return hit;
+  const r = await board(env, { op: "list" });
+  const res = new Response(JSON.stringify(r.data), { status: r.status, headers: {
+    "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=60" } });
+  if (cache && r.status === 200) await cache.put(key, res.clone());
+  return res;
+}
+
+async function boardPostRoute(body, request, env, deps, origin, path) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const salt = `${env.TURNSTILE_SECRET}|board`;
+  const device = await hashKey("device", String(body.device || "").slice(0, 100) || crypto.randomUUID(), salt);
+  if (path === "/board/report") {
+    const r = await board(env, { op: "report", id: body.id, device });
+    if (r.data.hidden) await forgetBoard(request);
+    return json(r.data, r.status, origin);
+  }
+  if (!(await turnstileOk(env, body.turnstile, ip, deps.fetch || fetch))) {
+    return json({ error: "verify", message: say("请先完成人机验证。", "Please complete the human check.") }, 401, origin);
+  }
+  // the model is asked here in the Worker; its verdict goes to the Durable Object with the post. Invalid posts skip it.
+  const v = validateBoard(body);
+  let verdict = null;
+  if (v.ok) {
+    const client = env.PAUSED === "1" ? null : (deps.client || new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 30_000 }));
+    verdict = await moderate(client, v.post);
+  }
+  const r = await board(env, { op: "post", body, device, ip: await hashKey("ip", ip, salt), verdict });
+  if (r.status === 429) {
+    const msg = r.data.reason === "ip"
+      ? say("这个网络今天发帖次数已到上限，明天再来。", "This network has reached today's posting limit; please come back tomorrow.")
+      : say("你今天发得太多了，明天再来。", "You have posted a lot today; please come back tomorrow.");
+    return json({ error: "limit", message: msg }, 429, origin);
+  }
+  if (r.status === 400) return json({ error: "invalid", message: say(`还差：${r.data.problems.join("、")}`, "Some fields need fixing."), problems: r.data.problems }, 400, origin);
+  if (r.status === 200 && r.data.status === "live") await forgetBoard(request);
+  return json(r.data, r.status, origin);
+}
+
 const ratingsKey = (request) => new Request(new URL("/ratings", request.url).toString());
 
 async function forgetRatings(request) {   // after a vote or a keep/drop, the next page load reads fresh numbers
@@ -77,6 +135,12 @@ async function adminRoute(request, env, deps) {
   let body;
   try { body = JSON.parse(await request.text()); } catch { return new Response("bad json", { status: 400 }); }
   if (!(await sameSecret(body.token, env.REVIEWS_ADMIN_TOKEN))) return new Response(JSON.stringify({ error: "token" }), { status: 401 });
+  const boardOps = { board_list: "admin_list", board_approve: "approve", board_remove: "remove" };
+  if (boardOps[body.op]) {
+    const r = await board(env, { op: boardOps[body.op], ids: body.ids });
+    if (body.op !== "board_list") await forgetBoard(request);
+    return new Response(JSON.stringify(r.data), { status: r.status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+  }
   const ops = new Set(["list", "keep", "drop", "summary", "lecturers", "import"]);
   if (!ops.has(body.op)) return new Response(JSON.stringify({ error: "unknown op" }), { status: 400 });
   const { catalog } = await siteData(deps.fetch || fetch);
@@ -150,6 +214,7 @@ export async function handle(request, env, deps = {}) {
   const path = new URL(request.url).pathname;
   // public or token-protected routes
   if (path === "/ratings" && request.method === "GET") return ratingsRoute(request, env, deps);
+  if (path === "/board" && request.method === "GET") return boardListRoute(request, env);
   if (path === "/admin" && request.method === "GET") {
     return new Response(ADMIN_HTML, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",
                                                  "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer" } });
@@ -160,11 +225,13 @@ export async function handle(request, env, deps = {}) {
   const origin = request.headers.get("Origin") || "";
   if (!allowed.includes(origin)) return new Response("forbidden", { status: 403 });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: headers(origin) });
-  if (request.method !== "POST" || (path !== "/chat" && path !== "/vote")) return json({ error: "not found" }, 404, origin);
+  const routes = ["/chat", "/vote", "/board/post", "/board/report"];
+  if (request.method !== "POST" || !routes.includes(path)) return json({ error: "not found" }, 404, origin);
   const raw = await request.text();
   if (raw.length > MAX_BODY) return json({ error: "too large" }, 413, origin);
   let body;
   try { body = JSON.parse(raw); } catch { return json({ error: "bad json" }, 400, origin); }
+  if (path.startsWith("/board/")) return boardPostRoute(body, request, env, deps, origin, path);
   return path === "/vote" ? voteRoute(body, request, env, deps, origin) : chatRoute(body, request, env, deps, origin);
 }
 
@@ -230,6 +297,50 @@ export class Reviews {
 
   async fetch(request) {
     const r = await reviewsApi(this.store, await request.json());
+    return new Response(JSON.stringify(r.data), { status: r.status, headers: { "Content-Type": "application/json" } });
+  }
+}
+
+// The opportunity wall and experience posts: one Durable Object, posts, reports and today's counters in SQLite.
+export class BoardStore {
+  constructor(sql) {
+    this.sql = sql;
+    sql.exec(`CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, kind TEXT, cat TEXT, title TEXT, body TEXT, fields TEXT, author TEXT,
+              at INTEGER, status TEXT, reason TEXT, reports INTEGER, ip TEXT, device TEXT)`);
+    sql.exec("CREATE TABLE IF NOT EXISTS counters (k TEXT PRIMARY KEY, n INTEGER NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS reports (id TEXT NOT NULL, device TEXT NOT NULL, PRIMARY KEY (id, device))");
+  }
+
+  static row(r) { return r && { ...r, fields: JSON.parse(r.fields || "{}") }; }
+
+  async get(id) { return BoardStore.row(this.sql.exec("SELECT * FROM posts WHERE id = ?", id).toArray()[0]); }
+
+  async put(p) {
+    this.sql.exec("INSERT OR REPLACE INTO posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", p.id, p.kind, p.cat, p.title, p.body,
+                  JSON.stringify(p.fields || {}), p.author || "", p.at, p.status, p.reason || "", p.reports || 0, p.ip || "", p.device || "");
+  }
+
+  async all() { return this.sql.exec("SELECT * FROM posts").toArray().map(BoardStore.row); }
+
+  async count(key, day) { return this.sql.exec("SELECT n FROM counters WHERE k = ?", `${key}|${day}`).toArray()[0]?.n || 0; }
+
+  async bump(key, day) {
+    this.sql.exec("INSERT INTO counters (k, n) VALUES (?, 1) ON CONFLICT (k) DO UPDATE SET n = n + 1", `${key}|${day}`);
+    this.sql.exec("DELETE FROM counters WHERE k NOT LIKE ?", `%|${day}`);
+  }
+
+  async report(id, device) {
+    if (this.sql.exec("SELECT 1 FROM reports WHERE id = ? AND device = ?", id, device).toArray().length) return false;
+    this.sql.exec("INSERT INTO reports VALUES (?, ?)", id, device);
+    return true;
+  }
+}
+
+export class Board {
+  constructor(ctx) { this.store = new BoardStore(ctx.storage.sql); }
+
+  async fetch(request) {
+    const r = await boardApi(this.store, await request.json());
     return new Response(JSON.stringify(r.data), { status: r.status, headers: { "Content-Type": "application/json" } });
   }
 }

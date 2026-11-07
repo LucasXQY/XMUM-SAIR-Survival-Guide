@@ -193,12 +193,12 @@ ROOT_PAGES = {
     "README.md": "about/",
     "DISCLAIMER.md": "disclaimer/",
     "CONTRIBUTING.md": "contributing/",
-    "Research-Opportunities.md": "research/",
 }
 # repo markdown folded into another page: links to it go to that page's section
-LINK_ALIASES = {"CONTRIBUTORS.md": "about/#contributors", "Lecturers.md": "reviews/#lecturers"}
+LINK_ALIASES = {"CONTRIBUTORS.md": "about/#contributors", "Lecturers.md": "reviews/#lecturers",
+                "Research-Opportunities.md": "opportunities/"}
 # addresses that used to be pages
-REDIRECTS = {"contributors/": "about/#contributors", "lecturers/": "reviews/#lecturers"}
+REDIRECTS = {"contributors/": "about/#contributors", "lecturers/": "reviews/#lecturers", "research/": "opportunities/"}
 REDIRECT_MARK = '<meta http-equiv="refresh"'
 
 
@@ -383,21 +383,25 @@ def recent_entries(site: Site, limit: int = 100) -> list[dict]:
                     if not d:
                         continue
                     g = groups.setdefault((d, c.code, sess, t), {
-                        "date": d, "code": c.code, "name": c.name, "session": sess, "type": t, "n": 0,
+                        "date": d, "prog": c.prog, "code": c.code, "name": c.name, "session": sess, "type": t, "n": 0,
                         "url": f"{site.prefix}{c.path}/#{sess}", "by": LINK_RE.sub(r"\1", c.contributors.get(sess, ""))})
                     g["n"] += 1
     return sorted(groups.values(), key=lambda g: (g["date"], g["code"], g["session"], g["type"]), reverse=True)[:limit]
 
 
-def recent_html(entries: list[dict]) -> str:
+def recent_html(entries: list[dict], compact: bool = False) -> str:
     if not entries:
         return "<p>暂时无法读取上传记录 | Upload history is not available right now.</p>"
     items = []
     for e in entries:
         by = f" · 来自 | by {esc(e['by'])}" if e["by"] else ""
+        if compact:   # programme pages: date, course, what was added
+            items.append(f'<li><time datetime="{e["date"]}">{e["date"][5:]}</time> <a href="{e["url"]}">{esc(e["code"])} {esc(e["name"])}</a> '
+                         f'<small>+{e["n"]} {esc(e["type"])} · {esc(e["session"])}</small></li>')
+            continue
         items.append(f'<li><time datetime="{e["date"]}">{e["date"]}</time> <a href="{e["url"]}">{esc(e["code"])} {esc(e["name"])}</a> '
                      f'<small>{esc(e["session"])} · {esc(e["type"])} · {e["n"]} 份 | files{by}</small></li>')
-    return f'<ul class="recent">{"".join(items)}</ul>'
+    return f'<ul class="recent{" compact" if compact else ""}">{"".join(items)}</ul>'
 
 
 def recent_page(site: Site) -> str:
@@ -630,7 +634,7 @@ def rate_page(site: Site) -> str:
 
 def site_pages(site: Site) -> list[str]:
     """Every page's path relative to the site root, for the sitemap."""
-    pages = ["", "qa/", "courses/", "upload/", "recent/", "wanted/", "reviews/", "rate/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
+    pages = ["", "qa/", "courses/", "upload/", "recent/", "wanted/", "reviews/", "rate/", "news/", "opportunities/", *ROOT_PAGES.values(), *(f"{p}/" for p in PROGS),
              *(f"{c.path}/" for c in site.courses), *(f"lecturers/{lecturer_slug(n)}/" for n in lecturers(site))]
     return list(dict.fromkeys(pages))
 
@@ -806,7 +810,7 @@ GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="20" height="20" fill="currentCol
 # programmes and GE (nav-sub) instead of three separate blocks; lecturers live on Reviews, contributors on About.
 # (Chinese, English, site path or absolute URL, icon); kept short so the row fits one line at the page width
 NAV = [("课程", "Courses", "courses/", "📚"), ("讨论", "Discussion", "qa/", "💬"), ("评价", "Reviews", "reviews/", "📊"),
-       ("科研机会", "Research", "research/", "🔬"), ("关于", "About", "about/", "ℹ️"), ("GitHub", "仓库", GH, GITHUB_MARK),
+       ("机会", "Opportunities", "opportunities/", "🧭"), ("关于", "About", "about/", "ℹ️"), ("GitHub", "仓库", GH, GITHUB_MARK),
        ("如何贡献", "Contribute", "contributing/", "🤝"), ("上传", "Upload", "upload/", "📤")]
 UPLOAD_URL = f"{GH}/issues/new?template=upload.yml"  # the upload form (intake/DESIGN.md); /upload/ fills it in for the visitor
 
@@ -954,8 +958,11 @@ def prog_page(site: Site, prog: str) -> str:
                 + f"<br>{en} courses. University-wide G and MPU courses are under <a href=\"{site.prefix}GE/\">University-wide</a>."
                 + ("" if cs else f' Nothing here yet: <a href="{site.prefix}upload/">uploads welcome</a>.'))
         body = '<h2 id="courses">课程 | Courses</h2>' + course_table_html(site, cs) + timeline_html(site, prog)
+    newest = [e for e in getattr(site, "recent", []) if e.get("prog") == prog][:5]
+    fresh = (f'<section class="fresh"><h2>🆕 最近新增 | Recently added</h2>{recent_html(newest, compact=True)}'
+             f'<p class="more"><a href="{site.prefix}recent/">全部最近上传 | All recent uploads</a></p></section>') if newest else ""
     content = (f"<h1>{PROG_ICONS[prog]} {prog} · {esc(PROGS[prog])}</h1><p class=\"lead\">{lead}</p>"
-               + body + f'<p class="meta">有新资料？{up} · <a href="{site.prefix}upload/">Upload</a></p>')
+               + fresh + body + f'<p class="meta">有新资料？{up} · <a href="{site.prefix}upload/">Upload</a></p>')
     return page(site, f"{prog} · {PROGS[prog]}", content, f"{prog} {PROGS[prog]} 课程索引 | course index")
 
 
@@ -988,27 +995,173 @@ def root_page(site: Site, md: str) -> str:
 
 
 def home_page(site: Site) -> str:
-    links = [("上传资料 | Upload material", f"{site.prefix}upload/"), ("征集榜 | Wanted", f"{site.prefix}wanted/"),
-             ("最近上传 | Recent uploads", f"{site.prefix}recent/"), ("课程评价 | Course review", f"{site.prefix}reviews/"),
-             ("添加评价 | Add a review", f"{site.prefix}rate/"), ("讨论 | Discussion", f"{site.prefix}qa/"),
-             ("研究机会 | Research", f"{site.prefix}research/"), ("如何贡献 | How to contribute", f"{site.prefix}contributing/"),
-             ("关于与贡献者 | About & contributors", f"{site.prefix}about/"), ("免责声明 | Disclaimer", f"{site.prefix}disclaimer/"),
-             ("GitHub 仓库 | Repository", GH)]
+    """Search first; then a one-line changelog note, the programmes, new opportunities and new posts side by side, and the
+    two links the header does not carry (wanted list, add a review). Everything else is one click away in the header."""
+    files = all_files(site.courses)
+    with_mat = sum(1 for c in site.courses if c.sessions)
+    stats = (f'<p class="stats home-stats">{with_mat} 门课有资料 · {len(files)} 份文件 · 全部免费 | '
+             f'{with_mat} courses with material · {len(files)} files · all free</p>')
+    posts = sorted(site.discussions or [], key=lambda d: d["updated"], reverse=True)[:5]
+    talk = (post_list_html(posts) if posts else
+            '<p class="muted">还没有帖子，来发第一帖 | No posts yet: start one</p>')
     content = (
-        '<section class="hero"><h1>XMUM SAIR 生存指南 | Survival Guide</h1><p class="ciallo">Ciallo～ (∠・ < )⌒☆</p>'
-        "<p>厦门大学马来西亚分校人工智能与机器人学院（SAIR）三个本科专业的开放资料库：空白试卷、大纲、作业题、实验手册、笔记，全部免费公开。想找哪门课，直接搜。</p>"
-        "<p>An open, student-run archive for the three undergraduate programmes of XMUM's School of Artificial Intelligence "
-        "and Robotics: blank past papers, syllabi, assignment briefs, lab manuals and notes, all free. Search for a course to start.</p></section>"
+        '<section class="hero"><h1>XMUM SAIR 生存指南 <span>| Survival Guide</span></h1>'
+        "<p>SAIR 三个本科专业的开放资料库：空白试卷、大纲、作业、实验手册、笔记，同学自发整理，免费公开。"
+        "<br><span class=\"muted\">An open, student-run archive for XMUM SAIR's three undergraduate programmes: past papers, "
+        "syllabi, assignments, lab manuals and notes, all free.</span></p></section>"
         f'<form id="search" action="{site.prefix}" method="get" role="search">'
-        '<label for="q">搜索课程代码、课名、老师或文件名 | Search by course code, name, lecturer or file name</label>'
-        '<input id="q" name="q" type="search" autocomplete="off" placeholder="例如 COM107、Circuits、Chua | e.g. COM107"></form>'
-        '<div id="results" aria-live="polite"></div>'
-        f'<h2>课程 | Courses</h2>{prog_cards(site)}'
-        f'<h2>最近上传 | Recent uploads</h2>{recent_html(getattr(site, "recent", [])[:8])}'
-        f'<p><a href="{site.prefix}recent/">全部 | All</a> · <a href="{site.prefix}feed.xml">RSS</a> · '
-        f'<a href="{site.prefix}wanted/">还缺资料的课 | Courses still wanted</a></p>'
-        '<h2>更多 | More</h2><ul class="links">' + "".join(f'<li><a href="{u}">{esc(t)}</a></li>' for t, u in links) + "</ul>")
+        '<label class="sr-only" for="q">搜索课程代码、课名、老师、知识点或文件名 | Search by course code, name, lecturer, topic or file name</label>'
+        '<input id="q" name="q" type="search" autocomplete="off" placeholder="课程代码、课名、老师、知识点… 如 COM107、傅里叶 | course, lecturer, topic"></form>'
+        + stats + '<div id="results" aria-live="polite"></div>'
+        + news_strip(site)
+        + f'<h2>课程 | Courses</h2>{prog_cards(site)}'
+        + f'<p class="chips home-more"><a class="chip" href="{site.prefix}wanted/">📋 还缺资料的课 <small>Wanted</small></a>'
+        f'<a class="chip" href="{site.prefix}rate/">⭐ 给上过的课打分 <small>Rate a course</small></a></p>'
+        '<div class="home-cols">'
+        f'<section><h2>🧭 新机会 <small>New opportunities</small></h2>{board_html(site, preview=True)}'
+        f'<p class="more"><a href="{site.prefix}opportunities/">机会墙 | All opportunities →</a></p></section>'
+        f'<section><h2>💬 讨论区新帖 <small>Latest posts</small></h2>{talk}'
+        f'<p class="more"><a href="{site.prefix}qa/">讨论区 | Discussion →</a></p></section>'
+        '</div>')
+    content += f'<script src="{site.prefix}static/board.js" defer></script>'
     return page(site, "首页 | Home", content)
+
+
+# ---------------------------------------------------------------- changelog (site/news.md)
+
+NEWS_HEAD = re.compile(r"^## (v[\w.]+) · (\d{4}-\d{2}-\d{2})\s*$")
+
+
+def parse_news(text: str) -> list[dict]:
+    """site/news.md → [{version, date, items: [(zh, en)]}], newest first as written."""
+    out: list[dict] = []
+    for line in text.replace("\r\n", "\n").splitlines():
+        if m := NEWS_HEAD.match(line):
+            out.append({"version": m.group(1), "date": m.group(2), "items": []})
+        elif out and line.startswith("- "):
+            zh, _, en = line[2:].partition(" | ")
+            out[-1]["items"].append((zh.strip(), en.strip()))
+    return out
+
+
+def news(site: Site) -> list[dict]:
+    path = HERE / "news.md"
+    return parse_news(path.read_text(encoding="utf-8")) if path.is_file() else []
+
+
+def inline_md(site: Site, text: str) -> str:
+    """One line of markdown (links, bold) with the site prefix on root-relative links."""
+    html = markdown.markdown(text)
+    html = re.sub(r"^<p>|</p>$", "", html.strip())
+    return re.sub(r'href="/(?!/)', f'href="{site.prefix}', html)
+
+
+def news_strip(site: Site) -> str:
+    rel = news(site)
+    if not rel:
+        return ""
+    r = rel[0]
+    items = "".join(f"<li>{inline_md(site, zh)}</li>" for zh, _ in r["items"][:3])
+    return (f'<aside class="news-strip" aria-label="更新 | What\'s new"><p class="news-head">🆕 <b>{esc(r["version"])}</b> '
+            f'<time datetime="{r["date"]}">{r["date"]}</time> · <a href="{site.prefix}news/">更新日志 | What\'s new</a></p>'
+            f'<ul>{items}</ul></aside>')
+
+
+def news_page(site: Site) -> str:
+    parts = ["<h1>更新日志 | What's new</h1>",
+             "<p class=\"lead\">每次上线新功能都记在这里，最新的在最上面。<br>Every release, newest first.</p>"]
+    for r in news(site):
+        items = "".join(f'<li>{inline_md(site, zh)}<br><small>{inline_md(site, en)}</small></li>' for zh, en in r["items"])
+        parts.append(f'<section class="release"><h2>{esc(r["version"])} <small><time datetime="{r["date"]}">{r["date"]}</time></small></h2>'
+                     f"<ul>{items}</ul></section>")
+    return page(site, "更新日志 | What's new", "".join(parts), "网站每次更新了什么 | what changed in each release")
+
+
+# ---------------------------------------------------------------- opportunities (Research-Opportunities.md + the Worker's board)
+
+# kind → [(key, Chinese, English, icon)]; static/board.js reads this list from the page, the Worker keeps the same keys
+BOARD_CATS = {
+    "opp": [("research", "科研", "Research", "🔬"), ("intern", "实习", "Internship", "💼"), ("job", "全职", "Full-time", "🏢"),
+            ("referral", "内推码", "Referral", "🎟️"), ("event", "比赛活动", "Events", "🏆"), ("study", "升学奖学金", "Study", "🎓")],
+    "story": [("research", "科研经历", "Research", "🔬"), ("intern", "实习经历", "Internship", "💼"), ("job", "求职面经", "Job hunting", "🏢"),
+              ("study", "升学申请", "Grad school", "🎓"), ("event", "比赛经验", "Competitions", "🏆"), ("life", "其他", "Other", "☕")],
+}
+CURATED_CAT = {"科研": "research", "实习": "intern", "全职": "job", "内推": "referral", "比赛活动": "event", "升学": "study"}
+OPP_MD = "Research-Opportunities.md"
+
+
+def _md_section(text: str, heading_start: str) -> str:
+    m = re.search(rf"^## {re.escape(heading_start)}.*?\n(.*?)(?=^## |\Z)", text, flags=re.M | re.S)
+    return m.group(1) if m else ""
+
+
+def curated_opportunities(site: Site) -> list[dict]:
+    """Rows of the "Curated by maintainers" table as board posts (template rows in [brackets] left out)."""
+    path = site.root / OPP_MD
+    if not path.is_file():
+        return []
+    out = []
+    for line in _md_section(path.read_text(encoding="utf-8"), "维护者整理").splitlines():
+        cells = _cells(line) if line.startswith("|") else []
+        if len(cells) < 8 or cells[0].startswith(("[", "更新", "---")) or set(cells[0]) <= set("-: "):
+            continue
+        updated, cat, title, org, details, contact, deadline, status = cells[:8]
+        closed = bool(re.search(r"关闭|closed", status, flags=re.I))
+        fields = {k: v for k, v in (("org", org), ("contact", contact), ("deadline", deadline)) if v}
+        out.append({"id": f"curated-{len(out)}", "kind": "opp", "cat": CURATED_CAT.get(cat, "research"), "title": title,
+                    "body": details, "fields": fields, "author": "维护者 | maintainers", "at": updated, "pinned": True, "closed": closed})
+    return out
+
+
+def research_guide(site: Site) -> dict | None:
+    """The getting-started guide as a pinned experience post."""
+    path = site.root / OPP_MD
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r"^## (科研入门[^|\n]*?)\s*\|\s*(.*)$", text, flags=re.M)
+    sec = _md_section(text, "科研入门")
+    if not (m and sec):
+        return None
+    body = re.sub(r"^这一篇在网站上置顶.*\n", "", sec, flags=re.M).strip()
+    body = re.sub(r"\*\*(.+?)\*\*", r"\1", body)   # plain text: the page shows posts as text
+    body = re.sub(r"^- ", "• ", body, flags=re.M)
+    return {"id": "guide", "kind": "story", "cat": "research", "title": f"{m.group(1).strip()} | {m.group(2).strip()}",
+            "body": body, "fields": {}, "author": "维护者 | maintainers", "at": "", "pinned": True}
+
+
+def board_data(site: Site) -> str:
+    guide = research_guide(site)
+    data = {"cats": {k: [{"key": a, "zh": b, "en": c, "icon": d} for a, b, c, d in v] for k, v in BOARD_CATS.items()},
+            "curated": curated_opportunities(site) + ([guide] if guide else [])}
+    return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+
+
+def board_html(site: Site, preview: bool = False) -> str:
+    """The wall's mount point; static/board.js fills it from the Worker. Without script the curated notes still show."""
+    curated = [c for c in curated_opportunities(site) if not c["closed"]]
+    fallback = "".join(f'<li><b>{esc(c["title"])}</b><br><small>{esc(c["fields"].get("org", ""))}</small></li>' for c in curated[:3])
+    attrs = f'data-board="{WORKER_URL}/board" data-sitekey="{TURNSTILE_SITE_KEY}"' + (' data-preview="3"' if preview else "")
+    return (f'<div class="board-app" {attrs}><ul class="board-fallback">{fallback}</ul></div>'
+            f'<script type="application/json" class="board-data">{board_data(site)}</script>')
+
+
+def opportunities_page(site: Site) -> str:
+    how = ""
+    path = site.root / OPP_MD
+    if path.is_file():
+        how = render_md(site, _md_section(path.read_text(encoding="utf-8"), "怎么发布"), OPP_MD)
+    content = (
+        "<h1>🧭 机会 | Opportunities</h1>"
+        '<p class="lead">实习、科研、全职、内推码、比赛、升学：同学和老师贴的机会都在这面墙上，点便签看详情。下面是同学写的经验帖。'
+        "<br><span class=\"muted\">Internships, research, jobs, referral codes, competitions and study, pinned by students and lecturers; "
+        "tap a note for details. Experience posts from students are further down.</span></p>"
+        '<p class="board-actions"><button type="button" class="btn big" data-compose="opp">＋ 发布机会 | Post an opportunity</button> '
+        '<button type="button" class="btn" data-compose="story">✍️ 分享经验 | Share an experience</button></p>'
+        + board_html(site)
+        + f'<details class="board-how"><summary>怎么发布、怎么审核 | How posting and checking work</summary>{how}</details>'
+        f'<script src="{site.prefix}static/board.js" defer></script>')
+    return page(site, "机会 | Opportunities", content, "实习、科研、全职、内推码、比赛和经验分享 | internships, research, jobs, referral codes and experience posts")
 
 
 def qa_page(site: Site) -> str:
@@ -1096,6 +1249,8 @@ def build(root: Path, out: Path, prefix: str, discussions: list[dict] | None = N
     write("reviews/index.html", reviews_page(site))
     write("rate/index.html", rate_page(site))
     write("wanted/index.html", wanted_page(site))
+    write("news/index.html", news_page(site))
+    write("opportunities/index.html", opportunities_page(site))
     for name, taught in lecturers(site).items():
         write(f"lecturers/{lecturer_slug(name)}/index.html", lecturer_page(site, name, taught))
     for md, rel in ROOT_PAGES.items():

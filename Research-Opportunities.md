@@ -1,36 +1,38 @@
-# 研究机会 | Research Opportunities
+# 机会 | Opportunities
 
-这一页专门记录 SAIR 哪些老师在招本科生进课题组（FYP、科研助理、暑期项目、论文合作等）。信息会过期，所以每条都带"更新日期"，看到的时候先看日期。想补充或更正，直接提 PR，或发邮件到 `xieqiyi@ieee.org`。
+网站上的[机会页](https://xmum-sair.github.io/opportunities/)是一面便签墙：科研、实习、全职、内推码、比赛活动、升学奖学金，同学和老师都能贴；旁边是同学写的经验帖（科研经历、实习、求职面经、升学申请、比赛……）。这个文件只放**维护者整理**的条目和一篇入门指南；同学自己发的帖子存在网站的服务里，不在仓库里。
 
-This page tracks which SAIR lecturers are currently taking undergraduates into their groups (FYP, research assistant, summer projects, paper collaborations, etc.). Such information goes stale fast, so every entry carries an "updated" date: check it first. To add or correct an entry, open a PR or email `xieqiyi@ieee.org`.
+The site's [Opportunities page](https://xmum-sair.github.io/opportunities/) is a wall of notes: research, internships, full-time jobs, referral codes, competitions and events, study and scholarships, posted by students and lecturers, next to experience posts written by students (research, internships, job hunting and interviews, grad school applications, competitions …). This file holds only the entries **curated by the maintainers** and a getting-started guide; posts made on the site live in the site's service, not in the repository.
 
-## 使用说明 | How to use this page
+## 怎么发布 | How to post
 
-- 只记录老师公开说过、或本人同意公开的招人信息，不要替老师"推测"。
-- 写清楚方向、形式（FYP / RA / 志愿 / 有薪）、对学生的要求、怎么联系（用学校邮箱）。
-- 老师不再招人时，把状态改为"已关闭"，不要直接删掉，方便后人了解该组历史。
-- 老师本人如希望移除条目，发邮件即可，我们会立即处理。
+- 在机会页点「发布机会」或「分享经验」，填表提交即可，**不用登录**，每次过一次人机验证。
+- 提交后先由 AI 做一次初审：没问题直接上墙；拿不准的交给维护者人工看，通常一两天内处理；明显的广告、诈骗（要交押金、刷单）、代写、他人隐私会被退回，并告诉你原因。
+- 内推码直接写在「内推码」一栏，卡片上有一键复制；有截止日期的写上日期，过期后自动收进「已截止」。
+- 只发你有权公开的信息：老师的招人信息要老师公开说过或同意公开；不要发别人的电话、学号。
+- 卡片上有「举报」：被 3 个人举报的帖子会先隐藏，等维护者处理。想删掉自己发的帖子或更正，发邮件到 `xieqiyi@ieee.org`。
 
-- Only list openings the lecturer has announced publicly or agreed to have listed; never guess on their behalf.
-- State the research area, the form (FYP / RA / volunteer / paid), what they expect from students, and how to reach them (university email).
-- When a group stops recruiting, mark the entry "closed" instead of deleting it, so later students can see the history.
-- Lecturers who want an entry removed can email us; it will be taken down at once.
+- On the Opportunities page, press "Post an opportunity" or "Share an experience" and submit the form: **no login**, one human check per post.
+- An automatic first check reads every post: fine posts go up at once; posts it is unsure about wait for a maintainer, usually a day or two; obvious adverts, scams (deposits, order brushing), homework writing and other people's personal data are sent back with the reason.
+- Put a referral code in the "Referral code" field: the card gets a copy button. Give a deadline if there is one; expired notes move to "Closed" by themselves.
+- Only post what you may make public: a lecturer's opening must have been announced or approved by them; never post other people's phone numbers or student IDs.
+- Every card has "Report": a post reported by three people is hidden until a maintainer looks. To remove or correct your own post, email `xieqiyi@ieee.org`.
 
-## 当前招人 | Currently recruiting
+## 维护者整理 | Curated by maintainers
 
-| 更新 / Updated | 老师 / Lecturer | 专业 / Programme | 方向 / Area | 形式 / Type | 要求 / Looking for | 联系 / Contact | 状态 / Status |
+维护者确认过的长期条目，网站上显示为带 📌 的便签。类别填 `科研`、`实习`、`全职`、`内推`、`比赛活动`、`升学` 之一；不再招人时把状态改成「已关闭」，不要删掉。
+
+Long-running entries the maintainers have checked, shown on the site as notes with a 📌. Category is one of the Chinese words above (research, internship, full-time, referral, competitions and events, study); when an opening closes, set the status to "closed" instead of deleting the row.
+
+| 更新 / Updated | 类别 / Category | 标题 / Title | 老师或机构 / Lecturer or organisation | 详情 / Details | 联系 / Contact | 截止 / Deadline | 状态 / Status |
 |---|---|---|---|---|---|---|---|
-| 2026-11 | Dr. Tan Jian Ding（副教授，ROBO 本科项目主任 / Assoc. Prof. Dr., Head of the ROBO undergraduate programme） | ROBO | 世界模型及其他机器人相关课题 / World models and other robotics-related topics | 讲师（正式教职岗位）/ Lecturer (full-time academic position) | 机器人相关方向、有博士学位 / Robotics-related background with a PhD | jianding.tan@xmu.edu.my（办公室 / office A1#434） | 招人中 / open |
-| 2026-11 | Dr. Tan Jian Ding（副教授，ROBO 本科项目主任 / Assoc. Prof. Dr., Head of the ROBO undergraduate programme） | ROBO，其他专业也可联系 / ROBO, other SAIR programmes welcome to ask | 世界模型及其他机器人相关课题 / World models and other robotics-related topics | FYP、RA、志愿者 / FYP, RA, volunteer | 对世界模型或机器人方向感兴趣 / Interested in world models or robotics | jianding.tan@xmu.edu.my（办公室 / office A1#434） | 招人中 / open |
-| [YYYY-MM] | [Name] | [EEE / AIT / ROBO] | [e.g. computer vision, power systems] | [FYP / RA / volunteer / paid] | [e.g. Python, Year 3+] | [name@xmu.edu.my] | 招人中 / open |
+| 2026-11 | 科研 | 世界模型与机器人课题组招本科生 / World models and robotics group takes undergraduates | Dr. Tan Jian Ding（副教授，ROBO 本科项目主任 / Assoc. Prof., Head of the ROBO undergraduate programme） | 方向：世界模型及其他机器人相关课题。形式：FYP、RA、志愿者。ROBO 优先，其他专业也可联系；对世界模型或机器人方向感兴趣即可。/ World models and other robotics topics. FYP, RA or volunteer. ROBO first, other SAIR programmes welcome to ask; interest in world models or robotics is enough. | jianding.tan@xmu.edu.my（办公室 / office A1#434） |  | 招人中 / open |
+| 2026-11 | 全职 | 机器人方向讲师（正式教职）/ Lecturer in robotics (full-time academic post) | Dr. Tan Jian Ding（ROBO 本科项目）/ ROBO undergraduate programme | 方向：世界模型及其他机器人相关课题。要求：机器人相关方向博士学位。/ World models and other robotics topics; a PhD in a robotics-related field. | jianding.tan@xmu.edu.my（办公室 / office A1#434） |  | 招人中 / open |
+| [YYYY-MM] | [科研 / 实习 / 全职 / 内推 / 比赛活动 / 升学] | [一句话标题 / one-line title] | [Name or company] | [方向、形式、要求 / area, form, requirements] | [name@xmu.edu.my 或链接 / or a link] | [YYYY-MM-DD] | 招人中 / open |
 
-## 历史记录 | Past entries
+## 科研入门：怎么找老师进组 | Getting started: joining a research group
 
-| 更新 / Updated | 老师 / Lecturer | 专业 / Programme | 方向 / Area | 形式 / Type | 状态 / Status |
-|---|---|---|---|---|---|
-| [YYYY-MM] | [Name] | [EEE / AIT / ROBO] | [Area] | [Type] | 已关闭 / closed |
-
-## 经验分享 | Tips from students who did it
+这一篇在网站上置顶在经验帖的最前面。/ Pinned at the top of the experience posts on the site.
 
 - **先做功课再敲门**：去老师的 Google Scholar 或学院主页看最近两三年的论文，知道他具体在做什么，再决定找谁。方向对不上，再热情也白搭。
 - **什么时候找**：大二下到大三是最合适的时间。FYP 分配前先找到老师，FYP 就能顺着组里现有的课题做，不用从零开始。

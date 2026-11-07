@@ -35,3 +35,12 @@ class_name = "Reviews"
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Reviews"]
+
+# the opportunity wall and experience posts: one SQLite-backed Durable Object (src/board.js, src/worker.js)
+[[durable_objects.bindings]]
+name = "BOARD"
+class_name = "Board"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Board"]

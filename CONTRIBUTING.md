@@ -23,7 +23,7 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 - 作业题目（assignment brief）、实验手册、习题（tutorial sheet）、评分表（rubric）、报告模板
 - 自己的笔记、复习总结
 - 实验经验、踩坑记录
-- 哪些老师在招本科生进组（写到 [Research-Opportunities.md](Research-Opportunities.md)）
+- 科研、实习、全职、内推码、比赛等机会，以及经验分享（直接在网站的[机会页](https://xmum-sair.github.io/opportunities/)发帖，不用登录）
 - 课程考核比例（作业、实验、期中、期末各占多少）
 
 - Blank past papers (questions only): finals, midterms, quizzes, etc.
@@ -31,7 +31,7 @@ Thanks for wanting to share! Every file you add saves a junior a bit of pain.
 - Assignment briefs, lab manuals, tutorial sheets, rubrics, report templates
 - Your own notes and revision summaries
 - Lab tips and lessons learned
-- Which lecturers are taking undergraduates (go in [Research-Opportunities.md](Research-Opportunities.md))
+- Opportunities (research, internships, jobs, referral codes, competitions) and experience posts (post them on the site's [Opportunities page](https://xmum-sair.github.io/opportunities/), no login)
 - Assessment weightings (assignments, labs, midterm, final)
 
 ## 请勿上传 | What NOT to upload
@@ -188,7 +188,7 @@ Dropping files in is step one. So that others can find them, also update the fil
 | 还没有你的时间表 / You have no timeline yet | `<专业>/README.md` 的"修课时间表" | 照 LucasXQY 那张表的格式新加一节 `### <你的昵称>`，按修读学期列出你的课；只想加几门就写进"其他同学" / Add a `### <your nickname>` section in the same format as the LucasXQY table, listing your courses by session; for just a few courses, use "Other contributors" |
 | AIT / ROBO 的第一份资料 / First files for AIT or ROBO | `AIT/README.md` 或 `ROBO/README.md` | 照 `EEE/README.md` 的格式加课程索引（带 `<!-- COURSE-INDEX -->` 标记）和修课时间表，然后 `python scripts/update_index.py AIT` / Add a course index (with the `<!-- COURSE-INDEX -->` markers) and a course timeline in the style of `EEE/README.md`, then run `python scripts/update_index.py AIT` |
 | 课程换了代码 / A course got a new code | 新旧两个课程文件夹的 `README.md` | 各写一句"2021 入学时为 COM204 / 2025 入学起为 EEE220"互相链接，例子见 `EEE/EEE220_Engineering_Graphics/README.md` / One line in each README cross-linking the other; see `EEE/EEE220_Engineering_Graphics/README.md` |
-| 老师在招人 / A lecturer is recruiting | [Research-Opportunities.md](Research-Opportunities.md) | 在"当前招人"表加一行，带年月；不再招人时把状态改成"已关闭"并移到"历史记录" / Add a row to "Currently recruiting" with the date; when closed, mark it and move it to "Past entries" |
+| 有个机会想分享 / An opportunity to share | 网站[机会页](https://xmum-sair.github.io/opportunities/) / the site's Opportunities page | 点「发布机会」，不用登录；长期条目由维护者写进 [Research-Opportunities.md](Research-Opportunities.md) 的"维护者整理"表 / Press "Post an opportunity", no login; long-running entries go in the "Curated by maintainers" table of Research-Opportunities.md |
 | 课程的老师、考核比例、小贴士 / Course lecturer, assessment weighting, tips | 课程文件夹里的 `README.md` / `README.md` inside the course folder | 没有就按下面的模板新建；**每个修读学期一行**，不同学期老师和考核可能不同，不要覆盖别人的行 / Create one from the template below if missing; **one row per session**, since lecturer and assessment can change between sessions; never overwrite someone else's row |
 | 想署名 / Want to be credited | [CONTRIBUTORS.md](CONTRIBUTORS.md) | 在你那一届的表里加一行，昵称 / 真名 / 匿名都行，联系方式可留空 / Add a row under your cohort; nickname, name or anonymous, contact optional |
 | 规则本身要改 / Changing the rules | 本文件 [CONTRIBUTING.md](CONTRIBUTING.md) 及 [DISCLAIMER.md](DISCLAIMER.md) | 中英文都改，先在 PR 里说明原因 / Change both languages and explain why in the PR |

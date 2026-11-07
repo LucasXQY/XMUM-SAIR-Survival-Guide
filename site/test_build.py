@@ -109,7 +109,7 @@ def _course_pages(out):
 def test_build_writes_every_page():
     site, out = _build()
     for p in ["index.html", "404.html", "about/index.html", "disclaimer/index.html", "qa/index.html", "courses/index.html",
-              "upload/index.html", "contributing/index.html", "research/index.html", "EEE/index.html", "AIT/index.html",
+              "upload/index.html", "contributing/index.html", "opportunities/index.html", "news/index.html", "research/index.html", "EEE/index.html", "AIT/index.html",
               "ROBO/index.html", "GE/index.html", "EEE/COM107_Circuits_and_Devices/index.html",
               "GE/G0191_Face_Recognition_with_Machine_Learning/index.html", "search.json", "static/style.css", "static/search.js"]:
         assert (out / p).is_file(), p
@@ -160,6 +160,7 @@ def test_prog_and_qa_pages():
     assert '<details class="timeline">' in eee and "修课时间表" in eee
     assert not re.search(r"<td><a [^>]*>COM106</a></td>", eee)
     ge = (out / "GE/index.html").read_text(encoding="utf-8")
+    ge = ge[ge.index("<h2>G 开头"):]                                   # the course tables, after the recently-added box
     assert "G0191" in ge and "MPU1.1" in ge and ge.index("G0191") < ge.index("MPU1.1") and "MPU" in ge and "选修" in ge
     qa = (out / "qa/index.html").read_text(encoding="utf-8")   # renamed 讨论 on the page; the giscus term stays, or the thread is lost
     assert 'data-category-id="DIC_kwDOQ_iF5s4DKaje"' in qa and 'data-term="综合问答 | General Q&amp;A"' in qa and "<h1>讨论区 | Discussion</h1>" in qa
@@ -309,7 +310,7 @@ def test_nav_is_blocks_with_courses_menu():
     blocks = re.findall(r'<a class="nb[^"]*"[^>]*>', nav.group(1))
     assert len(blocks) == len(build.NAV), blocks
     order = [re.search(r'href="([^"]*)"', b).group(1) for b in blocks]     # maintainer's order, 2026-11-06: contribute and upload last
-    assert order == [P + "courses/", P + "qa/", P + "reviews/", P + "research/", P + "about/", build.GH,
+    assert order == [P + "courses/", P + "qa/", P + "reviews/", P + "opportunities/", P + "about/", build.GH,
                      P + "contributing/", P + "upload/"], order
     assert P + "lecturers/" not in nav.group(1) and P + "contributors/" not in nav.group(1) and P + "EEE/" not in nav.group(1)
     assert 'aria-controls="nav-courses"' in blocks[0] and 'aria-expanded="false"' in blocks[0]
@@ -317,7 +318,7 @@ def test_nav_is_blocks_with_courses_menu():
     assert sub and all(f'href="{P}{p}/"' in sub.group(1) for p in ("EEE", "AIT", "ROBO", "GE")) and f'href="{P}courses/"' in sub.group(1)
     assert nav.group(1).count('class="nb-ic"') == len(blocks) and nav.group(1).count('class="nb-t"') == len(blocks)
     assert "<small>Discussion</small>" in nav.group(1) and "讨论" in nav.group(1) and "问答" not in nav.group(1)
-    assert "科研机会" in nav.group(1) and 'class="nb upload"' in nav.group(1) and "<small>仓库</small>" in nav.group(1)
+    assert "<small>Opportunities</small>" in nav.group(1) and 'class="nb upload"' in nav.group(1) and "<small>仓库</small>" in nav.group(1)
     css = (out / "static/style.css").read_text(encoding="utf-8")
     assert ".nb:hover" in css and "transition" in css and "prefers-reduced-motion" in css and ".nav-sub" in css
     js = (out / "static/site.js").read_text(encoding="utf-8")
@@ -347,7 +348,9 @@ def test_recent_uploads_and_feed():
     e = entries[0]
     assert set(e) >= {"date", "code", "name", "session", "type", "n", "url", "by"} and re.fullmatch(r"\d{4}-\d{2}-\d{2}", e["date"])
     home = (out / "index.html").read_text(encoding="utf-8")
-    assert "最近上传 | Recent uploads" in home and e["code"] in home and 'type="application/atom+xml"' in home
+    assert 'class="recent' not in home and 'type="application/atom+xml"' in home   # recent uploads live on programme pages now
+    prog = (out / f"{e['prog']}/index.html").read_text(encoding="utf-8")
+    assert "最近新增 | Recently added" in prog and e["code"] in prog and prog.count("<li><time") <= 5
     feed = (out / "feed.xml").read_text(encoding="utf-8")
     assert feed.startswith("<?xml") and "<feed" in feed and "<entry>" in feed and build.SITE_URL in feed
     assert (out / "recent/index.html").is_file()
@@ -582,6 +585,45 @@ def test_goatcounter_snippet_on_every_page():
         html = (out / p).read_text(encoding="utf-8")
         assert 'data-goatcounter="https://xmum-sair.goatcounter.com/count"' in html and "gc.zgo.at/count.js" in html, p
     assert "GoatCounter" in (out / "index.html").read_text(encoding="utf-8")   # the footer says so
+
+
+def test_news_changelog():
+    rel = build.parse_news("## v2 · 2026-11-05\n- 甲 | A\n- 乙 | B\n\n## v1 · 2026-11-04\n- 丙 | C\n")
+    assert [r["version"] for r in rel] == ["v2", "v1"] and rel[0]["items"] == [("甲", "A"), ("乙", "B")]
+    site, out = _build()
+    real = build.news(site)
+    assert real and all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", r["date"]) and r["items"] for r in real)
+    home = (out / "index.html").read_text(encoding="utf-8")
+    assert 'class="news-strip"' in home and real[0]["version"] in home and home.count("<li>", home.index("news-strip")) >= 1
+    page = (out / "news/index.html").read_text(encoding="utf-8")
+    assert all(r["version"] in page for r in real)
+    assert 'href="/' not in page.replace(f'href="{P}', "")    # root-relative links in news.md get the site prefix
+
+
+def test_home_is_short_and_has_no_more_list():
+    _, out = _build()
+    home = (out / "index.html").read_text(encoding="utf-8")
+    assert "更多 | More" not in home and 'ul class="links"' not in home
+    assert f'href="{P}wanted/"' in home and f'href="{P}rate/"' in home            # the two links the header lacks
+    assert 'class="board-app"' in home and 'data-preview="3"' in home and "static/board.js" in home
+
+
+def test_opportunities_page_and_research_redirect():
+    site, out = _build()
+    curated = build.curated_opportunities(site)
+    assert curated and all(c["title"] and not c["title"].startswith("[") for c in curated)    # template rows left out
+    assert {c["cat"] for c in curated} <= {k for k, *_ in build.BOARD_CATS["opp"]}
+    guide = build.research_guide(site)
+    assert guide and guide["kind"] == "story" and "**" not in guide["body"]
+    page = (out / "opportunities/index.html").read_text(encoding="utf-8")
+    assert 'data-compose="opp"' in page and 'data-compose="story"' in page and build.WORKER_URL + "/board" in page
+    data = json.loads(re.search(r'<script type="application/json" class="board-data">(.*?)</script>', page, re.S).group(1))
+    worker = (ROOT / "assistant/src/board.js").read_text(encoding="utf-8")
+    for kind, cats in data["cats"].items():                                    # the site and the Worker agree on the keys
+        keys = re.search(rf'{kind}: \[([^\]]*)\]', worker).group(1)
+        assert [c["key"] for c in cats] == re.findall(r'"(\w+)"', keys), kind
+    assert build.REDIRECT_MARK in (out / "research/index.html").read_text(encoding="utf-8")
+    assert "Research-Opportunities.md" not in build.ROOT_PAGES and build.LINK_ALIASES["Research-Opportunities.md"] == "opportunities/"
 
 
 if __name__ == "__main__":
