@@ -40,4 +40,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL_MODERATION: ${{ vars.CLAUDE_MODEL_MODERATION }}
           CLAUDE_DAILY_MODERATION: ${{ vars.CLAUDE_DAILY_MODERATION }}
+          CLAUDE_USD_DAY_HAIKU: ${{ vars.CLAUDE_USD_DAY_HAIKU }}
+          CLAUDE_USD_MONTH_HAIKU: ${{ vars.CLAUDE_USD_MONTH_HAIKU }}
         run: python moderation/moderation.py --event "$GITHUB_EVENT_PATH"

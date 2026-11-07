@@ -7,8 +7,8 @@ and the caller falls back to its own rules.
   on the file's sha, so concurrent runs cannot overspend).
 - 同一个文件还按池（pool）记美元：每天、每月各有上限（POOL_CAPS，可用 CLAUDE_USD_<PERIOD>_<POOL> 改）。
   The same file also keeps US dollars per pool, with day and month caps (POOL_CAPS; override with CLAUDE_USD_<PERIOD>_<POOL>).
-- 模型和上限都可以用仓库变量改：CLAUDE_MODEL_<TASK>、CLAUDE_DAILY_<TASK>（TASK = MODERATION / UPLOAD）。
-  Model and limit per task come from repository variables CLAUDE_MODEL_<TASK> and CLAUDE_DAILY_<TASK>.
+- 模型可用仓库变量 CLAUDE_MODEL_<TASK> 改；按次数的上限 CLAUDE_DAILY_<TASK>（有默认值时）是美元上限之外的第二道保险。
+  The model comes from the repository variable CLAUDE_MODEL_<TASK>; the per-task count limit CLAUDE_DAILY_<TASK> (where one has a default) is a second guard beside the dollar caps.
 - 需要 ANTHROPIC_API_KEY；没有、额度用完、出错、Claude 拒答，一律返回 None。
   Needs ANTHROPIC_API_KEY; missing key, exhausted credit, any error or a refusal all give None.
 """

@@ -36,6 +36,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL_CLASSIFY: ${{ vars.CLAUDE_MODEL_CLASSIFY }}
           CLAUDE_DAILY_CLASSIFY: ${{ vars.CLAUDE_DAILY_CLASSIFY }}
+          CLAUDE_USD_DAY_HAIKU: ${{ vars.CLAUDE_USD_DAY_HAIKU }}
+          CLAUDE_USD_MONTH_HAIKU: ${{ vars.CLAUDE_USD_MONTH_HAIKU }}
         run: python discussions/boards.py --event "$GITHUB_EVENT_PATH"
       - env:
           GH_TOKEN: ${{ github.token }}
