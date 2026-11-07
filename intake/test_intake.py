@@ -117,6 +117,19 @@ def test_form_course_fields_are_optional():
     assert len(intake.validate(bad)) == 1 and "Session you took it" in intake.validate(bad)[0]   # still format-checked when given
 
 
+def test_unselected_optional_dropdowns_count_as_empty():
+    # GitHub writes "None" (not "_No response_") for an optional dropdown left unselected (issue #61)
+    body = _body()
+    for title in ("资料类型 | Type", "入学年份 | Intake year"):
+        body = re.sub(r"(### " + re.escape(title) + r"\n\n)[^\n]*", lambda m: m.group(1) + "None", body)
+    f = intake.parse_form(body)
+    assert (f.type, f.intake) == ("", "")
+    assert intake.validate(f) == []
+    yml = (ROOT / ".github/ISSUE_TEMPLATE/upload.yml").read_text(encoding="utf-8")
+    ids = re.findall(r"^  - type: dropdown\n    id: (\w+)$", yml, re.M)
+    assert sorted(ids) == sorted(intake.DROPDOWNS)        # every dropdown in the form gets the "None" rule
+
+
 def test_issue_form_marks_course_fields_optional():
     yml = (ROOT / ".github/ISSUE_TEMPLATE/upload.yml").read_text(encoding="utf-8")
     blocks = {m.group(1): part for part in yml.split("\n  - type: ")[1:] for m in [re.search(r"^    id: (\w+)$", part, re.M)] if m}

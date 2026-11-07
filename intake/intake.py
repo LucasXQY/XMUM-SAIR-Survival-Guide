@@ -55,6 +55,8 @@ CHECKS = (
 )
 
 NO_RESPONSE = "_No response_"
+NO_SELECTION = "None"                                    # what GitHub writes for an optional dropdown left unselected
+DROPDOWNS = ("prog", "type", "credit", "intake")         # the form's dropdown fields
 HEADING_RE = re.compile(r"^### (.*?)\s*$", re.M)
 MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^\s)]+)\)")
 # the two attachment URL shapes GitHub produces for files (images live under user-attachments/assets and are not taken)
@@ -80,9 +82,9 @@ class Form:
     checked: list[bool] = field(default_factory=lambda: [False] * len(CHECKS))
 
 
-def _clean(value: str) -> str:
+def _clean(value: str, dropdown: bool = False) -> str:
     value = value.strip()
-    return "" if value == NO_RESPONSE else value
+    return "" if value == NO_RESPONSE or (dropdown and value == NO_SELECTION) else value
 
 
 def parse_form(body: str) -> Form:
@@ -92,7 +94,7 @@ def parse_form(body: str) -> Form:
     parts = HEADING_RE.split(body)  # [preamble, title1, text1, title2, text2, ...]
     for title, text in zip(parts[1::2], parts[2::2]):
         sections[title.strip()] = text
-    by_key = {k: _clean(sections.get(t, "")) for k, t in FIELDS.items()}
+    by_key = {k: _clean(sections.get(t, ""), k in DROPDOWNS) for k, t in FIELDS.items()}
     checklist = sections.get(FIELDS["checklist"], "")
     checked = [bool(re.search(r"^\s*- \[[xX]\] " + re.escape(s) + r"\s*$", checklist, re.M)) for s in CHECKS]
     f = Form(prog=by_key["prog"], code=by_key["code"].upper(), name=by_key["name"], session=by_key["session"],
