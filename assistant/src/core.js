@@ -2,6 +2,8 @@
 // The assistant's core: request checks, session tokens, site search, the scope gate and the answer loop.
 // worker.js only does the network, the limits and the human check. Tests: npm test (node --test).
 
+import PRICES from "../../llm/prices.json" with { type: "json" };
+
 export const SITE = "https://xmum-sair.github.io/";
 export const MODEL = "claude-opus-5-5";          // answers (maintainer's choice, 2026-11-06)
 export const GATE_MODEL = "claude-haiku-5-5";    // scope check before any answer is paid for
@@ -171,24 +173,38 @@ ${catalogText}`;
 
 const textOf = (content) => (content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
 
+export const RESERVE_USD = 0.25;   // the Limiter holds this per question until its real cost is known
+
+export function costUsd(model, usage) {   // dollars for one call; same rules as cost_usd in llm/claude_check.py
+  const n = (k) => (usage && usage[k]) || 0;
+  const inp = n("input_tokens"), out = n("output_tokens"), cw = n("cache_creation_input_tokens"), cr = n("cache_read_input_tokens");
+  const table = PRICES.usd_per_million;
+  let rates = table[model] || table[PRICES.unknown_model];
+  const tier = PRICES.long_prompt[model];
+  if (tier && inp + cw + cr > tier.over_tokens) rates = tier;
+  return (inp * rates.input + out * rates.output + cw * rates.cache_write + cr * rates.cache_read) / 1_000_000;
+}
+
 export async function gate(client, messages) {
   const r = await client.messages.create({
     model: GATE_MODEL, max_tokens: 400, system: GATE_SYSTEM,
     messages: [{ role: "user", content: gatePrompt(messages) }],
     output_config: { effort: "low", format: { type: "json_schema", schema: GATE_SCHEMA } },
   });
-  if (r.stop_reason !== "end_turn") return { in_scope: false, reply: OFF_TOPIC };
+  const cost = costUsd(r.model || GATE_MODEL, r.usage);
+  if (r.stop_reason !== "end_turn") return { in_scope: false, reply: OFF_TOPIC, cost };
   try {
     const v = JSON.parse(textOf(r.content));
-    return { in_scope: v.in_scope === true, reply: String(v.reply || "") || OFF_TOPIC };
+    return { in_scope: v.in_scope === true, reply: String(v.reply || "") || OFF_TOPIC, cost };
   } catch {
-    return { in_scope: false, reply: OFF_TOPIC };
+    return { in_scope: false, reply: OFF_TOPIC, cost };
   }
 }
 
 export async function answer({ client, index, ratings, messages }) {
   const verdict = await gate(client, messages);
-  if (!verdict.in_scope) return { reply: verdict.reply, gated: true };
+  let cost = verdict.cost;
+  if (!verdict.in_scope) return { reply: verdict.reply, gated: true, cost };
   const system = [{ type: "text", text: systemPrompt(catalog(index)), cache_control: { type: "ephemeral" } }];
   const msgs = messages.map((m) => ({ role: m.role, content: m.content }));
   for (let round = 0; round < LIMITS.toolRounds; round++) {
@@ -199,16 +215,17 @@ export async function answer({ client, index, ratings, messages }) {
       output_config: { effort: "low" },
       ...(last ? { tool_choice: { type: "none" } } : {}),                // the last round must answer with what it has
     });
-    if (r.stop_reason === "refusal") return { reply: "这个问题我答不了，换个和课程有关的问题试试。| I can't help with that one; try a course question.", gated: false };
+    cost += costUsd(r.model || MODEL, r.usage);
+    if (r.stop_reason === "refusal") return { cost, reply: "这个问题我答不了，换个和课程有关的问题试试。| I can't help with that one; try a course question.", gated: false };
     if (r.stop_reason === "pause_turn") { msgs.push({ role: "assistant", content: r.content }); continue; }
-    if (r.stop_reason !== "tool_use") return { reply: textOf(r.content) || OFF_TOPIC, gated: false };
+    if (r.stop_reason !== "tool_use") return { reply: textOf(r.content) || OFF_TOPIC, gated: false, cost };
     msgs.push({ role: "assistant", content: r.content });
     const results = r.content.filter((b) => b.type === "tool_use").map((b) => ({
       type: "tool_result", tool_use_id: b.id, content: JSON.stringify(runTool(b.name, b.input, index, ratings)).slice(0, 12000),
     }));
     msgs.push({ role: "user", content: results });
   }
-  return { reply: "这个问题要查的东西太多了，换个更具体的问法试试。| That needs too much looking up; try a more specific question.", gated: false };
+  return { reply: "这个问题要查的东西太多了，换个更具体的问法试试。| That needs too much looking up; try a more specific question.", gated: false, cost };
 }
 
 export function safeLinks(text) {   // for the widget: links only to this site or its GitHub organisation

@@ -69,6 +69,31 @@ def test_prompt_fences_the_post_and_lists_boards_and_courses():
     assert "untrusted" in b.CLASSIFY_SYSTEM
 
 
+def test_the_classify_judge_reserves_its_estimate_and_settles_the_real_cost():
+    import os
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "llm"))
+    import claude_check as cc
+    calls = []
+
+    class FakeBudget:
+        def __init__(self, repo): pass
+        def take(self, task, n, limit, usd=0.0): calls.append(("take", task, n, usd)); return True
+        def settle(self, pool, delta): calls.append(("settle", pool, round(delta, 6)))
+    real = (cc.Budget, cc.ask, os.environ.get("ANTHROPIC_API_KEY"))
+    cc.Budget = FakeBudget
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+    try:
+        cc.ask = lambda *a, on_cost=None, **k: (on_cost(0.0005), {"course": ""})[1]
+        judge = b.make_judge("r/r", [])
+        assert judge("t", "body") == {"course": ""}
+        assert calls == [("take", "classify", 1, b.CLASSIFY_ESTIMATE_USD), ("settle", "haiku", round(0.0005 - b.CLASSIFY_ESTIMATE_USD, 6))]
+        calls.clear(); cc.ask = lambda *a, on_cost=None, **k: None                   # no response: the whole reservation comes back
+        assert judge("t", "body") is None and calls[-1] == ("settle", "haiku", -b.CLASSIFY_ESTIMATE_USD)
+    finally:
+        cc.Budget, cc.ask = real[0], real[1]
+        os.environ.pop("ANTHROPIC_API_KEY", None) if real[2] is None else os.environ.__setitem__("ANTHROPIC_API_KEY", real[2])
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

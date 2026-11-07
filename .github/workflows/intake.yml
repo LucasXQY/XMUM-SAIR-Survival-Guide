@@ -52,7 +52,9 @@ jobs:
           # Claude pre-check of the uploaded files, written into the PR; without the key the PR just says it did not run
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL_UPLOAD: ${{ vars.CLAUDE_MODEL_UPLOAD }}
-          CLAUDE_DAILY_UPLOAD: ${{ vars.CLAUDE_DAILY_UPLOAD }}
+          CLAUDE_USD_DAY_UPLOAD: ${{ vars.CLAUDE_USD_DAY_UPLOAD }}
+          CLAUDE_USD_MONTH_UPLOAD: ${{ vars.CLAUDE_USD_MONTH_UPLOAD }}
+          CLAUDE_USD_RUN_UPLOAD: ${{ vars.CLAUDE_USD_RUN_UPLOAD }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           EVENT: ${{ github.event_name }}
           ISSUE: ${{ github.event.issue.number || inputs.issue }}

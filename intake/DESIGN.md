@@ -161,7 +161,7 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 每个上传文件交给 Claude 读一遍（PDF 原样发送，最多前 40 页；其他格式发文字，最多 6 万字符；doc/ppt/xls 旧格式不发），判断有没有答案或学生作答、个人信息（姓名、学号、签名、私人联系方式、Moodle 密钥、二维码）、评分标准，再加一句内容概述，写进 PR 正文的「Claude 预检」表。只是参考：不阻断、不删文件，维护者照常审核。
 
 - 结果按上传文件字节的 sha256 缓存在 PR 正文末尾的隐藏注释里；main 每次更新都会重建所有上传 PR，缓存保证同一个文件只付一次钱。
-- 每次运行最多 20 个文件；每天最多 30 个（仓库变量 `CLAUDE_DAILY_UPLOAD`），计数在 `bot-state` 分支。超出、没有 `ANTHROPIC_API_KEY`、调用失败时，表里写明原因，其余照旧。
+- 按美元限额，不按文件个数：每个文件先预留 0.04 美元加每页 0.025 美元（PDF 最多按 40 页算），查完按实际花费结算。上传池每天 15、每月 60、每次运行 8 美元（仓库变量 `CLAUDE_USD_DAY_UPLOAD`、`CLAUDE_USD_MONTH_UPLOAD`、`CLAUDE_USD_RUN_UPLOAD` 可改，留空用默认值），记账在 `bot-state` 分支的 `claude-usage.json`；设计细节见 [AI-PIPELINE.md](AI-PIPELINE.md)。额度用完、没有 `ANTHROPIC_API_KEY`、调用失败时，表里写明原因，其余照旧。
 - 模型默认 Claude Opus 5.5，仓库变量 `CLAUDE_MODEL_UPLOAD` 可改。Claude 不复述个人信息，只说在哪一页。文件内容视为不可信输入。
 - 代码：`intake.py` 的 `precheck_input`、`precheck`、`precheck_lines`、`make_prechecker`；调用与计数在 `llm/claude_check.py`。
 

@@ -35,6 +35,7 @@ TEXT_CHARS = 30000      # characters of text sent per file
 SCAN_PAGES = 20         # pages of a scanned PDF (no text layer) sent as the PDF itself
 MAX_TOPICS = 12
 DEFAULT_LIMIT = 700
+FILE_ESTIMATE_USD = 0.005    # reserved per file before the call, settled against the real cost
 STORE = "topics.json"
 TOPICS_SYSTEM = """You index study material for XMUM SAIR Survival Guide, an archive of course material for students of \
 Xiamen University Malaysia (electrical engineering, AI, robotics and university-wide courses).
@@ -171,16 +172,24 @@ def main(argv: list[str] | None = None) -> int:
     store, sha = state.read()
     files = course_files(Path(args.root))
     ask = take = None
+    budget, reserved, spent = None, [0.0], []   # `spent` is appended to from worker threads (list.append is atomic)
     if not args.dry_run and os.environ.get("ANTHROPIC_API_KEY"):
         budget = cc.Budget(args.repo)
         limit = cc.daily_limit("topics", DEFAULT_LIMIT)
 
         def ask(content):
-            return cc.ask("topics", TOPICS_SYSTEM, content, TOPICS_SCHEMA, max_tokens=2000)
+            return cc.ask("topics", TOPICS_SYSTEM, content, TOPICS_SCHEMA, max_tokens=2000, on_cost=spent.append)
 
         def take(n):
-            return budget.take("topics", n, limit)
-    new, stats = update(files, store, ask, take)
+            ok = budget.take("topics", n, limit, usd=n * FILE_ESTIMATE_USD)
+            if ok:
+                reserved[0] += n * FILE_ESTIMATE_USD
+            return ok
+    try:
+        new, stats = update(files, store, ask, take)
+    finally:
+        if budget:   # once, after the whole batch: refunds what the estimates over-reserved, charges what they missed
+            budget.settle(cc.pool_of("topics"), sum(spent) - reserved[0])
     print(f"{len(files)} files: " + ", ".join(f"{k} {v}" for k, v in stats.items()))
     changed = new != store
     if changed and not args.dry_run:
