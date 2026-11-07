@@ -7,3 +7,11 @@
 | [2023-04](2023-04/) |  |  | LucasXQY · [nsd-chen](https://github.com/nsd-chen) | [Assignments](2023-04/Assignments/) |
 
 - 小贴士 / Tips：
+
+## 同名课程资料 | Related course materials
+
+同名课程的另一课程代码资料见下方链接，资料按卷面课程代码归档。
+
+Materials for the same course title under another course code are linked below. Materials are filed under the course code printed on each paper.
+
+[COM213 Computer Architecture](../COM213_Computer_Architecture/)
