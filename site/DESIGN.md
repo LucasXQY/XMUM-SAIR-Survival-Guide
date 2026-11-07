@@ -152,7 +152,7 @@ site/
 - 改版前用 giscus 嵌 GitHub Discussions，发言要 GitHub 账号。现在讨论区和机会墙一样由站点的 Cloudflare Worker 提供（`assistant/src/forum.js`），网页端是 `static/forum.js`，帖子存在 Worker 的 Durable Object 里，不进仓库。
 - `/qa/`：按 `discussions/boards.json` 的板块列主题帖，可搜索、按最新回复 / 最新发布 / 没人回排序；`?t=<id>` 打开一帖和它的回复，`?board=<key>` 只看一个板块。课程页底部列出带这门课代码的帖子，可「就这门课提问」；首页列最新 5 帖；`/wanted/` 列「资料求助」板块，按课程分组。
 - 发帖、回帖不用登录，昵称可不填（显示「匿名同学」）。每个浏览器一小时过一次 Turnstile 人机验证；同一网络每天 60 条、同一浏览器每天 20 条。
-- 审核：先过 `moderation/words` 的关键词表（Worker 从仓库读取，10 分钟缓存，规则同 `moderation/moderation.py`），再由 Claude Haiku 决定发布、待审或退回（退回时告诉发帖人原因）。命中「折叠」类词表的，模型说可以发也进待审；模型出错、超时、暂停或当天 400 次额度用完，一律待审。维护者在 Worker 的 `/admin` 页批准或删除。3 个不同浏览器举报后自动撤回待审；发帖的浏览器可以自己撤回。
+- 审核：先过 `moderation/words` 的关键词表（Worker 从仓库读取，10 分钟缓存，规则同 `moderation/moderation.py`），再由 Claude Haiku 决定发布、待审或退回（退回时告诉发帖人原因）。命中「折叠」类词表的，模型说可以发也进待审；模型出错、超时、暂停，或讨论区自己的美元额度（每天 0.5、每月 5 美元，见 intake/AI-PIPELINE.md §8）、每天 400 次用完，一律待审。维护者在 Worker 的 `/admin` 页批准或删除。3 个不同浏览器举报后自动撤回待审；发帖的浏览器可以自己撤回。
 - 板块的键在 `assistant/src/forum.js` 的 `BOARD_HINTS` 里也有一份，`build.py` 的自检会比对两边。
 - GitHub 上的旧帖不导入，`/qa/` 底部链接到 GitHub Discussions 作只读存档。
 

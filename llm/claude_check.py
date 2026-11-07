@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_MODELS = {"moderation": "claude-haiku-5-5", "classify": "claude-haiku-5-5", "topics": "claude-haiku-5-5"}   # maintainer: Haiku for bulk sorting (2026-11-06)
+DEFAULT_MODELS = {"moderation": "claude-haiku-5-5", "topics": "claude-haiku-5-5"}   # maintainer: Haiku for bulk sorting (2026-11-06)
 # models that take the server-side refusal fallback ("default" routes a declined request to Anthropic's recommended model)
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 STATE_BRANCH, STATE_FILE = "bot-state", "claude-usage.json"
@@ -114,7 +114,7 @@ class StateFile:
 
 
 # which spending pool a task draws on, and the dollar caps per pool (USD); repository variables CLAUDE_USD_<PERIOD>_<POOL> override
-TASK_POOLS = {"moderation": "haiku", "classify": "haiku", "topics": "haiku", "sort": "upload", "upload": "upload"}
+TASK_POOLS = {"moderation": "haiku", "topics": "haiku", "sort": "upload", "upload": "upload"}
 POOL_CAPS = {"upload": {"day": 15, "month": 60, "run": 8}, "haiku": {"day": 2, "month": 10}}
 
 
