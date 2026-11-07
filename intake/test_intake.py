@@ -510,7 +510,7 @@ def test_precheck_has_no_file_count_cap_and_asks_for_the_files_it_will_send():
     seen = []
     out = intake.precheck(files, {}, ask=lambda c: dict(VERDICT), take=lambda fs: seen.append(list(fs)) or True)
     assert {r["status"] for r in out.values()} == {"ok"} and len(out) == 25          # no "skipped" any more
-    assert len(seen) == 1 and sorted(seen[0]) == sorted(files.values())             # one reservation for the whole upload
+    assert seen == [[f] for f in files.values()]                                     # one reservation per file, in order
 
 
 def test_precheck_estimate_is_a_base_plus_a_rate_per_page_up_to_forty():
@@ -578,28 +578,46 @@ FORM_BODY = _body().replace("com107", "_No response_").replace("Circuits and Dev
     "[bundle.zip](https://github.com/user-attachments/files/112/bundle.zip)", "[papers.zip](https://github.com/user-attachments/files/112/papers.zip)")
 
 
-class _FakeCache:
-    """IntakeCache in memory: what the run asked to save (before scrubbing) lands in gh.cache_writes."""
-    def __init__(self, gh): self.gh = gh
-    def load(self): return __import__("copy").deepcopy(self.gh.cache or {})
-    def save(self, data):
-        import copy, cache
-        self.gh.cache_writes.append(copy.deepcopy(data)); self.gh.cache = cache.scrub(data)
-    def delete(self): self.gh.cache = None
+CACHE_PATH = "intake-cache/issue-5.json"
 
 
 class FakeGH:
+    """GitHub in memory. The upload cache is the real cache.IntakeCache over test_cache's in-memory contents API, so
+    the run and the commands go through the same read / sha / write path as on bot-state; every PUT that reaches the
+    store (already scrubbed) is kept in cache_writes."""
     repo = "o/r"
 
-    def __init__(self, body=None, labels=("upload",), cache=None, pr=None, head="upload/issue-5"):
-        self.body, self.labels, self.cache, self.pr, self.head = body, list(labels), cache, pr, head
+    def __init__(self, body=None, labels=("upload",), cache=None, pr=None, head="upload/issue-5", prs=(), issues=()):
+        from test_cache import FakeStore
+        self.body, self.labels, self.pr, self.head = body, list(labels), pr, head
         self.calls, self.cache_writes, self.ai_calls, self.ai_text, self.comments = [], [], [], [], {}
+        self.prs, self.issues = list(prs), list(issues)
+        self.state = FakeStore(branch=True)
+        if cache is not None:
+            self.state.files[CACHE_PATH] = (json.loads(json.dumps(cache)), "c")
+
+    @property
+    def cache(self):
+        entry = self.state.files.get(CACHE_PATH)
+        return entry[0] if entry else None
+
+    def _contents(self, *args, input=None):
+        if "-X" in args and args[args.index("-X") + 1] == "PUT":
+            import base64
+            self.cache_writes.append(json.loads(base64.b64decode(json.loads(input)["content"])))
+        return self.state.gh(*args, input=input)
+
+    def intake_cache(self, issue):
+        import cache
+        return cache.IntakeCache(self.repo, issue, gh=self._contents)
+
     def issue(self, n): return {"body": self.body, "title": "t", "state": "open", "login": "alice", "id": 111, "labels": self.labels}
     def comment(self, n, text): self.calls.append(("comment", text))
     def comment_pr(self, n, text): self.calls.append(("comment_pr", text))
     def label(self, n, add=(), remove=()): self.calls.append(("label", tuple(add), tuple(remove)))
     def pr_for(self, branch): return self.pr
     def pr_head(self, n): return self.head
+    def pr_head_sha(self, n): return f"PRHEAD{n}"
     def create_or_edit_pr(self, branch, title, body, draft=False):
         self.calls.append(("pr", title, body)); self.pr = self.pr or 1
         return f"https://example/pr/{self.pr}"
@@ -607,7 +625,9 @@ class FakeGH:
     def set_status(self, sha, ok, text): self.calls.append(("status", sha, ok))
     def react(self, comment_id, content): self.calls.append(("react", comment_id, content))
     def upsert_comment(self, n, marker, text): self.calls.append(("upsert_comment", n, text)); self.comments[(n, marker)] = text
-    def intake_cache(self, issue): return _FakeCache(self)
+    def open_upload_prs(self): return self.prs
+    def open_upload_issues(self): return self.issues
+    def dispatch(self, n): self.calls.append(("dispatch", n))
 
 
 class FakeGit:
@@ -625,9 +645,15 @@ class FakeBudget:
     def spent(self, pool): return 1.25, 4.5
 
 
-def fake_claude(gh, sorts, checks):
-    """(asks, checker) answering from the tables by file number; every question is logged in gh.ai_calls."""
-    def text(content): return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
+def fake_claude(gh, sorts, checks, during=None):
+    """(asks, checker) answering from the tables by file number; every question is logged in gh.ai_calls.
+    `during()` runs once, on the first question: something that happens while the rebuild is under way."""
+    hooks = [during] if during else []
+
+    def text(content):
+        while hooks:
+            hooks.pop()()
+        return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
 
     def sort(content, on_cost=None):
         m = re.search(r"^File: .* › (\d+)$", text(content), re.M); k = int(m.group(1)) if m else 1
@@ -642,7 +668,7 @@ def fake_claude(gh, sorts, checks):
     return {"sort": sort}, (ask, lambda files: True, lambda: 0.02)
 
 
-def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=()):
+def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", failed=(), during=None):
     """Issue #5 with one attachment, a zip holding files 1..n (n = the highest number in the tables, at least 1)."""
     import zipfile
     tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
@@ -653,7 +679,7 @@ def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", f
     gh = gh or FakeGH()
     gh.body = gh.body or FORM_BODY
     git = FakeGit()
-    asks, checker = fake_claude(gh, sorts, checks)
+    asks, checker = fake_claude(gh, sorts, checks, during)
     real = intake.download
     intake.download = lambda links, work: ([(zip_name, z)], list(failed))
     try:
@@ -797,6 +823,103 @@ def test_comment_event_on_the_pr_retry_and_mistakes():
         ran, gh = [], FakeGH(cache=dict(items), head=head)
         intake.handle_comment(ev, gh, FakeGit(), tmp_repo(), run=ran.append)
         assert ran == [] and gh.calls == [] and not gh.cache_writes, ev
+
+
+def _event(body, number=5, who="OWNER", pr=False, labels=("upload",)):
+    return {"comment": {"id": 4, "body": body, "author_association": who, "user": {"login": "m"}},
+            "issue": {"number": number, "labels": [{"name": l} for l in labels], "pull_request": {"url": "u"} if pr else None}}
+
+
+def _sha(k):
+    return __import__("hashlib").sha256(_pdf_bytes(k)).hexdigest()
+
+
+def test_commands_are_stored_and_answered_before_any_rebuild():
+    """The ungrouped half of a command: store, answer, and name the issue to rebuild (the grouped job rebuilds it)."""
+    import os
+    gh = FakeGH(cache={"items": [{"k": 2, "sha": "s2", "source": "b.pdf"}], "check": {"s2": CHECK_OK}})
+    assert intake.store_commands(_event("/skip #2"), gh) == 5
+    assert gh.cache["overrides"] == {"s2": {"skip": True}} and gh.cache["check"] == {"s2": CHECK_OK} and ("react", 4, "+1") in gh.calls
+    assert intake.store_commands(_event("/retry"), gh) == 5 and len(gh.cache_writes) == 1        # /retry stores nothing
+    assert intake.store_commands(_event("/skip #9"), gh) is None and len(gh.cache_writes) == 1   # nothing applied
+    assert intake.store_commands(_event("/skip #2", who="NONE"), gh) is None and len(gh.cache_writes) == 1
+    assert intake.store_commands(_event("hello"), gh) is None
+    out = pathlib.Path(tempfile.mkdtemp()) / "out"
+    os.environ["GITHUB_OUTPUT"] = str(out)
+    try:
+        intake.set_output("issue", 5); intake.set_output("issue", None)
+    finally:
+        del os.environ["GITHUB_OUTPUT"]
+    assert out.read_text(encoding="utf-8") == "issue=5\nissue=\n"
+
+
+def test_a_command_stored_while_a_rebuild_runs_survives_it():
+    gh = FakeGH()
+    run_with_fakes(SORTS, {1: CHECK_OK, 2: CHECK_OK}, gh=gh)                   # #3's check failed: asked again next time
+    stored = []
+    run_with_fakes(SORTS, CHECKS, gh=gh, during=lambda: stored.append(intake.store_commands(_event("/keep #4"), gh)))
+    assert stored == [5] and gh.ai_calls[-1] == ("check", 3)
+    assert gh.cache["overrides"] == {_sha(4): {"keep": True}}                 # the rebuild's save kept the command
+    assert gh.cache["check"][_sha(3)]["personal_data"] == "unsure"            # and the command kept the rebuild's verdicts
+
+
+def test_the_push_sweep_only_dispatches_one_run_per_issue():
+    gh = FakeGH(prs=[5, 9], issues=[9, 12])
+    assert intake.dispatch_open(gh) == [5, 9, 12] and gh.calls == [("dispatch", 5), ("dispatch", 9), ("dispatch", 12)]
+    yml = (ROOT / ".github/workflows/intake.yml").read_text(encoding="utf-8")
+    target, rest = yml.split("\n  command-target:")[1].split("\n  command:")
+    assert "--dispatch-open" in yml and "actions: write" in yml and "--all-open" not in yml
+    assert '--comment-event "$GITHUB_EVENT_PATH"' in target and "concurrency" not in target     # stored ungrouped
+    command = rest.split("\n  cleanup:")[0]
+    assert "group: intake-${{ needs.command-target.outputs.issue }}" in command and '--issue "$ISSUE"' in command
+
+
+def test_the_precheck_checks_what_fits_and_leaves_the_rest_for_later():
+    import os
+    sys.path.insert(0, str(ROOT / "llm"))
+    import claude_check as cc
+    w = pathlib.Path(tempfile.mkdtemp()); files = {}
+    for i in range(1, 6):
+        _pdf(w / f"p{i}.pdf", text=f"page {i}"); files[f"item-{i}.pdf"] = w / f"p{i}.pdf"
+    booked, settled = [], []
+
+    class FakeBudget:                                   # room for three one-page files (0.065 each) today
+        def __init__(self, repo): pass
+        def reserve(self, pool, usd):
+            if round(sum(booked) + usd, 6) > 0.195: return False
+            booked.append(usd); return True
+        def settle(self, pool, delta): settled.append(round(delta, 6))
+    real = (cc.Budget, cc.ask, os.environ.get("ANTHROPIC_API_KEY"))
+    cc.Budget = FakeBudget
+    cc.ask = lambda task, system, content, schema, max_tokens=0, on_cost=None: (on_cost(0.01), dict(VERDICT))[1]
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+    try:
+        ask, take, settle = intake.make_prechecker("r/r")
+        out = intake.precheck(files, {}, ask=ask, take=take)
+        assert [out[k]["status"] for k in files] == ["ok", "ok", "ok", "limit", "limit"]
+        assert round(settle(), 6) == 0.03 and settled == [round(0.03 - 0.195, 6)]       # settled once, at the end
+    finally:
+        cc.Budget, cc.ask = real[0], real[1]
+        os.environ.pop("ANTHROPIC_API_KEY", None) if real[2] is None else os.environ.__setitem__("ANTHROPIC_API_KEY", real[2])
+
+
+def test_claude_text_cannot_close_issues_or_ping():
+    git, gh, _ = run_with_fakes({1: SORT_OK}, {1: dict(CHECK_OK, summary="fixes #12 @someone")})
+    body = pr_body_of(gh)
+    assert re.search(r"`[^`\n]*fixes #12 @someone[^`\n]*`", body) and body.count("@someone") == 1
+    git, gh, _ = run_with_fakes({1: dict(SORT_OK, note="closes #3 @zed")}, {1: dict(CHECK_OK, summary="")})
+    body = pr_body_of(gh)                                                   # the sort note stands in for a summary
+    assert re.search(r"`[^`\n]*closes #3 @zed[^`\n]*`", body) and body.count("@zed") == 1
+
+
+def test_nothing_committable_with_an_older_pr_updates_and_blocks_it():
+    gh = FakeGH(pr=7)
+    git, gh, _ = run_with_fakes({1: SORT_OK}, {1: dict(CHECK_OK, personal_data="unsure")}, gh=gh)
+    assert git.calls == [("reset", "upload/issue-5")]                       # nothing committed, nothing pushed
+    body = pr_body_of(gh)
+    assert _in_order(body, SECTIONS + ("Refs #5",)) and "Closes" not in body and "#1" in body.split("## 需要你看")[1]
+    assert ("draft", 7, True) in gh.calls and ("status", "PRHEAD7", False) in gh.calls
+    assert [c[0] for c in gh.calls].count("upsert_comment") == 1
 
 
 def test_run_issue_glue_with_fakes():

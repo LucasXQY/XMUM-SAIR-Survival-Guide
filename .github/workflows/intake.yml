@@ -1,9 +1,15 @@
 name: intake
 
-# 上传通道：把带 upload 标签的 Issue 整理成 PR；main 有新提交时把所有打开的上传 PR 重建一遍；维护者在上传 Issue 或它的 PR 下
+# 上传通道：把带 upload 标签的 Issue 整理成 PR；main 有新提交时给每个打开的上传各启动一次重建；维护者在上传 Issue 或它的 PR 下
 # 留 /place、/skip、/keep、/approve、/retry 指令。见 intake/DESIGN.md 与 intake/AI-PIPELINE.md
-# Upload channel: turns an issue labelled `upload` into a pull request; every push to main rebuilds all open upload PRs;
-# maintainers steer an upload with /place, /skip, /keep, /approve and /retry comments. See intake/DESIGN.md and intake/AI-PIPELINE.md
+# Upload channel: turns an issue labelled `upload` into a pull request; every push to main starts one rebuild per open
+# upload; maintainers steer an upload with /place, /skip, /keep, /approve and /retry comments. See intake/DESIGN.md and
+# intake/AI-PIPELINE.md
+#
+# Every rebuild of issue n runs in concurrency group intake-<n> (issue events, dispatches, commands), so two rebuilds of
+# one upload never overlap. GitHub keeps one running and one pending run per group and cancels an older pending one:
+# that is harmless for rebuilds (each starts from the issue, main and the cache), so whatever must not be lost, the
+# maintainers' commands, is stored before that, in the ungrouped `command-target` job.
 on:
   issues:
     types: [opened, edited]
@@ -17,6 +23,11 @@ on:
         description: "Issue number to rebuild"
         required: true
         type: string
+      sweep:
+        description: "Started by the push sweep: stay quiet when the form is still invalid and already answered"
+        required: false
+        type: boolean
+        default: false
   pull_request_target:
     types: [closed]
 
@@ -31,14 +42,11 @@ jobs:
     if: >-
       vars.BOTS_PAUSED != '1' && (
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'upload'))
-      || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # one group per issue (and one for the push-triggered sweep): a newer run for the same issue replaces the queued one,
-    # runs for different issues touch different branches and may overlap. GitHub keeps a single queued run per group and
-    # cancels older ones, so the sweep on push also picks up upload issues that never got an answer.
     concurrency:
-      group: intake-${{ github.event.issue.number || inputs.issue || 'all' }}
+      group: intake-${{ github.event.issue.number || inputs.issue }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +59,7 @@ jobs:
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Rebuild upload pull requests
+      - name: Rebuild the upload pull request
         env:
           GH_TOKEN: ${{ github.token }}
           # Claude sorts (CLAUDE_MODEL_SORT) and pre-checks (CLAUDE_MODEL_UPLOAD) each file; without the key nothing is
@@ -63,11 +71,11 @@ jobs:
           CLAUDE_USD_MONTH_UPLOAD: ${{ vars.CLAUDE_USD_MONTH_UPLOAD }}
           CLAUDE_USD_RUN_UPLOAD: ${{ vars.CLAUDE_USD_RUN_UPLOAD }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          EVENT: ${{ github.event_name }}
           ISSUE: ${{ github.event.issue.number || inputs.issue }}
+          SWEEP: ${{ inputs.sweep }}
         run: |
-          if [ "$EVENT" = push ]; then
-            python intake/intake.py --all-open
+          if [ "$SWEEP" = true ]; then
+            python intake/intake.py --issue "$ISSUE" --sweep
           else
             python intake/intake.py --issue "$ISSUE"
           fi
@@ -78,34 +86,57 @@ jobs:
           path: _intake/thumbs
           if-no-files-found: ignore
 
-  # A comment on a PR carries the PR's number, not the upload issue's: read the issue number from the PR's head branch
-  # so the command below queues in the same concurrency group as that issue's own runs.
+  # On every push to main: one workflow_dispatch run per open upload (open upload PRs, and upload issues the bot has
+  # not answered), so each rebuild queues in its own issue's group instead of racing that issue's other runs.
+  sweep:
+    if: vars.BOTS_PAUSED != '1' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write          # GITHUB_TOKEN may start workflow_dispatch runs
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start one rebuild per open upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python intake/intake.py --dispatch-open
+
+  # The maintainer's command is stored (and answered with 👍 or a reply) here, outside any concurrency group, so a
+  # queued rebuild can never cancel it; the job outputs the upload issue to rebuild (a PR comment names the PR, the
+  # issue number comes from its head branch upload/issue-<n>), empty when there is nothing to do.
   command-target:
     if: >-
       vars.BOTS_PAUSED != '1' && github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
-      issue: ${{ steps.find.outputs.issue }}
+      issue: ${{ steps.store.outputs.issue }}
     steps:
-      - id: find
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - id: store
+        name: Store the command
         env:
           GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.issue.number }}
-          IS_PR: ${{ github.event.issue.pull_request != null }}
-        run: |
-          n="$NUMBER"
-          if [ "$IS_PR" = true ]; then
-            head=$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName -q .headRefName)
-            case "$head" in upload/issue-*) n="${head#upload/issue-}";; esac
-          fi
-          case "$n" in ''|*[!0-9]*) n="$NUMBER";; esac
-          echo "issue=$n" >> "$GITHUB_OUTPUT"
+        # the comment is read from the event file by the script (author, permission, thread), never pasted into the shell
+        run: python intake/intake.py --comment-event "$GITHUB_EVENT_PATH"
 
   command:
     needs: command-target
     if: >-
-      vars.BOTS_PAUSED != '1' && github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
+      vars.BOTS_PAUSED != '1' && github.event_name == 'issue_comment' && needs.command-target.outputs.issue != ''
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -122,7 +153,7 @@ jobs:
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Apply a maintainer command and rebuild
+      - name: Rebuild after the command
         env:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -132,8 +163,8 @@ jobs:
           CLAUDE_USD_MONTH_UPLOAD: ${{ vars.CLAUDE_USD_MONTH_UPLOAD }}
           CLAUDE_USD_RUN_UPLOAD: ${{ vars.CLAUDE_USD_RUN_UPLOAD }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        # the comment is read from the event file by the script (author, permission, thread), never pasted into the shell
-        run: python intake/intake.py --comment-event "$GITHUB_EVENT_PATH"
+          ISSUE: ${{ needs.command-target.outputs.issue }}
+        run: python intake/intake.py --issue "$ISSUE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

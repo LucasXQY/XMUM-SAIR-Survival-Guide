@@ -97,10 +97,30 @@ def test_scrub_redaction_label_and_nested_notes():
     assert c["check"]["t"]["summary"] == ["", "plain"]
 
 
+PATH = "intake-cache/issue-7.json"
+
+
+def interleaved(store, other):
+    """store.gh, except that `other(store.gh)` runs just before the first PUT goes through: a second writer that slips
+    in between this writer's read and its write, so that write carries a stale sha and the store answers 409."""
+    state = {"done": False}
+
+    def gh(*args, input=None):
+        if not state["done"] and "-X" in args and args[args.index("-X") + 1] == "PUT":
+            state["done"] = True
+            other(store.gh)
+        return store.gh(*args, input=input)
+    return gh
+
+
 def test_cache_round_trip_on_bot_state():
     store = FakeStore(branch=True); c = cache.IntakeCache("o/r", 7, gh=store.gh)
-    c.save({"items": [{"k": 1, "sha": "s", "source": "a.pdf"}], "overrides": {"s": {"kind": "skip"}}})
-    assert c.load()["overrides"] == {"s": {"kind": "skip"}} and store.paths == ["intake-cache/issue-7.json"]
+    c.save({"items": [{"k": 1, "sha": "s", "source": "a.pdf"}]})
+    assert c.update_overrides(lambda data: {"s": {"skip": True}}) == {"s": {"skip": True}}
+    assert c.load() == {"items": [{"k": 1, "sha": "s", "source": "a.pdf"}], "overrides": {"s": {"skip": True}}}
+    assert store.paths == [PATH]
+    c.save({"overrides": {"s": {"keep": True}}, "x": 1}, keep_stored_overrides=False)     # the whole file, as given
+    assert c.load() == {"overrides": {"s": {"keep": True}}, "x": 1}
 
 
 def test_load_of_a_missing_cache_is_empty():
@@ -111,29 +131,72 @@ def test_save_scrubs_what_it_writes():
     store = FakeStore(branch=True)
     cache.IntakeCache("o/r", 7, gh=store.gh).save({"check": {"s": {"redactions": [{"page": 1, "kind": "text", "text": "EEE2109300", "rects": []}]}}})
     assert "EEE2109300" not in json.dumps(store.files)
+    c = cache.IntakeCache("o/r", 7, gh=store.gh)
+    c.update_overrides(lambda data: {"s": {"skip": True, "note": "mail a@gmail.com"}})
+    assert "gmail" not in json.dumps(store.files)
 
 
-def test_save_retries_once_on_conflict_and_keeps_both_overrides():
+def test_a_run_save_keeps_the_overrides_a_command_stored_meanwhile():
+    """A rebuild loads the cache, works for minutes, then saves: a command stored in between must survive."""
+    store = FakeStore(branch=True)
+    run, cmd = cache.IntakeCache("o/r", 7, gh=store.gh), cache.IntakeCache("o/r", 7, gh=store.gh)
+    run.save({"items": [{"k": 2, "sha": "s2", "source": "b.pdf"}]})
+    snapshot = run.load()                                               # the run starts: no overrides yet
+    cmd.update_overrides(lambda data: {**data.get("overrides", {}), "s2": {"skip": True}})
+    snapshot["check"] = {"s2": {"answers": "no"}}
+    snapshot["overrides"] = {"s2": {"keep": True}}                      # whatever the run holds is ignored
+    run.save(snapshot)
+    data = store.files[PATH][0]
+    assert data["overrides"] == {"s2": {"skip": True}} and data["check"] == {"s2": {"answers": "no"}}
+
+
+def test_a_run_save_that_conflicts_reads_the_overrides_again():
+    store = FakeStore(branch=True)
+    cache.IntakeCache("o/r", 7, gh=store.gh).save({"items": [], "sort": {"a": 1}})
+    command = lambda gh: cache.IntakeCache("o/r", 7, gh=gh).update_overrides(lambda data: {"s": {"approved_by": "m"}})
+    run = cache.IntakeCache("o/r", 7, gh=interleaved(store, command))
+    run.save({"sort": {"a": 1, "b": 2}, "spent_usd": 0.5})
+    data = store.files[PATH][0]
+    assert data == {"items": [], "sort": {"a": 1, "b": 2}, "spent_usd": 0.5, "overrides": {"s": {"approved_by": "m"}}}
+
+
+def test_a_command_never_loses_results_a_run_saved_meanwhile():
+    """The other direction: a command reads, a run saves paid verdicts, the command writes. Its write conflicts, so
+    it reads again and applies its commands again; the verdicts stay."""
+    store = FakeStore(branch=True)
+    cache.IntakeCache("o/r", 7, gh=store.gh).save({"items": [{"k": 1, "sha": "s1", "source": "a.pdf"}]})
+    run = lambda gh: cache.IntakeCache("o/r", 7, gh=gh).save({"items": [{"k": 1, "sha": "s1", "source": "a.pdf"}],
+                                                             "check": {"s1": {"answers": "no"}}, "spent_usd": 2})
+    seen = []
+
+    def change(data):
+        seen.append(dict(data))
+        return {**data.get("overrides", {}), "s1": {"skip": True}}
+    cache.IntakeCache("o/r", 7, gh=interleaved(store, run)).update_overrides(change)
+    data = store.files[PATH][0]
+    assert len(seen) == 2 and "check" not in seen[0] and seen[1]["check"] == {"s1": {"answers": "no"}}
+    assert data["check"] == {"s1": {"answers": "no"}} and data["spent_usd"] == 2 and data["overrides"] == {"s1": {"skip": True}}
+
+
+def test_nothing_to_change_writes_nothing():
     store = FakeStore(branch=True)
     c = cache.IntakeCache("o/r", 7, gh=store.gh)
-    c.save({"overrides": {"mine": {"skip": True}}})
-    store.conflicts, store.on_conflict = 1, other_writer
-    c.save({"overrides": {"mine": {"skip": True, "approved_by": "z"}, "new": {"keep": True}}, "spent_usd": 1})
-    data = store.files["intake-cache/issue-7.json"][0]
-    assert data["overrides"] == {"mine": {"skip": True, "approved_by": "z"}, "new": {"keep": True}, "theirs": {"keep": True}}
-    assert data["spent_usd"] == 1
+    assert c.update_overrides(lambda data: None) is None and store.paths == []
 
 
-def test_a_second_conflict_propagates():
-    store = FakeStore(branch=True)
-    c = cache.IntakeCache("o/r", 7, gh=store.gh)
-    c.save({"overrides": {}})
-    store.conflicts, store.on_conflict = 2, other_writer
-    try:
-        c.save({"overrides": {}})
-    except cc.Conflict:
-        return
-    raise AssertionError("expected Conflict")
+def test_writers_retry_up_to_five_times_then_give_up():
+    for writer in (lambda c: c.save({"x": 1}), lambda c: c.update_overrides(lambda data: {"s": {"skip": True}})):
+        store = FakeStore(branch=True)
+        c = cache.IntakeCache("o/r", 7, gh=store.gh)
+        store.conflicts = 4
+        writer(c)
+        assert store.paths == [PATH]
+        store.conflicts = 5
+        try:
+            writer(c)
+        except cc.Conflict:
+            continue
+        raise AssertionError("expected Conflict")
 
 
 def test_delete_removes_the_file_and_a_missing_file_is_fine():

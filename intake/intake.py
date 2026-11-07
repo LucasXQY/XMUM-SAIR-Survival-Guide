@@ -479,8 +479,9 @@ def precheck_estimate(files: list[Path]) -> float:
 def precheck(files: dict[str, Path], cache: dict, ask=None, take=None) -> dict[str, dict]:
     """key → {"status", "sha", and the verdict fields when there is one}. The key ("item-<k>.<ext>") is the only name
     Claude sees. `cache` holds earlier verdicts by the hash of the uploaded bytes (the caller keeps it on bot-state), so
-    the rebuild on every push to main sends nothing twice. `take(paths)` reserves the dollars for checking those files
-    and says whether they fit; `ask(content)` returns a verdict or None."""
+    the rebuild on every push to main sends nothing twice. `take([path])` reserves the dollars for checking one file
+    and says whether they fit; it is asked file by file, in order, so whatever fits under today's cap is checked and
+    the rest are "limit" (never cached: a later rebuild tries them again). `ask(content)` returns a verdict or None."""
     import hashlib
     out: dict[str, dict] = {}
     todo = []
@@ -497,10 +498,10 @@ def precheck(files: dict[str, Path], cache: dict, ask=None, take=None) -> dict[s
     if ask is None or take is None:
         out.update({rel: {"status": "off", "sha": sha} for rel, _, sha in todo})
         return out
-    if not take([src for _, src, _ in todo]):
-        out.update({rel: {"status": "limit", "sha": sha} for rel, _, sha in todo})
-        return out
     for rel, src, sha in todo:
+        if not take([src]):
+            out[rel] = {"status": "limit", "sha": sha}
+            continue
         try:
             block, note = precheck_input(src)
         except Exception as e:   # the message may quote the file's path: print the type only
@@ -1032,20 +1033,20 @@ class Report:
 @dataclass
 class Result:
     placement: Placement
-    body: str                             # the PR body, or the issue comment when nothing can be committed
+    body: str                             # the PR body (also when nothing is committable: an older PR shows it)
     decisions: list
     rejected: list[tuple[str, str]]
     blocking: bool
     committable: int                      # files in the commit: placed + waiting folder
     held: int = 0                         # files that block the merge
+    comment: str = ""                     # the issue comment that stands in for the PR when nothing is committable
 
 
 def _ai_text(text: str) -> str:
-    """Claude's free text for the PR: one line, no raw HTML, dropped entirely when it looks like personal data."""
-    text = str(text or "")
-    if PII_RE.search(text):
-        return ""
-    return re.sub(r"\s+", " ", text).strip().replace("<", "&lt;").replace(">", "&gt;")
+    """Claude's free text for the PR or the issue comment: a code span, so it cannot close an issue (#12), ping
+    anyone (@x), link or render HTML; dropped entirely when it looks like personal data."""
+    text = str(text or "").strip()
+    return "" if not text or PII_RE.search(text) else _code(text)
 
 
 def _row_of(*cells: str) -> str:
@@ -1193,7 +1194,11 @@ def pr_body(r: Report, base_sha: str, held: int) -> str:
     n = len(committed_paths(r.placement, r.issue, {it.k: it.ext for it in r.items}))
     when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     head = [f"来自 | From #{r.issue} · 这个 PR 有 {n} 个文件 | {n} files in this PR", *_hints(r.form), ""]
-    if held:
+    if not n:   # an older PR while nothing can be committed: its branch still holds the previous build
+        head += ["> ⛔ 现在没有能提交的文件，这个分支还是上一次整理的内容，不要合并；处理完「需要你看」后机器人会重建。"
+                 " | Nothing can be committed now and this branch still holds the previous build: do not merge. The bot "
+                 "rebuilds it once Needs you is dealt with.", ""]
+    elif held:
         head += [f"> ⛔ 还有 {held} 个文件要你处理（见「需要你看」）。处理完之前这个 PR 是草稿，状态 `{STATUS_CONTEXT}` 不通过。"
                  f" | {held} files need you (see Needs you); until then this PR stays a draft and the `{STATUS_CONTEXT}` status fails.", ""]
     return "\n".join([
@@ -1202,7 +1207,7 @@ def pr_body(r: Report, base_sha: str, held: int) -> str:
         f"重建于 {when}，基于 main `{base_sha[:7]}`。要改内容请编辑原 Issue 或用上面的指令，PR 会自动重建；不要直接改这个分支。"
         f" | Rebuilt {when} from main `{base_sha[:7]}`. To change anything edit the issue or use the commands above and "
         f"the PR rebuilds itself; do not push to this branch.",
-        "", f"{'Refs' if held else 'Closes'} #{r.issue}", ""])
+        "", f"{'Refs' if held or not n else 'Closes'} #{r.issue}", ""])
 
 
 def issue_comment(r: Report) -> str:
@@ -1350,11 +1355,13 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
                         asked=bool(asks.get("sort") or ask))
     report = Report(f, issue, items, decisions, pl, rejected, verdicts, sorts, why, inspections, build, spend,
                     run_url, branch or f"upload/issue-{issue}")
-    body = pr_body(report, base_sha, held) if committed else issue_comment(report)
-    return Result(pl, body, decisions, rejected, held > 0, len(committed), held)
+    return Result(pl, pr_body(report, base_sha, held), decisions, rejected, held > 0, len(committed), held,
+                  "" if committed else issue_comment(report))
 
 
 def pr_title(n: int, res: Result) -> str:
+    if not res.committable:
+        return f"[上传 | Upload] #{n}：暂时没有能提交的文件 | nothing to commit yet"
     codes = [c.rsplit("/", 1)[-1].split("_", 1)[0] for c in res.placement.courses]
     return f"[上传 | Upload] #{n}：{res.committable} 个文件 | files（{'、'.join(codes) or WAITING}）"
 
@@ -1372,6 +1379,8 @@ def commit_message(n: int, res: Result) -> str:
 
 
 def status_text(res: Result) -> str:
+    if not res.committable:
+        return "现在没有能提交的文件，这个分支是上一次的内容 | nothing can be committed now; this branch is the previous build"
     if res.blocking:
         return f"还有 {res.held} 个文件要维护者处理 | {res.held} file(s) still need a maintainer"
     return "没有挡合并的文件 | nothing blocks the merge"
@@ -1456,6 +1465,9 @@ class GH:
     def pr_head(self, n: int) -> str:
         return self._run("pr", "view", str(n), "--repo", self.repo, "--json", "headRefName", "-q", ".headRefName")
 
+    def pr_head_sha(self, n: int) -> str:
+        return self._run("pr", "view", str(n), "--repo", self.repo, "--json", "headRefOid", "-q", ".headRefOid")
+
     def create_or_edit_pr(self, branch: str, title: str, body: str, draft: bool = False) -> str:
         n = self.pr_for(branch)
         if n:
@@ -1473,6 +1485,11 @@ class GH:
         """The commit status `intake/待整理` on the PR head: failure while a file still needs a maintainer."""
         self._api("POST", f"statuses/{sha}", {"state": "success" if ok else "failure", "context": STATUS_CONTEXT,
                                               "description": text[:140]})
+
+    def dispatch(self, n: int, sweep: bool = True) -> None:
+        """Start the intake workflow for issue n on main (GITHUB_TOKEN may start workflow_dispatch runs)."""
+        self._run("workflow", "run", "intake.yml", "--repo", self.repo, "--ref", "main", "-f", f"issue={int(n)}",
+                  "-f", f"sweep={'true' if sweep else 'false'}")
 
     def intake_cache(self, issue: int):
         from cache import IntakeCache
@@ -1605,9 +1622,11 @@ def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: P
                     print(f"#{n}: could not save the cache ({type(e).__name__})", file=sys.stderr)
         existing = gh.pr_for(branch)
         if not res.committable:
-            gh.upsert_comment(n, COMMENT_MARKER, res.body)
-            if existing:            # an older PR from before a /skip: keep it from being merged
+            gh.upsert_comment(n, COMMENT_MARKER, res.comment)
+            if existing:            # an older PR (say, from before a /skip): the same sections, and kept from merging
+                gh.create_or_edit_pr(branch, pr_title(n, res), res.body)
                 gh.set_draft(existing, True)
+                gh.set_status(gh.pr_head_sha(existing), False, status_text(res))
             print(f"#{n}: nothing to commit yet, {res.held} file(s) need a maintainer; issue comment updated")
             return
         anonymous = f.credit == CREDIT_ANON
@@ -1637,65 +1656,93 @@ UNAUTHORIZED = ("只有仓库的 OWNER、MEMBER 或 COLLABORATOR 能用这些指
                 "| Only the repository's owners, members and collaborators can use these commands; nothing was done.")
 
 
-def handle_comment(event: dict, gh, git, repo: Path, run) -> None:
-    """A maintainer command in a comment on an upload issue or its PR (spec §7). Ignored: comments that do not start
-    with "/", words that are not ours, and threads that are neither an `upload` issue nor a PR from `upload/issue-<n>`.
-    An author who is not OWNER / MEMBER / COLLABORATOR gets one bilingual reply and nothing else. Otherwise each
-    command is stored in the upload's cache by file hash (`#k` resolved through cache["items"]), the comment gets 👍 or
-    a reply naming what could not be done, and `run(n)` rebuilds the issue. `/retry` stores nothing and just rebuilds:
-    failed or unbudgeted AI results were never cached, so only those are asked again."""
+def store_commands(event: dict, gh) -> int | None:
+    """The first half of a maintainer command (spec §7), run outside the issue's concurrency group so a queued rebuild
+    can never cancel it: store the commands, answer the comment, and return the issue to rebuild (None: nothing to do).
+    Ignored: comments that do not start with "/", words that are not ours, and threads that are neither an `upload`
+    issue nor a PR from `upload/issue-<n>`. An author who is not OWNER / MEMBER / COLLABORATOR gets one bilingual reply
+    and nothing else. Commands are compare-and-swapped into the cache's `overrides` by file hash (`#k` resolved through
+    cache["items"] of the same read), retried on a Conflict; every other key stays as stored. The comment gets 👍, or
+    a reply naming what could not be done. `/retry` stores nothing and only asks for the rebuild: failed or unbudgeted
+    AI results were never cached, so only those are asked again."""
     import commands
     c = event.get("comment") or {}
     if not str(c.get("body") or "").lstrip().startswith("/"):
-        return
-    cmds, errors = commands.parse(c.get("body") or "")
-    if not cmds and not errors:              # another bot's /word
-        return
+        return None
+    cmds, parse_errors = commands.parse(c.get("body") or "")
+    if not cmds and not parse_errors:              # another bot's /word
+        return None
     thread = event.get("issue") or {}
     where = int(thread.get("number") or 0)
     if thread.get("pull_request"):
         m = re.fullmatch(r"upload/issue-(\d+)", gh.pr_head(where) or "")
         if not m:
-            return
+            return None
         n = int(m.group(1))
     elif LABEL_UPLOAD in {l.get("name") for l in thread.get("labels") or [] if isinstance(l, dict)}:
         n = where
     else:
-        return
+        return None
     if not commands.authorized(str(c.get("author_association") or "")):
         gh.comment(where, UNAUTHORIZED)
-        return
+        return None
     login = str((c.get("user") or {}).get("login") or "")
     rebuild = any(x.kind == "retry" for x in cmds)
     todo = [x for x in cmds if x.kind != "retry"]
-    if todo:
-        store = gh.intake_cache(n)
-        data = store.load()
+    unknown: list[str] = []
+
+    def apply(data: dict) -> dict | None:
+        """The commands against one read of the cache; run again on every retry."""
+        unknown.clear()
         shas = {}
         for i in data.get("items") or []:
             if isinstance(i, dict) and str(i.get("k", "")).isdigit() and i.get("sha"):
                 shas[int(i["k"])] = str(i["sha"])
-        overrides = dict(data.get("overrides") or {})
+        stored = data.get("overrides")
+        overrides = {s: o for s, o in stored.items() if isinstance(o, dict)} if isinstance(stored, dict) else {}
         changed = False
         for x in todo:
             sha = shas.get(x.k)
             if not sha:
-                errors.append(f"没有 #{x.k} 这个文件，编号见 PR 正文或机器人的评论 "
-                              f"| there is no file #{x.k}; the numbers are in the PR body or the bot's comment")
+                unknown.append(f"没有 #{x.k} 这个文件，编号见 PR 正文或机器人的评论 "
+                               f"| there is no file #{x.k}; the numbers are in the PR body or the bot's comment")
                 continue
             overrides[sha] = commands.merge(overrides.get(sha), x, login)
             changed = True
-        if changed:
-            data["overrides"] = overrides
-            store.save(data)
-            rebuild = True
+        return overrides if changed else None
+    if todo and gh.intake_cache(n).update_overrides(apply) is not None:
+        rebuild = True
+    errors = parse_errors + unknown
     if errors:
         done = "\n\n其余指令已执行 | The other commands were applied." if rebuild else ""
         gh.comment(where, "\n".join(f"- {e}" for e in errors) + done)
     else:
         gh.react(int(c.get("id") or 0), "+1")
-    if rebuild:
+    return n if rebuild else None
+
+
+def handle_comment(event: dict, gh, git, repo: Path, run) -> None:
+    """store_commands, then `run(n)` for the issue it names (in the workflow the two halves are separate jobs)."""
+    n = store_commands(event, gh)
+    if n is not None:
         run(n)
+
+
+def set_output(name: str, value) -> None:
+    """A step output for the workflow (the file $GITHUB_OUTPUT names); None writes an empty value."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as out:
+            out.write(f"{name}={'' if value is None else value}\n")
+
+
+def dispatch_open(gh) -> list[int]:
+    """The push sweep: one workflow run per open upload (PRs, and upload issues the bot has not answered), each in its
+    issue's own concurrency group, instead of rebuilding them all here outside those groups."""
+    issues = sorted(set(gh.open_upload_prs()) | set(gh.open_upload_issues()))
+    for n in issues:
+        gh.dispatch(n)
+    return issues
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1703,8 +1750,12 @@ def main(argv: list[str] | None = None) -> int:
     import traceback
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--issue", type=int, help="process this issue")
-    ap.add_argument("--all-open", action="store_true", help="rebuild every open upload/issue-N pull request")
-    ap.add_argument("--comment-event", help="handle the maintainer command in this GitHub issue_comment event (JSON file)")
+    ap.add_argument("--sweep", action="store_true", help="with --issue: a sweep's rebuild, quiet when the form is still invalid")
+    ap.add_argument("--all-open", action="store_true", help="rebuild every open upload/issue-N pull request here, one by one")
+    ap.add_argument("--dispatch-open", action="store_true",
+                    help="start one intake workflow run per open upload (the push sweep; each run in its issue's group)")
+    ap.add_argument("--comment-event", help="store the maintainer commands in this GitHub issue_comment event (JSON file) "
+                                            "and write the issue to rebuild to $GITHUB_OUTPUT (issue=<n>)")
     ap.add_argument("--dry-run", action="store_true", help="no network: --form FILE --files F... --repo DIR "
                                                          "(a stand-in AI unless ANTHROPIC_API_KEY is set)")
     ap.add_argument("--form", help="dry run: a file holding the rendered issue body")
@@ -1746,32 +1797,35 @@ def main(argv: list[str] | None = None) -> int:
             meter.settle()
         name, other = ("PR_BODY.md", "ISSUE_COMMENT.md") if res.committable else ("ISSUE_COMMENT.md", "PR_BODY.md")
         (work / other).unlink(missing_ok=True)
-        (work / name).write_text(res.body, encoding="utf-8")
+        (work / name).write_text(res.body if res.committable else res.comment, encoding="utf-8")
         print(f"{res.committable} file(s) committed, {res.held} need a maintainer; {name} -> {work / name}")
         return 0
 
     gh, git = GH(), Git(repo)
     if args.comment_event:
         event = json.loads(Path(args.comment_event).read_text(encoding="utf-8"))
-
-        def rebuild(n: int) -> None:
-            gh.ensure_labels()
-            run_issue(n, repo, gh, git, run_url, work)
         try:
-            handle_comment(event, gh, git, repo, run=rebuild)
+            n = store_commands(event, gh)
         except Exception:
             traceback.print_exc()
             return 1
+        set_output("issue", n)
+        print(f"rebuild #{n}" if n else "nothing to rebuild")
+        return 0
+    if args.dispatch_open:
+        issues = dispatch_open(gh)
+        print(f"dispatched {len(issues)} rebuild(s): {' '.join(f'#{n}' for n in issues) or 'none'}")
         return 0
     gh.ensure_labels()
     issues = [args.issue] if args.issue else sorted(set(gh.open_upload_prs()) | set(gh.open_upload_issues())) if args.all_open else []
     if not issues:
-        print("no open upload PRs" if args.all_open else "nothing to do: pass --issue N, --all-open or --comment-event FILE")
+        print("no open upload PRs" if args.all_open else
+              "nothing to do: pass --issue N, --all-open, --dispatch-open or --comment-event FILE")
         return 0
     failed = 0
     for n in issues:
         try:
-            run_issue(n, repo, gh, git, run_url, work, sweep=args.all_open)
+            run_issue(n, repo, gh, git, run_url, work, sweep=args.all_open or args.sweep)
         except Exception:
             traceback.print_exc()
             failed += 1

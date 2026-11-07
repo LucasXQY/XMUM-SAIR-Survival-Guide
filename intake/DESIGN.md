@@ -85,9 +85,10 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 
 工作流 `.github/workflows/intake.yml`，三个入口都调用同一个"重建"过程：
 - `issues: [opened, edited]`，仅当 Issue 带 `upload` 标签 → 重建该 Issue 的分支和 PR。
-- `push: branches: [main]` → 列出所有打开的、分支名以 `upload/issue-` 开头的 PR，逐个重建。
-- `workflow_dispatch`，输入 `issue` 编号 → 重建该 Issue（维护者手动兜底）。
-`concurrency` 按 Issue 分组（`intake-<n>`；push 触发用 `intake-all`），同一 Issue 只保留最新一次排队。GitHub 每个组只留一个排队位，被挤掉的任务会被静默取消，所以 push 到 main 的那次重建还会扫一遍带 `upload` 标签、既没有 PR 也没有 `needs-info` 的 Issue，补上漏掉的。权限 `contents: write`、`pull-requests: write`、`issues: write`。步骤：checkout（取 main）→ setup-python → `pip install pymupdf markdown` → `python intake/intake.py --event "$GITHUB_EVENT_PATH"`（或 `--issue N` / `--all-open`）→ 把缩略图目录上传为 workflow artifact。
+- `push: branches: [main]` → `sweep` 任务列出所有打开的、分支名以 `upload/issue-` 开头的 PR，以及带 `upload` 标签、既没有 PR 也没有 `needs-info` 的 Issue，给每个用 `gh workflow run intake.yml -f issue=<n>` 各启动一次重建（2026-11-07 起；`GITHUB_TOKEN` 可以触发 `workflow_dispatch`，该任务需要 `actions: write`）。
+- `workflow_dispatch`，输入 `issue` 编号 → 重建该 Issue（维护者手动兜底，也是上面 push 的落点）。
+- `issue_comment: [created]`，以 `/` 开头 → `command-target` 任务（不进任何并发组）先把留言指令存进缓存并回复 👍 或原因，再由 `command` 任务排队重建该 Issue（见 [AI-PIPELINE.md](AI-PIPELINE.md) §7）。
+`concurrency` 按 Issue 分组（`intake-<n>`），同一 Issue 的重建从不并发、只保留最新一次排队。GitHub 每个组只留一个排队位，被挤掉的任务会被静默取消；重建只取决于（Issue、main、缓存），丢掉一次排队无妨，而不能丢的留言指令在进组之前就已存好。权限 `contents: write`、`pull-requests: write`、`issues: write`、`statuses: write`。步骤：checkout（取 main）→ setup-python → `pip install pymupdf markdown anthropic` → `python intake/intake.py --issue N`（push 的 sweep 用 `--dispatch-open`，留言用 `--comment-event "$GITHUB_EVENT_PATH"`）→ 把缩略图目录上传为 workflow artifact。
 
 脚本 `intake/intake.py` 对每个 Issue 按顺序：
 
