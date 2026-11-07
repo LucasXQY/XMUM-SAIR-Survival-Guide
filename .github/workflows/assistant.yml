@@ -5,7 +5,7 @@ name: assistant
 on:
   push:
     branches: [main]
-    paths: ["assistant/**", ".github/workflows/assistant.yml"]
+    paths: ["assistant/**", "llm/prices.json", ".github/workflows/assistant.yml"]
   workflow_dispatch:
 
 permissions:

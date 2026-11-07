@@ -12,6 +12,7 @@ import { reviewsApi } from "./reviews.js";
 import { ADMIN_HTML } from "./admin.js";
 
 const MAX_BODY = 20000;
+export const RESERVE_USD = 0.25;   // held per question until its real cost is known
 let cached = { at: 0, index: null, catalog: null, fetcher: null };
 
 export async function siteData(fetcher = fetch, now = Date.now()) {   // the site's search index and course/lecturer list, kept 10 minutes
@@ -124,7 +125,8 @@ async function chatRoute(body, request, env, deps, origin) {
     session = await signSession(secret);
   }
   // daily caps: per visitor (a hash of the address, never the address itself) and for the whole site
-  // and a dollar cap per day and per month (UTC), checked before the call; one answer may overshoot it
+  // and a dollar cap per day and per month (UTC). Each question reserves RESERVE_USD at once, so parallel questions cannot all
+  // slip under the cap; the real cost replaces the reservation when the answer is done (a failed answer keeps its reservation).
   const day = new Date().toISOString().slice(0, 10), month = day.slice(0, 7);
   const stub = env.LIMITER.get(env.LIMITER.idFromName("global"));
   const ask = (msg) => stub.fetch("https://limiter/" + msg.op, { method: "POST", body: JSON.stringify(msg) }).then((r) => r.json());
@@ -180,25 +182,28 @@ export class Limiter {
   constructor(ctx) { this.ctx = ctx; }
 
   async fetch(request) {
-    const msg = await request.json();
-    const { day, month } = msg, st = this.ctx.storage;
-    if ((await st.get("day")) !== day) {                        // a new day: drop yesterday's counts and spend, and older months
-      const old = await st.list();
-      await st.delete([...old.keys()].filter((k) => k !== "day" && k !== `m:${month}` && !k.includes(`:${day}`)));
+    const msg = await request.json(), st = this.ctx.storage;
+    const stored = await st.get("day");
+    const day = !stored || msg.day > stored ? msg.day : stored;   // roll forward only: a late request counts in the current day
+    const month = day.slice(0, 7);
+    if (day !== stored) {                                          // a new day: drop old counts and spend, and older months
+      const old = [...(await st.list()).keys()].filter((k) => k !== "day" && k !== `m:${month}` && !k.includes(`:${day}`));
+      for (let i = 0; i < old.length; i += 128) await st.delete(old.slice(i, i + 128));   // delete takes at most 128 keys
       await st.put("day", day);
     }
-    if (msg.op === "spend") {
-      const usd = Number(msg.usd);
-      if (usd > 0) await st.put({ [`s:${day}`]: ((await st.get(`s:${day}`)) || 0) + usd, [`m:${month}`]: ((await st.get(`m:${month}`)) || 0) + usd });
+    const s = (await st.get(`s:${day}`)) || 0, m = (await st.get(`m:${month}`)) || 0;
+    if (msg.op === "spend") {                                      // settle: the real cost replaces the reservation
+      const usd = Number(msg.usd) - RESERVE_USD;
+      await st.put({ [`s:${day}`]: Math.max(0, s + usd), [`m:${month}`]: Math.max(0, m + usd) });
       return Response.json({ ok: true });
     }
     const { visitor, perVisitor, global } = msg;
     const g = (await st.get(`g:${day}`)) || 0;
     const u = (await st.get(`u:${day}:${visitor}`)) || 0;
-    if (((await st.get(`s:${day}`)) || 0) >= msg.usdDay || ((await st.get(`m:${month}`)) || 0) >= msg.usdMonth) return Response.json({ ok: false, reason: "budget" });
+    if (s + RESERVE_USD > msg.usdDay || m + RESERVE_USD > msg.usdMonth) return Response.json({ ok: false, reason: "budget" });
     if (g >= global) return Response.json({ ok: false, reason: "global" });
     if (u >= perVisitor) return Response.json({ ok: false, reason: "visitor" });
-    await st.put({ [`g:${day}`]: g + 1, [`u:${day}:${visitor}`]: u + 1 });
+    await st.put({ [`g:${day}`]: g + 1, [`u:${day}:${visitor}`]: u + 1, [`s:${day}`]: s + RESERVE_USD, [`m:${month}`]: m + RESERVE_USD });
     return Response.json({ ok: true, used: g + 1 });
   }
 }

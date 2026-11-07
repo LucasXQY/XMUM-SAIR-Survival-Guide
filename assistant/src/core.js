@@ -189,7 +189,7 @@ export async function gate(client, messages) {
     messages: [{ role: "user", content: gatePrompt(messages) }],
     output_config: { effort: "low", format: { type: "json_schema", schema: GATE_SCHEMA } },
   });
-  const cost = costUsd(GATE_MODEL, r.usage);
+  const cost = costUsd(r.model || GATE_MODEL, r.usage);
   if (r.stop_reason !== "end_turn") return { in_scope: false, reply: OFF_TOPIC, cost };
   try {
     const v = JSON.parse(textOf(r.content));
@@ -213,7 +213,7 @@ export async function answer({ client, index, ratings, messages }) {
       output_config: { effort: "low" },
       ...(last ? { tool_choice: { type: "none" } } : {}),                // the last round must answer with what it has
     });
-    cost += costUsd(MODEL, r.usage);
+    cost += costUsd(r.model || MODEL, r.usage);
     if (r.stop_reason === "refusal") return { cost, reply: "这个问题我答不了，换个和课程有关的问题试试。| I can't help with that one; try a course question.", gated: false };
     if (r.stop_reason === "pause_turn") { msgs.push({ role: "assistant", content: r.content }); continue; }
     if (r.stop_reason !== "tool_use") return { reply: textOf(r.content) || OFF_TOPIC, gated: false, cost };
