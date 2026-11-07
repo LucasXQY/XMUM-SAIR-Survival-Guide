@@ -420,7 +420,13 @@ NOT_CHECKED = {
     "unreadable": "PDF 打不开，没有检查 | the PDF cannot be opened, not checked",
     "plain_text": "纯文本文件暂不自动检查 | plain-text files are not checked automatically yet",
     "unsorted": "没分拣成（额度或调用失败），之后的重建会再试，也可以 /retry | not sorted (budget or a failed call); a later rebuild tries again, or /retry",
+    "failed": "检查失败 {n} 次，用 `/retry` 再试 | the check failed {n} times; use `/retry` to try again",   # ai.CHECK_TRIES
 }
+
+
+def why_text(key: str, tries: int = 0) -> str:
+    """The Needs-you line for a NOT_CHECKED key; "failed" says how many times the check failed."""
+    return NOT_CHECKED[key].format(n=tries) if key == "failed" else NOT_CHECKED[key]
 
 
 def _plain_text(path: Path) -> str:
@@ -883,6 +889,7 @@ FLAG_TEXT = {
     "new_set": "和仓库里的一份很像但题目不同，按另一套收 | like a file in the archive with other questions: filed as another set",
     "new_version": "像仓库里一份文件的新版本，加了版本号 | looks like a newer version of a file in the archive: filed with a version number",
     "dedupe_skipped": "扫描件，没有查近似重复 | scanned: not checked for near-duplicates",
+    "possible_duplicate": "可能重复，未比较 | possible duplicate, not compared",
 }
 FLAGS_NOT_LISTED = ("placed_by_maintainer", "dedupe_skipped")   # shown in the table only, not under "worth a look"
 BLACKOUT_TEXT = {
@@ -936,6 +943,7 @@ class Report:
     run_url: str | None = None
     branch: str = ""
     redactions: dict = field(default_factory=dict)   # k -> Blackout, for the files whose redactions were applied
+    tries: dict = field(default_factory=dict)        # k -> failed checks, for the files `why` calls "failed"
 
 
 @dataclass
@@ -1042,7 +1050,7 @@ def report_sections(r: Report, linked: bool) -> list[str]:
     parked = dict(pl.parked)
     for d in ordered:
         if d.outcome == "review":
-            extra = [NOT_CHECKED[r.why[d.k]]] if d.k in r.why else []
+            extra = [why_text(r.why[d.k], r.tries.get(d.k, 0))] if d.k in r.why else []
             b = r.redactions.get(d.k)
             if b is not None and b.status != "ok":
                 extra.append("可用 `/retry` 从头再查 | `/retry` checks it again from scratch")
@@ -1243,8 +1251,9 @@ def _check_of(raw):
     return Check(**fields)
 
 
-def _why_unchecked(it, asked: bool) -> str:
-    """The NOT_CHECKED key for a kept file without a usable check."""
+def _why_unchecked(it, asked: bool, cache: dict | None = None) -> str:
+    """The NOT_CHECKED key for a kept file without a usable check: "failed" once its check failed ai.CHECK_TRIES times
+    (it then waits for /retry), "unchecked" before that."""
     import ai
     from items import OFFICE_EXTS
     if it.view is None:
@@ -1253,6 +1262,8 @@ def _why_unchecked(it, asked: bool) -> str:
         return "unreadable"
     if it.pages > ai.CHECK_MAX_PAGES:
         return "too_long"
+    if ai.failed_checks(cache or {}, it.sha) >= ai.CHECK_TRIES:
+        return "failed"
     return "unchecked" if asked else "off"
 
 
@@ -1411,9 +1422,10 @@ def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | No
     """(repo path it duplicates, None), or (None, variant), for a file about to be committed as decision `d` (spec §5
     step 5). It is compared with the PDFs in d's course folder (none when the course has no folder yet); the best match
     decides: SAME_AT or more is the same file; from ASK_AT the first two pages of both go to the comparison (`ask`, on
-    `meter`),
-    whose "same" is a duplicate, "different_set" the next free set letter, "different_version" the next version number,
-    anything else nothing. `seen` holds the repo files' first pages for the whole run (dedupe.first_pages)."""
+    `meter`), whose "same" is a duplicate, "different_set" the next free set letter, "different_version" the next
+    version number, "different" nothing. When there is no answer (no `ask` or `meter`, a refused reservation, a failed
+    call) the variant is {"possible_duplicate": True}: committed, flagged for a look, never silently "different".
+    `seen` holds the repo files' first pages for the whole run (dedupe.first_pages)."""
     import ai
     import dedupe
     from decide import stem_label
@@ -1425,10 +1437,12 @@ def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | No
     if score >= dedupe.SAME_AT:
         return path, None
     if ask is None or meter is None:
-        return None, None
+        return None, {"possible_duplicate": True}
     theirs = dedupe.first_pages(repo / path, seen) or []      # the run's cache: read when it was scored
     rel = ai.compare_pair("\n".join(it.page_text[:dedupe.PAGES]), "\n".join(theirs), ask, meter)
     label = stem_label(d.type, d.label)
+    if rel is None:
+        return None, {"possible_duplicate": True}
     if rel == "same":
         return path, None
     if rel == "different_set":
@@ -1460,7 +1474,7 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
     (`asks["compare"]` for the doubtful ones), decide each file, place them (redacted copies, never their originals),
     inspect and thumbnail what is committed, build the site, write the report. Every call is within `meter`. `cache` is
     the upload's bot-state cache: read and updated in place (items, sort, check with the rectangles applied, check_skipped,
-    verify); overrides are only read; the caller adds the meter's spend. `budget` gives the pool totals."""
+    check_failed, verify); overrides are only read; the caller adds the meter's spend. `budget` gives the pool totals."""
     import ai
     from decide import decide, validate_sort
     from items import exact_duplicates, make_items
@@ -1513,8 +1527,8 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
             c = _check_of(answers.get(it.k))
             if c is not None:
                 checks[it.k] = c
-            else:                              # failures are never cached, so /retry and rebuilds try them again
-                why[it.k] = _why_unchecked(it, asked=asks.get("check") is not None and meter is not None)
+            else:                              # no answer is cached: a later rebuild asks again, up to ai.CHECK_TRIES
+                why[it.k] = _why_unchecked(it, asked=asks.get("check") is not None and meter is not None, cache=cache)
         elif raw.get(it.k) is None:
             why[it.k] = "unsorted"
 
@@ -1583,8 +1597,9 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
                                                        if "WARNING" in l or "ERROR" in l)))
     spend = spend_lines([sort_usd, check_usd, verify_usd, compare_usd], budget,
                         asked=any(asks.get(x) for x in ("sort", "check", "verify", "compare")))
+    tries = {it.k: ai.failed_checks(cache, it.sha) for it in live if why.get(it.k) == "failed"}
     report = Report(f, issue, items, decisions, pl, rejected, checks, sorts, why, inspections, build, spend,
-                    run_url, branch or f"upload/issue-{issue}", red)
+                    run_url, branch or f"upload/issue-{issue}", red, tries)
     return Result(pl, pr_body(report, base_sha, held), decisions, rejected, held > 0, len(committed), held,
                   "" if committed else issue_comment(report))
 
@@ -1907,8 +1922,9 @@ def _retry_seq(overrides) -> int:
 def apply_retry(cache: dict) -> bool:
     """At the start of a run: a /retry not acted on yet (overrides["_retry"]["seq"] above cache["retry_done"]) drops
     every check whose redaction failed (`redactions_ok` False) and every check whose re-check verdict is not "no",
-    with that verdict, so this run checks those files again from scratch; then retry_done = seq, saved with the run's
-    results. Ordinary runs drop nothing. True when it acted."""
+    with that verdict, so this run checks those files again from scratch, and clears every failed-check count
+    (cache["check_failed"]), so files held after ai.CHECK_TRIES failures are asked again; then retry_done = seq, saved
+    with the run's results. Ordinary runs drop nothing. True when it acted."""
     seq = _retry_seq(cache.get("overrides"))
     done = cache.get("retry_done")
     if not seq or (type(done) is int and seq <= done):
@@ -1919,6 +1935,8 @@ def apply_retry(cache: dict) -> bool:
     for sha in drop:
         checks.pop(sha, None)
         verdicts.pop(sha, None)
+    if "check_failed" in cache:
+        cache["check_failed"] = {}      # emptied, not deleted: a save keeps the stored keys a run leaves out
     cache["retry_done"] = seq
     return True
 
@@ -1930,10 +1948,11 @@ def store_commands(event: dict, gh) -> int | None:
     issue nor a PR from `upload/issue-<n>`. An author who is not OWNER / MEMBER / COLLABORATOR gets one bilingual reply
     and nothing else. Commands are compare-and-swapped into the cache's `overrides` by file hash (`#k` resolved through
     cache["items"] of the same read), retried on a Conflict; every other key stays as stored. The comment gets 👍, or
-    a reply naming what could not be done. `/retry` asks for the rebuild (failed or unbudgeted AI results were never
-    cached, so those are asked again) and bumps overrides["_retry"]["seq"] in the same compare-and-swap: the next run
-    then drops failed redactions and unconfirmed re-checks (apply_retry). Runs never write overrides, so a rebuild that
-    is already running cannot undo it."""
+    a reply naming what could not be done. `/retry` asks for the rebuild (a file that got no answer has no cached
+    check, so it is asked again) and bumps overrides["_retry"]["seq"] in the same compare-and-swap: the next run then
+    drops failed redactions and unconfirmed re-checks and clears the failed-check counts, so files held after
+    repeated failures are asked again too (apply_retry). Runs never write overrides, so a rebuild that is already
+    running cannot undo it."""
     import commands
     c = event.get("comment") or {}
     if not str(c.get("body") or "").lstrip().startswith("/"):

@@ -118,6 +118,13 @@ def test_personal_data_never_shapes_a_file_or_folder_name():                   #
     assert d.outcome == "inbox" and "2109300" not in d.label + d.name                # unsure: never named by it
 
 
+def test_an_uncompared_near_duplicate_is_committed_and_flagged():               # final review, finding 11
+    d = decide.decide(ITEM, S(), CLEAN, FORM, None, None, {"possible_duplicate": True})
+    assert (d.outcome, d.blocking, "possible_duplicate" in d.flags) == ("commit", False, True)
+    for v in ({"possible_duplicate": 1}, {"possible_duplicate": "yes"}, None, {}):
+        assert "possible_duplicate" not in decide.decide(ITEM, S(), CLEAN, FORM, None, None, v).flags, v
+
+
 def test_codes_and_sessions_take_ascii_digits_only():                         # final review, fold-in 9
     assert intake.CODE_RE.fullmatch("EEE202") and not intake.CODE_RE.fullmatch("EEE２０２")
     assert intake.SESSION_RE.fullmatch("2022-04") and not intake.SESSION_RE.fullmatch("２０２２-０４")

@@ -164,9 +164,12 @@ def _usable_place(p) -> dict | None:
 
 
 def _variant(v) -> dict:
-    """A usable {"set": "B"} or {"version": 2}; anything else is no variant."""
+    """A usable {"set": "B"} or {"version": 2}, or {"possible_duplicate": True} (like a file in the archive, but the
+    comparison gave no answer); anything else is no variant."""
     if not isinstance(v, dict):
         return {}
+    if v.get("possible_duplicate") is True:
+        return {"possible_duplicate": True}
     letter = v.get("set")
     if isinstance(letter, str) and re.fullmatch(r"[A-Z]", letter.strip().upper()):
         return {"set": letter.strip().upper()}
@@ -283,6 +286,8 @@ def decide(item, sort, check, form, override, dup, variant=None, redaction=None)
         flags.append("new_set")
     elif variant.get("version"):
         flags.append("new_version")
+    elif variant.get("possible_duplicate"):
+        flags.append("possible_duplicate")
     if not code:
         return done("inbox", "课程不明，放入待整理 | course unknown, held in the inbox")
     if variant.get("set"):

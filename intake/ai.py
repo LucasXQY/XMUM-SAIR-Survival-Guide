@@ -171,8 +171,10 @@ CHECK_KEYS = tuple(CHECK_SCHEMA["required"])
 CHECK_MAX_PAGES = 100        # longer files are not checked (spec §6)
 CHECK_BASE_USD = 0.04        # reserved per file, plus CHECK_PAGE_USD per page; settled against the real cost
 CHECK_PAGE_USD = 0.025
-CHECK_PART_PAGES = 25        # pages per call when a file is too big to send whole
+CHECK_PART_PAGES = 25        # pages per call when a file is too big or too long to send whole
+CHECK_SPLIT_PAGES = 40       # a file of more pages than this goes in parts, whatever its size
 CHECK_MAX_B64 = 30_000_000   # base64 characters sent whole (the API takes 32 MB per request)
+CHECK_TRIES = 2              # calls that gave no usable answer before a file waits for /retry (cache["check_failed"])
 SEVERITY = {"no": 0, "unsure": 1, "yes": 2}   # anything else outranks "yes": decide() then calls it unreadable
 _FITZ = threading.Lock()     # PyMuPDF is not thread-safe
 
@@ -211,8 +213,9 @@ def _catalogue_text(cat: list[dict]) -> str:
 
 
 def _first_pages_pdf(path: Path) -> str:
+    """The first PAGES_SENT pages as a new PDF, base64. Runs in sort_items' worker threads: under _FITZ."""
     import fitz
-    with fitz.open(path) as src, fitz.open() as out:
+    with _FITZ, fitz.open(path) as src, fitz.open() as out:
         out.insert_pdf(src, from_page=0, to_page=min(PAGES_SENT, len(src)) - 1)
         return base64.b64encode(out.tobytes()).decode()
 
@@ -304,19 +307,20 @@ def _tagged(tag: str, text) -> str:
     return f"<{tag}>{text}</{tag}>"
 
 
-def compare_pair(a_text: str, b_text: str, ask, meter) -> str:
+def compare_pair(a_text: str, b_text: str, ask, meter) -> str | None:
     """How two files relate, from the text of their first two pages: same | different_set | different_version |
-    different. Any failure is "different"."""
+    different. None when they were not compared: a refused reservation, a failed call, an answer outside RELATIONS
+    (the caller flags a possible duplicate; it never counts as "different")."""
     try:
         if not meter.reserve(RESERVE_PER_ITEM):
-            return "different"
+            return None
         content = [{"type": "text", "text": _tagged("file_a", a_text) + "\n\n" + _tagged("file_b", b_text)}]
         v = ask(content, on_cost=meter.add)
         rel = v.get("relation") if isinstance(v, dict) else None
-        return rel if rel in RELATIONS else "different"
+        return rel if rel in RELATIONS else None
     except Exception as e:
         print(f"compare: failed: {type(e).__name__}", file=sys.stderr)   # never print e: it may quote content
-        return "different"
+        return None
 
 
 # ---------------------------------------------------------------- the full check (Opus): every page of every kept file
@@ -350,9 +354,10 @@ def _pages_of(view: Path, first: int, last: int) -> bytes:
 
 
 def _ranges(item, max_b64: int) -> list[tuple[int, int]] | None:
-    """None: send the view whole. Otherwise the 0-based inclusive page ranges, CHECK_PART_PAGES each."""
+    """None: send the view whole. Otherwise (its base64 over max_b64, or more than CHECK_SPLIT_PAGES pages) the
+    0-based inclusive page ranges, CHECK_PART_PAGES each."""
     size = Path(item.view).stat().st_size
-    if 4 * -(-size // 3) <= max_b64:
+    if 4 * -(-size // 3) <= max_b64 and item.pages <= CHECK_SPLIT_PAGES:
         return None
     return [(a, min(a + CHECK_PART_PAGES, item.pages) - 1) for a in range(0, item.pages, CHECK_PART_PAGES)]
 
@@ -415,16 +420,43 @@ def merge_parts(parts: list[tuple[int, int, dict | None]]) -> dict | None:
     return out
 
 
+def failed_checks(cache: dict, sha: str) -> int:
+    """How many runs asked Claude to check this file and got no usable answer (cache["check_failed"][sha]); 0 when
+    there is no count or it is broken."""
+    fails = cache.get("check_failed")
+    n = fails.get(sha) if isinstance(fails, dict) else None
+    return n if type(n) is int and n > 0 else 0
+
+
+def _count_failure(cache: dict, sha: str, failed: bool) -> None:
+    """One more failed check of the file, or (an answer) none at all; a broken count is started again. The key stays
+    (emptied, never deleted): a saved cache keeps the stored keys a run leaves out (cache.IntakeCache.save)."""
+    n = failed_checks(cache, sha)
+    fails = cache.get("check_failed")
+    if not isinstance(fails, dict):
+        if not failed:
+            return
+        fails = cache["check_failed"] = {}
+    if failed:
+        fails[sha] = n + 1
+    else:
+        fails.pop(sha, None)
+
+
 def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = CHECK_MAX_B64) -> dict[int, dict | None]:
     """{k: answer or None} for the items numbered in `keep` (sorted as keep, or kept/placed by a maintainer).
     A complete answer cached in cache["check"][sha] is reused without a call. No call (None) for an item without a view,
     an unreadable PDF, or more than CHECK_MAX_PAGES pages (recorded as cache["check_skipped"][sha] = "too_long").
     An answer (fresh or cached) with a redaction on a page the file, or its range, does not have counts as no answer.
     A fresh answer keeps exactly CHECK_KEYS (anything else Claude adds is dropped).
-    Each other item, in order, reserves check_estimate(pages) on `meter`; a refused reservation leaves that item None
-    and the next one is still tried. A view whose base64 would exceed `max_b64` goes in page ranges, one call each, merged by
-    merge_parts. Up to WORKERS calls at once, each call's cost added to `meter`. Answers are cached as given (the
-    cache scrubs them when it is saved; the redaction text is needed in memory this run); failures never are."""
+    A file whose check already failed CHECK_TRIES times (cache["check_failed"][sha], see failed_checks) is not asked
+    again: it waits for /retry, which clears the counts (intake.apply_retry). Each other item, in order, reserves
+    check_estimate(pages) on `meter`; a refused reservation leaves that item None (and is no failure) and the next one is
+    still tried. A view whose base64 would exceed `max_b64`, or of more than CHECK_SPLIT_PAGES pages, goes in page
+    ranges, one call each, merged by merge_parts. Up to WORKERS calls at once, each call's cost added to `meter`.
+    Answers are cached as given (the cache scrubs them when it is saved; the redaction text is needed in memory this
+    run) and clear the file's failure count; when Claude was asked and no usable answer came back, the count goes up
+    by one (nothing is counted when no call was made, say a page range could not be cut)."""
     store = cache.setdefault("check", {})
     out: dict[int, dict | None] = {}
     plan: list[tuple] = []          # (item, ranges or None)
@@ -440,6 +472,8 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
         if it.pages > CHECK_MAX_PAGES:
             cache.setdefault("check_skipped", {})[it.sha] = "too_long"
             continue
+        if failed_checks(cache, it.sha) >= CHECK_TRIES:
+            continue                # held until /retry: a failure that repeats is not paid for on every rebuild
         try:
             ranges = _ranges(it, max_b64)
         except OSError:
@@ -452,18 +486,25 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
         return out
 
     def one(job):
+        """(Claude was asked, its answer or None)."""
         it, part, n, i = job
         try:
-            return ask(check_content(it, part, n, i), on_cost=meter.add)
+            content = check_content(it, part, n, i)
+        except Exception as e:
+            print(f"check: item {it.k} could not be prepared: {type(e).__name__}", file=sys.stderr)
+            return False, None
+        try:
+            return True, ask(content, on_cost=meter.add)
         except Exception as e:
             print(f"check: item {it.k} failed: {type(e).__name__}", file=sys.stderr)   # never print e: it may quote content
-            return None
+            return True, None
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
         results = list(ex.map(one, jobs))
     at = 0
     for it, ranges in plan:
         n = len(ranges) if ranges else 1
-        got = results[at:at + n]
+        asked = any(called for called, _ in results[at:at + n])
+        got = [v for _, v in results[at:at + n]]
         at += n
         if ranges is None:     # exactly the schema's keys: the bookkeeping keys a rebuild trusts are never Claude's
             v = {k: got[0][k] for k in CHECK_KEYS} if check_ok(got[0]) and pages_in_range(got[0], it.pages) else None
@@ -471,8 +512,11 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
             v = merge_parts([(a, b - a + 1, g) for (a, b), g in zip(ranges, got)])
         if v is not None:
             out[it.k] = store[it.sha] = v
+            _count_failure(cache, it.sha, failed=False)
         else:
             print(f"check: item {it.k}: no usable answer", file=sys.stderr)
+            if asked:
+                _count_failure(cache, it.sha, failed=True)
     return out
 
 

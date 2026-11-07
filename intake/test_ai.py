@@ -264,7 +264,7 @@ def test_a_missing_range_result_fails_the_whole_file():
     asked = []                                                     # an answer missing a field counts as no answer
     out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, {k: v for k, v in CHECK_OK.items() if k != "redactions"}),
                          ai.Meter(FakeBudget(ok=True)), cache)
-    assert out == {1: None} and len(asked) == 1 and cache["check"] == {}
+    assert out == {1: None} and len(asked) == 3 and cache["check"] == {}     # over 40 pages: in parts whatever its size
 
 
 def _box(page):
@@ -406,15 +406,86 @@ def test_compare_pair_returns_the_relation_and_neutralises_tags():
     assert "</file>" not in text and "<file>" not in text and "x" * 6001 not in text and m.reserved == 0.002 and m.spent == 0.001
 
 
-def test_compare_pair_falls_back_to_different():
+def test_compare_pair_gives_none_without_an_answer():                          # final review, finding 11
     good = lambda c, on_cost=None: {"relation": "same"}
-    assert ai.compare_pair("a", "b", good, _meter(False)) == "different"
+    assert ai.compare_pair("a", "b", good, _meter(False)) is None                  # refused for budget: not compared
     for bad in (None, {}, {"relation": "identical"}, {"relation": 3}, "same", ["same"]):
-        assert ai.compare_pair("a", "b", lambda c, on_cost=None, bad=bad: bad, _meter()) == "different"
+        assert ai.compare_pair("a", "b", lambda c, on_cost=None, bad=bad: bad, _meter()) is None
     def boom(c, on_cost=None): raise RuntimeError("x")
-    assert ai.compare_pair("a", "b", boom, _meter()) == "different"
+    assert ai.compare_pair("a", "b", boom, _meter()) is None
     for r in ("same", "different_set", "different_version", "different"):
         assert ai.compare_pair("a", "b", lambda c, on_cost=None, r=r: {"relation": r}, _meter()) == r
+
+
+# ---- final review: failed checks are counted, long files go in parts, PyMuPDF only under the lock
+
+def test_a_check_that_keeps_failing_is_paid_twice_then_waits_for_retry():      # finding 3
+    asked, b, cache = [], FakeBudget(ok=True), {"check": {}}
+    for run in range(3):                                                        # three rebuilds of the same upload
+        assert ai.check_items(ITEMS3, {1}, fake_ask(asked, None), ai.Meter(b), cache) == {1: None}
+    assert len(asked) == 2 and len(b.reserved) == 2                             # the third makes no call, reserves nothing
+    assert cache["check_failed"] == {ITEMS3[0].sha: 2} and cache["check"] == {} and ai.failed_checks(cache, ITEMS3[0].sha) == 2
+    stray = []                                                                  # an answer that cannot be used counts too
+    c2 = {"check": {}}
+    ai.check_items(ITEMS3, {1}, fake_ask(stray, dict(CHECK_OK, redactions=[_box(9)])), ai.Meter(FakeBudget(ok=True)), c2)
+    assert c2["check_failed"] == {ITEMS3[0].sha: 1}
+    refused = {"check": {}}                                                     # no budget: no call, no failure
+    ai.check_items(ITEMS3, {1}, fake_ask(asked, None), ai.Meter(FakeBudget(ok=False)), refused)
+    assert len(asked) == 2 and "check_failed" not in refused
+    calm = {"check": {}}                                                        # nothing sent (the part could not be cut)
+    real = ai.check_content
+    ai.check_content = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("cannot read page"))
+    try:
+        ai.check_items(ITEMS3, {1}, fake_ask(asked, None), ai.Meter(FakeBudget(ok=True)), calm)
+    finally:
+        ai.check_content = real
+    assert len(asked) == 2 and "check_failed" not in calm
+    good = {"check": {}, "check_failed": {ITEMS3[0].sha: 1, "other": 2}}        # an answer clears the count
+    assert ai.check_items(ITEMS3, {1}, fake_ask([], CHECK_OK), ai.Meter(FakeBudget(ok=True)), good)[1] == CHECK_OK
+    assert good["check_failed"] == {"other": 2}
+    for broken in ("x", ["a"], {ITEMS3[0].sha: "2"}, {ITEMS3[0].sha: True}):
+        c = {"check": {}, "check_failed": broken}
+        asked3 = []
+        ai.check_items(ITEMS3, {1}, fake_ask(asked3, None), ai.Meter(FakeBudget(ok=True)), c)
+        assert len(asked3) == 1 and c["check_failed"][ITEMS3[0].sha] == 1, broken
+
+
+def test_a_long_pdf_is_sent_in_parts_whatever_its_size():                      # finding 4
+    asked = []
+    out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), {"check": {}})
+    assert out[1] is not None and len(asked) == 3 and sorted(_part(c) for c in asked) == [1, 2, 3]
+    assert sorted(len(d) for c in asked for d in _docs(c)) == [10, 25, 25]
+    for n, calls in ((40, 1), (41, 2)):
+        it = Item(1, "p.pdf", pdf(W / f"p{n}.pdf", [f"page {i + 1}" for i in range(n)]), str(n) * 64, "pdf", n, False, [""] * n)
+        it.view = it.path
+        asked = []
+        ai.check_items([it], {1}, fake_ask(asked, CHECK_OK), ai.Meter(FakeBudget(ok=True)), {})
+        assert len(asked) == calls, n
+
+
+def test_pymupdf_is_only_used_under_the_lock_in_worker_threads():              # finding 5
+    import fitz, threading
+
+    class Watched:
+        def __init__(self): self.lock, self.held, self.entered = threading.Lock(), 0, 0
+        def __enter__(self): self.lock.acquire(); self.held += 1; self.entered += 1; return self
+        def __exit__(self, *a): self.held -= 1; self.lock.release()
+    watched, unlocked, real_lock, real_open = Watched(), [], ai._FITZ, fitz.open
+
+    def spy(*a, **k):
+        if not watched.held:
+            unlocked.append(threading.current_thread().name)
+        return real_open(*a, **k)
+    scans = [Item(k, f"s{k}.pdf", pdf(W / f"s{k}.pdf", ["", "", "", ""]), str(k) * 64, "pdf", 4, True, [""] * 4) for k in (1, 2, 3)]
+    for it in scans:
+        it.view = it.path
+    ai._FITZ, fitz.open = watched, spy
+    try:
+        ai.sort_items(scans, FORM, CAT, fake_ask([], SORT_OK), ai.Meter(FakeBudget(ok=True)), {})
+        ai.check_items(scans, {1, 2, 3}, fake_ask([], CHECK_OK), ai.Meter(FakeBudget(ok=True)), {}, max_b64=10)
+    finally:
+        ai._FITZ, fitz.open = real_lock, real_open
+    assert watched.entered == 6 and unlocked == []                               # 3 first-page copies, 3 page ranges
 
 
 def test_compare_schema_prompt_and_ask():

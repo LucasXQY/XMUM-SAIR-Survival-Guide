@@ -696,7 +696,7 @@ def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", f
     `pages` gives some of them more than one page. `pdf_text` is file 1's text (or {k: text}); `scanned` makes file 1 a
     scan (pictures, no text layer), `image` gives file 1's pages a picture beside the text, `annotated` a highlight and a
     note that hold personal data (see _pdf_bytes). `verify` and `compare` are
-    the fake re-check's and comparison's answers; `prepare(repo)` runs on the repo copy before the run. The run's
+    the fake re-check's and comparison's answers (compare=False: no comparison can be asked at all); `prepare(repo)` runs on the repo copy before the run. The run's
     ledger is gh.budget; the PDFs the thumbnail sheet was made from are kept for thumbnail_sources."""
     import zipfile
     tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp())
@@ -714,6 +714,8 @@ def run_with_fakes(sorts, checks, member=None, gh=None, zip_name="papers.zip", f
     gh.budget = FakeBudget()
     git = FakeGit()
     asks = fake_claude(gh, sorts, checks, during, verify, compare)
+    if compare is False:
+        del asks["compare"]
     real, real_thumbs = intake.download, intake.thumbnails
 
     def thumbs(pdfs, out_png, *a, **kw):
@@ -844,6 +846,22 @@ def test_unchecked_files_wait_for_a_retry():
     assert ("check", 2) not in gh.ai_calls                                              # an unsorted file is not checked
     text = next(c[2] for c in gh.calls if c[0] == "upsert_comment")
     assert "#1" in text and "#2" in text and "/retry" in text.split("## 需要你看")[1].split("## 打码记录")[0]
+
+
+def test_a_check_that_keeps_failing_waits_for_retry_after_two_tries():       # final review, finding 3
+    gh = FakeGH()
+    for run in range(3):                                                        # the check never gives an answer
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: None}, gh=gh)
+        assert committed_pdfs(tmp) == []
+    assert gh.ai_calls.count(("check", 1)) == 2 and gh.cache["check_failed"] == {SHA1: 2}
+    needs = _section(issue_comment_or_body(gh), "## 需要你看", "## 打码记录")
+    assert "检查失败 2 次，用 `/retry` 再试 | the check failed 2 times; use `/retry` to try again" in needs
+    assert "之后的重建会再试" not in needs
+    assert intake.store_commands(_event("/retry"), gh) == 5
+    git, gh, tmp = run_with_fakes({}, {1: CHECK_OK}, gh=gh)                      # /retry: asked again, and it answers
+    assert gh.ai_calls.count(("check", 1)) == 3 and committed_pdfs(tmp) == [FINAL] and not gh.cache.get("check_failed")
+    data = {"overrides": {"_retry": {"seq": 2}}, "retry_done": 1, "check_failed": {"a": 2, "b": 1}}
+    assert intake.apply_retry(data) and data["check_failed"] == {}             # /retry clears every count
 
 
 def test_overrides_steer_the_next_run():
@@ -1208,6 +1226,19 @@ def test_a_near_duplicate_of_a_repo_file_is_not_taken():
     gh = FakeGH(cache={"overrides": {_sha_of(gh, 1): {"keep": True}}})                  # /keep takes it back
     git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, gh=gh, pdf_text=LONG_A, prepare=_old_paper(LONG_A))
     assert committed_pdfs(tmp) == [OLD.replace("_Question.pdf", "_Question_2.pdf")]
+
+
+def test_a_comparison_that_gave_no_answer_flags_a_possible_duplicate():      # final review, finding 11
+    for answer in ("nonsense", False):                      # an answer outside the list; no comparison possible at all
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, pdf_text=LONG_B + "Question 4 upload second page",
+                                      prepare=_old_paper(LONG_A + "Question 4 archive second page"), compare=answer)
+        assert committed_pdfs(tmp) == ["EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question_2.pdf"]
+        body = pr_body_of(gh)
+        worth = body.split("不挡合并，但请留意")[1].split("## 打码记录")[0]
+        assert "可能重复，未比较 | possible duplicate, not compared" in worth, answer
+        assert ("draft", 1, False) in gh.calls and ("status", "HEAD", True) in gh.calls, answer       # not blocking
+    git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: CHECK_OK}, pdf_text=LONG_B, prepare=_old_paper(LONG_A), compare="different")
+    assert "可能重复" not in pr_body_of(gh)                                        # a real "different" is just committed
 
 
 def test_a_similar_repo_file_is_compared_and_the_answer_names_the_file():
