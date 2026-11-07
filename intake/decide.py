@@ -147,6 +147,24 @@ def _usable_place(p) -> dict | None:
     return {"code": code, "session": session, "type": typ, "label": _label(p.get("label"))}
 
 
+def _variant(v) -> dict:
+    """A usable {"set": "B"} or {"version": 2}; anything else is no variant."""
+    if not isinstance(v, dict):
+        return {}
+    letter = v.get("set")
+    if isinstance(letter, str) and re.fullmatch(r"[A-Z]", letter.strip().upper()):
+        return {"set": letter.strip().upper()}
+    n = v.get("version")
+    if type(n) is int and n >= 2:
+        return {"version": n}
+    return {}
+
+
+def _suffixed(label: str, suffix: str) -> str:
+    """The label cut so that label + suffix still fits LABEL_MAX: the suffix is what makes the name different."""
+    return _label(_label(label)[:LABEL_MAX - len(suffix)].rstrip("_.") + suffix)
+
+
 def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
     override = override or {}
     k = item.k
@@ -229,7 +247,7 @@ def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
             return done("review", f"需要你看：{zh} | needs a look: {en}", **placed)
         flags.append(f"approved_by:{approved}")
 
-    variant = variant if isinstance(variant, dict) else {}
+    variant = _variant(variant)
     if variant.get("set"):
         flags.append("new_set")
     elif variant.get("version"):
@@ -237,11 +255,10 @@ def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
     if not code:
         return done("inbox", "课程不明，放入待整理 | course unknown, held in the inbox")
     if variant.get("set"):
-        letter = _strip_set(str(variant["set"]))
         if typ == "Past-Papers":
-            placed["set"] = letter
+            placed["set"] = variant["set"]
         else:
-            placed["label"] = _label(f"{label or typ.replace('-', '')}_Set{letter}")
+            placed["label"] = _suffixed(label or typ.replace("-", ""), f"_Set{variant['set']}")
     elif variant.get("version"):
-        placed["label"] = _label(f"{label or typ.replace('-', '')}_v{int(variant['version'])}")
+        placed["label"] = _suffixed(label or typ.replace("-", ""), f"_v{variant['version']}")
     return done("commit", "提交 | committed", **placed)

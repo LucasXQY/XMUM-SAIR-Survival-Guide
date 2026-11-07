@@ -113,6 +113,49 @@ def test_decide_variant_ignored_unless_committed_or_inbox_and_positional_compati
     assert d.set == "" and d.label == "Final" and not {"new_set", "new_version"} & set(d.flags)
 
 
+def test_candidates_cache_reads_each_pdf_once():
+    import fitz
+    root, course = repo()
+    pdf(course / "Past-Papers" / "a.pdf", A)
+    pdf(course / "Past-Papers" / "b.pdf", "Lab manual for oscilloscopes")
+    opens, real = [], fitz.open
+    fitz.open = lambda *a, **k: (opens.append(a), real(*a, **k))[1]
+    try:
+        cache = {}
+        first = dedupe.candidates(item(A), course, cache=cache)
+        n = len(opens)
+        assert n == 2 and len(cache) == 2
+        assert dedupe.candidates(item(A), course, cache=cache) == first and len(opens) == n
+    finally:
+        fitz.open = real
+
+
+def test_chinese_only_pages_match():
+    zh = "期末考试 电路分析 第一题 求电流"
+    assert dedupe.normalise(zh)[:2] == ["期", "末"] and dedupe.classify(dedupe.similarity(zh, zh)) == "same"
+    assert dedupe.classify(dedupe.similarity(zh, "实验手册 示波器使用")) == "different"
+
+
+def test_long_labels_keep_their_suffix_and_metacharacters_are_safe():
+    long = "A" * 40
+    srt = decide.Sort("COM107", "C", "2022-04", "Notes", long, "", "", True, "", True, "")
+    d = decide.decide(item(A), srt, CLEAN, intake.Form(), None, None, {"version": 2})
+    assert d.label.endswith("_v2") and len(d.label) <= decide.LABEL_MAX and d.label != long
+    d = decide.decide(item(A), srt, CLEAN, intake.Form(), None, None, {"set": "B"})
+    assert d.label.endswith("_SetB") and len(d.label) <= decide.LABEL_MAX
+    root, course = repo()
+    name = decide.file_name("COM107", "2022-04", "Notes", "Lab(2)+", "", "pdf", set())
+    (course / name).write_text("x")
+    assert dedupe.next_version(course, "COM107", "2022-04", "Lab(2)+") == 2
+    assert dedupe.next_set(course, "COM107", "2022-04", "Lab(2)+") == "B"
+
+
+def test_bad_variants_are_ignored():
+    for v in ({"version": "x"}, {"version": 1}, {"version": True}, {"set": "AB"}, {"set": "1"}, {"set": 5}, "B", []):
+        d = decide.decide(item(A), SORT, CLEAN, intake.Form(), None, None, v)
+        assert d.set == "" and d.label == "Final" and not {"new_set", "new_version"} & set(d.flags), v
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

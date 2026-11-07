@@ -6,13 +6,15 @@ import difflib
 import re
 from pathlib import Path
 
+import ai   # for the PyMuPDF lock (ai._FITZ), shared with every other fitz user
+
 SAME_AT = 0.9
 ASK_AT = 0.6
-_WORD = re.compile(r"[a-z0-9]{2,}")
+_WORD = re.compile(r"[a-z0-9]{2,}|[一-鿿]")
 
 
 def normalise(text: str) -> list[str]:
-    """Lower-case words of 2+ letters or digits."""
+    """Lower-case words of 2+ letters or digits; each Han character is a token of its own."""
     return _WORD.findall(str(text or "").lower())
 
 
@@ -31,15 +33,16 @@ def first_page_text(path: Path) -> str | None:
     """Text of the first page of a PDF, None when it cannot be read."""
     try:
         import fitz
-        with fitz.open(path) as doc:
+        with ai._FITZ, fitz.open(path) as doc:
             return doc[0].get_text() if len(doc) else None
     except Exception:
         return None
 
 
-def candidates(item, course_dir: Path | None, root: Path | None = None) -> list[tuple[str, float]]:
+def candidates(item, course_dir: Path | None, root: Path | None = None, cache: dict | None = None) -> list[tuple[str, float]]:
     """[(repo-relative posix path, score)] of PDFs under course_dir whose first page scores >= ASK_AT against the item's,
-    best first. Scanned items, items without page text and a missing folder give []. Unreadable PDFs are skipped."""
+    best first. `cache` (path -> first-page text or None) is filled and reused, so a run reads each repo PDF once. Safe to
+    call from worker threads: PDFs are opened under ai._FITZ. Scanned items, items without page text and a missing folder give []. Unreadable PDFs are skipped."""
     if course_dir is None or item.scanned or not item.page_text or not Path(course_dir).is_dir():
         return []
     mine = item.page_text[0]
@@ -51,7 +54,13 @@ def candidates(item, course_dir: Path | None, root: Path | None = None) -> list[
     for p in sorted(course_dir.rglob("*")):
         if not p.is_file() or p.suffix.lower() != ".pdf":
             continue
-        text = first_page_text(p)
+        key = str(p)
+        if cache is not None and key in cache:
+            text = cache[key]
+        else:
+            text = first_page_text(p)
+            if cache is not None:
+                cache[key] = text
         if text is None:
             continue
         score = similarity(mine, text)
