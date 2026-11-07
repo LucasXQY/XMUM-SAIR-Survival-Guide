@@ -128,7 +128,8 @@ answers is fine. "yes", "no" or "unsure".
 - personal_data: student names, student IDs (letters followed by digits, such as ABC2109123), signatures, photos of people, \
 personal phone numbers or personal email addresses, Moodle enrolment keys, QR codes. Lecturers' university addresses ending \
 in @xmu.edu.my are fine. "yes", "no" or "unsure". Answer "yes" whenever redactions is not empty.
-- redactions: every personal-data item to black out, one entry per item (an empty list when there is none):
+- redactions: every personal-data item to black out (an empty list when there is none). Give one entry for each page \
+an item appears on, repeated headers and footers included, and one box per occurrence:
   - page: the page it is on, counting from 1 at the first page of the PDF you were given.
   - On a page with selectable text: kind "text", and text = the item copied EXACTLY as it appears on the page, the \
 shortest string that covers it (just the ID or just the name, not the whole line); box = [0, 0, 0, 0].
@@ -136,8 +137,8 @@ shortest string that covers it (just the ID or just the name, not the whole line
 0–1000 page coordinates (origin at the top left, x to the right, y down), generously covering the item; text = "".
   - what: a short category label in the form "中文 | English", such as "学号 | student ID", "姓名 | name", \
 "签名 | signature", "二维码 | QR code". NEVER the value itself.
-- lecturers: the lecturers' names printed on a syllabus or course introduction (public academic staff); an empty list \
-for any other file.
+- lecturers: the lecturers' names printed on a syllabus or course introduction (public academic staff); names only, no \
+contact details; an empty list for any other file.
 - weighting: the assessment breakdown as printed, such as "Final 50%, Midterm 30%, Coursework 20%"; "" when the file \
 shows none.
 - summary: what the file is, one short sentence in Chinese, then " | ", then the same in English.
@@ -323,43 +324,47 @@ def check_content(item, part: tuple[int, int] | None = None, n_parts: int = 1, i
     return [_pdf_block(data), {"type": "text", "text": "\n".join(lines)}]
 
 
-_PAGE_REF = re.compile(r"(第\s*|\bpages?\s*|\bp\.\s*)(\d{1,4})(?:(\s*[-–~]\s*)(\d{1,4}))?", re.I)
+# the page references intake.PAGE_RE reads ("第 3 页", "page 3", "p. 3"), plus ranges ("第 3–5 页", "pages 3–5")
+_PAGE_REF = re.compile(r"(第\s*)(\d{1,4})(?:(\s*[-–~]\s*)(\d{1,4}))?(?=\s*页)"
+                       r"|(\bpages?\s*|\bp\.\s*)(\d{1,4})(?:(\s*[-–~]\s*)(\d{1,4}))?(?!\d)", re.I)
 
 
 def _shift_pages(text: str, offset: int) -> str:
-    """Page references in one part's notes ("第 3 页", "page 3", "pages 3–5", "p. 3"), counted from the file's start."""
+    """Page references in one part's notes, counted from the file's start instead of the part's. "第 3 题" is a
+    question, not a page: left alone."""
     def sub(m):
-        out = m.group(1) + str(int(m.group(2)) + offset)
-        return out + (m.group(3) + str(int(m.group(4)) + offset) if m.group(4) else "")
+        pre, a, dash, b = m.group(1, 2, 3, 4) if m.group(1) is not None else m.group(5, 6, 7, 8)
+        return pre + str(int(a) + offset) + (dash + str(int(b) + offset) if b else "")
     return _PAGE_REF.sub(sub, text) if offset else text
+
+
+def pages_in_range(v: dict, n: int) -> bool:
+    """Every redaction names a page of the PDF it came from (an int, 1..n). One that does not would black out the
+    wrong page and leave the real one, so the whole answer is refused."""
+    return all(type(r.get("page")) is int and 1 <= r["page"] <= n for r in v["redactions"])
 
 
 def _rank(v) -> int:
     return SEVERITY.get(v, len(SEVERITY)) if isinstance(v, str) else len(SEVERITY)
 
 
-def merge_parts(parts: list[tuple[int, dict | None]]) -> dict | None:
-    """One answer from the answers for consecutive page ranges, [(first page index, answer)]; None when any is missing.
-    Redactions are pooled with their pages moved by the range's offset; answers, marking_scheme and personal_data take
-    the most severe value (yes > unsure > no); summaries and notes are joined with " / "; lecturers deduplicated in
-    order; the first weighting given."""
-    if not parts or not all(check_ok(v) for _, v in parts):
+def merge_parts(parts: list[tuple[int, int, dict | None]]) -> dict | None:
+    """One answer from the answers for consecutive page ranges, [(first page index, pages in the range, answer)]; None
+    when any is missing, incomplete, or has a redaction outside its own range's pages. Redactions are pooled with their
+    pages moved by the range's offset; answers, marking_scheme and personal_data take the most severe value
+    (yes > unsure > no); summaries and notes are joined with " / "; lecturers deduplicated in order; the first
+    weighting given."""
+    if not parts or not all(check_ok(v) and pages_in_range(v, n) for _, n, v in parts):
         return None
 
     def joined(texts):
         return " / ".join(dict.fromkeys(t.strip() for t in texts if t.strip()))
-    out = {key: max((v[key] for _, v in parts), key=_rank) for key in ("answers", "marking_scheme", "personal_data")}
-    out["summary"] = joined(v["summary"] for _, v in parts)
-    out["notes"] = joined(_shift_pages(v["notes"], off) for off, v in parts)
-    out["lecturers"] = list(dict.fromkeys(x for _, v in parts for x in v["lecturers"]))
-    out["weighting"] = next((v["weighting"].strip() for _, v in parts if v["weighting"].strip()), "")
-    out["redactions"] = []
-    for off, v in parts:
-        for r in v["redactions"]:
-            r = dict(r)
-            if type(r.get("page")) is int:
-                r["page"] += off
-            out["redactions"].append(r)
+    out = {key: max((v[key] for _, _, v in parts), key=_rank) for key in ("answers", "marking_scheme", "personal_data")}
+    out["summary"] = joined(v["summary"] for _, _, v in parts)
+    out["notes"] = joined(_shift_pages(v["notes"], off) for off, _, v in parts)
+    out["lecturers"] = list(dict.fromkeys(x for _, _, v in parts for x in v["lecturers"]))
+    out["weighting"] = next((v["weighting"].strip() for _, _, v in parts if v["weighting"].strip()), "")
+    out["redactions"] = [dict(r, page=r["page"] + off) for off, _, v in parts for r in v["redactions"]]
     return out
 
 
@@ -367,8 +372,9 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
     """{k: answer or None} for the items numbered in `keep` (sorted as keep, or kept/placed by a maintainer).
     A complete answer cached in cache["check"][sha] is reused without a call. No call (None) for an item without a view,
     an unreadable PDF, or more than CHECK_MAX_PAGES pages (recorded as cache["check_skipped"][sha] = "too_long").
-    Each other item, in order, reserves check_estimate(pages) on `meter`; a refused reservation leaves that item None and
-    the next one is still tried. A view whose base64 would exceed `max_b64` goes in page ranges, one call each, merged by
+    An answer (fresh or cached) with a redaction on a page the file, or its range, does not have counts as no answer.
+    Each other item, in order, reserves check_estimate(pages) on `meter`; a refused reservation leaves that item None
+    and the next one is still tried. A view whose base64 would exceed `max_b64` goes in page ranges, one call each, merged by
     merge_parts. Up to WORKERS calls at once, each call's cost added to `meter`. Answers are cached as given (the
     cache scrubs them when it is saved; the redaction text is needed in memory this run); failures never are."""
     store = cache.setdefault("check", {})
@@ -377,7 +383,7 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
     for it in items:
         if it.k not in keep:
             continue
-        if check_ok(store.get(it.sha)):
+        if check_ok(store.get(it.sha)) and pages_in_range(store[it.sha], it.pages):
             out[it.k] = store[it.sha]
             continue
         out[it.k] = None
@@ -411,8 +417,11 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
         n = len(ranges) if ranges else 1
         got = results[at:at + n]
         at += n
-        v = got[0] if ranges is None else merge_parts([(r[0], g) for r, g in zip(ranges, got)])
-        if check_ok(v):
+        if ranges is None:
+            v = got[0] if check_ok(got[0]) and pages_in_range(got[0], it.pages) else None
+        else:
+            v = merge_parts([(a, b - a + 1, g) for (a, b), g in zip(ranges, got)])
+        if v is not None:
             out[it.k] = store[it.sha] = v
         else:
             print(f"check: item {it.k}: no usable answer", file=sys.stderr)

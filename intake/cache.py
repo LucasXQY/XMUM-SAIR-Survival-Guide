@@ -13,13 +13,14 @@ sys.path.insert(0, str(HERE))
 import claude_check as cc
 from intake import PII_RE
 
-NOTE_KEYS = ("summary", "notes", "note")
+NOTE_KEYS = ("summary", "notes", "note", "weighting", "lecturers")   # Claude's free text
 WHAT_MAX = 40
 TRIES = 5          # writes retried after a Conflict
 
 
 def _note(v):
-    """Every string beneath a summary/notes/note key is free text: blank the ones that look personal."""
+    """Every string beneath a NOTE_KEYS key (summary, notes, note, weighting, lecturers) is free text: blank the ones
+    that look personal."""
     if isinstance(v, str):
         return "" if PII_RE.search(v) else v
     if isinstance(v, dict):

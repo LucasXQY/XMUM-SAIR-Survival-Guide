@@ -393,6 +393,7 @@ NOT_CHECKED = {
     "too_long": "超过 100 页，没有检查 | over 100 pages, not checked",
     "no_view": "没能转成 PDF 给 Claude 看，没有检查 | could not be turned into a PDF for Claude, not checked",
     "unreadable": "PDF 打不开，没有检查 | the PDF cannot be opened, not checked",
+    "plain_text": "纯文本文件暂不自动检查 | plain-text files are not checked automatically yet",
     "unsorted": "没分拣成（额度或调用失败），之后的重建会再试，也可以 /retry | not sorted (budget or a failed call); a later rebuild tries again, or /retry",
 }
 
@@ -1131,16 +1132,29 @@ def _check(items: list, keep: set[int], ask, meter, cache: dict) -> dict:
     return {it.k: store.get(it.sha) for it in items if it.k in keep}
 
 
+LECTURERS_MAX, LECTURER_CHARS, WEIGHTING_CHARS = 5, 80, 200   # Claude's text bound for a course README
+
+
+def _public(text: str, limit: int) -> str:
+    """Claude's text for a README cell: stripped and capped, or "" when it (or what is kept of it) looks personal."""
+    text = str(text or "").strip()
+    cut = text[:limit].strip()
+    return "" if PII_RE.search(text) or PII_RE.search(cut) else cut
+
+
 def _check_of(raw):
     """A check answer as a decide.Check: exactly the schema's keys, each of its type (ai.check_ok), else None.
-    Something to black out is personal data, whatever personal_data says."""
+    Something to black out is personal data, whatever personal_data says. lecturers and weighting go into a course
+    README (a commit): an entry that looks personal is dropped, and both are capped."""
     import ai
     from decide import Check
     if not ai.check_ok(raw):
         return None
     fields = {k: raw[k] for k in ai.CHECK_KEYS}
     fields["redactions"] = [dict(r) for r in fields["redactions"]]
-    fields["lecturers"] = list(fields["lecturers"])
+    lecturers = [_public(x, LECTURER_CHARS) for x in fields["lecturers"]]
+    fields["lecturers"] = [x for x in lecturers if x][:LECTURERS_MAX]
+    fields["weighting"] = _public(fields["weighting"], WEIGHTING_CHARS)
     if fields["redactions"] and fields["personal_data"] == "no":
         fields["personal_data"] = "yes"
     return Check(**fields)
@@ -1149,8 +1163,9 @@ def _check_of(raw):
 def _why_unchecked(it, asked: bool) -> str:
     """The NOT_CHECKED key for a kept file without a usable check."""
     import ai
+    from items import OFFICE_EXTS
     if it.view is None:
-        return "no_view"
+        return "no_view" if it.ext in OFFICE_EXTS else "plain_text"
     if it.pages < 1:
         return "unreadable"
     if it.pages > ai.CHECK_MAX_PAGES:

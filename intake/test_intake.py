@@ -348,15 +348,20 @@ def test_dry_run_end_to_end():
 
 def test_dry_run_with_nothing_committable_writes_the_issue_comment():
     import os, subprocess, sys
-    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); (w / "old.doc").write_bytes(b"\xd0\xcf legacy")   # old format: never checked
+    tmp = _repo_copy(); w = pathlib.Path(tempfile.mkdtemp()); (w / "old.doc").write_bytes(b"\xd0\xcf legacy")   # cannot be converted
+    (w / "notes.txt").write_text("Tips for the final", encoding="utf-8")                                       # never given a view
     form = w / "form.md"; form.write_text(_body(), encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     r = subprocess.run([sys.executable, str(ROOT / "intake/intake.py"), "--dry-run", "--form", str(form), "--files", str(w / "old.doc"),
-                        "--repo", str(tmp), "--issue", "8", "--work", str(w / "work")], capture_output=True, text=True, encoding="utf-8", env=env)
+                        str(w / "notes.txt"), "--repo", str(tmp), "--issue", "8", "--work", str(w / "work")],
+                       capture_output=True, text=True, encoding="utf-8", env=env)
     assert r.returncode == 0, r.stderr
     text = (w / "work/ISSUE_COMMENT.md").read_text(encoding="utf-8")
     assert not (w / "work/PR_BODY.md").exists() and "需要你看" in text and "#1" in text and "Closes" not in text
-    assert not list(tmp.rglob("*.doc"))
+    needs = text.split("## 需要你看")[1].split("## 打码记录")[0]
+    one, two = (next(l for l in needs.splitlines() if l.startswith(f"- #{k} ")) for k in (1, 2))
+    assert "没能转成 PDF" in one and "纯文本文件暂不自动检查 | plain-text files are not checked automatically yet" in two
+    assert not list(tmp.rglob("*.doc")) and not list(tmp.rglob("*.txt"))
 
 
 def test_the_fixture_form_is_valid():
@@ -489,6 +494,15 @@ def test_check_results_map_to_check_only_with_every_schema_key():
     box = {"page": 1, "kind": "box", "box": [0, 0, 9, 9], "text": "", "what": "签名 | signature"}
     assert intake._check_of(dict(FULL, redactions=[box])).personal_data == "yes"          # something to black out
     assert intake._check_of(dict(FULL, answers="maybe")).answers == "maybe"               # decide() calls it unreadable
+
+
+def test_lecturers_and_weighting_are_filtered_and_capped():
+    lect = ["Dr Tan", "tan@gmail.com", "ABC2109123", "Dr Lim (call 0123456789)", " ", "x" * 100, "A", "B", "C", "D"]
+    c = intake._check_of(dict(FULL, lecturers=lect, weighting="ABC2109123 Final 60%"))
+    assert c.lecturers == ["Dr Tan", "x" * 80, "A", "B", "C"] and c.weighting == ""       # 5 entries x 80 characters
+    assert intake._check_of(dict(FULL, weighting=" Final 60%, " + "y" * 300)).weighting == ("Final 60%, " + "y" * 300)[:200]
+    assert intake._check_of(dict(FULL, weighting="mail a.b@gmail.com for marks")).weighting == ""
+    assert intake._check_of(dict(FULL, weighting="Final 50%, Lab 20% (lecturer: tan@xmu.edu.my)")).weighting.startswith("Final 50%")
 
 
 # ---- the whole run with fakes: GitHub, git, the bot-state cache and Claude all in memory
@@ -733,6 +747,42 @@ def test_overrides_steer_the_next_run():
     assert any(p.endswith("2022-04/Notes/COM107_202204_Notes.pdf") for p in files)                 # /keep
     body = pr_body_of(gh)
     assert "`m-1`" in body and "@m-1" not in body and "Closes #5" in body and ("draft", 1, False) in gh.calls
+
+
+def test_personal_text_in_lecturers_or_weighting_reaches_no_readme_and_no_cache():
+    sorts = {1: dict(SORT_OK, session="2023-09"), 2: dict(SORT_OK, session="2024-02", label="Midterm", assessment="Midterm")}
+    checks = {1: dict(CHECK_OK, lecturers=["Dr Tan", "tan@gmail.com", "ABC2109123", "call 0123456789"], weighting="ABC2109123 Final 60%"),
+              2: dict(CHECK_OK, lecturers=["Dr Lim"], weighting="Final 60%, Coursework 40%")}
+    git, gh, tmp = run_with_fakes(sorts, checks)
+    readme = (tmp / "EEE/COM107_Circuits_and_Devices/README.md").read_text(encoding="utf-8")
+    row1 = next(l for l in readme.splitlines() if l.startswith("| [2023-09]"))
+    row2 = next(l for l in readme.splitlines() if l.startswith("| [2024-02]"))
+    assert "| Dr Tan |  |" in row1 and "| Dr Lim | Final 60%, Coursework 40% |" in row2   # clean text still flows
+    for bad in ("gmail", "ABC2109123", "0123456789"):
+        assert bad not in readme and bad not in json.dumps(gh.cache_writes, ensure_ascii=False), bad
+        assert bad not in json.dumps(gh.calls, ensure_ascii=False) and bad not in json.dumps(git.calls, ensure_ascii=False), bad
+
+
+def test_redaction_targets_never_leave_the_run():                           # this task's privacy invariant
+    import contextlib, io
+    found = dict(CHECK_OK, personal_data="yes", notes="第 1 页页眉 | page 1 header", redactions=[
+        {"page": 1, "kind": "text", "text": "EEE2109300", "box": [0, 0, 0, 0], "what": "学号 EEE2109300 | student ID EEE2109300"},
+        {"page": 1, "kind": "text", "text": "Zhang San", "box": [0, 0, 0, 0], "what": "姓名 | name"}])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found})
+    assert gh.ai_calls == [("sort", 1), ("check", 1)] and gh.cache_writes
+    for secret in ("EEE2109300", "Zhang San"):
+        assert secret not in json.dumps(gh.calls, ensure_ascii=False), secret
+        assert secret not in json.dumps(git.calls, ensure_ascii=False), secret
+        assert secret not in json.dumps(gh.cache_writes, ensure_ascii=False), secret
+        assert secret not in out.getvalue(), secret
+    text = next(c[2] for c in gh.calls if c[0] == "upsert_comment")                 # no redaction yet: held back
+    assert "#1" in text.split("## 需要你看")[1].split("## 打码记录")[0] and git.calls == [("reset", "upload/issue-5")]
+    assert "第 1 页" in text.split("## 打码记录")[1].split("## 登记")[0]                # the page, never the text
+    assert not any(p.endswith("COM107_202204_Final_Question.pdf") for p in files_in(tmp))
+    stored = gh.cache["check"][_sha(1)]["redactions"]
+    assert [r.get("text") for r in stored] == [None, None] and [r["page"] for r in stored] == [1, 1]   # pages kept, text never
 
 
 def test_a_file_over_100_pages_is_held_back_unchecked():

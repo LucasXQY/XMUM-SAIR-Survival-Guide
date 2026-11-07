@@ -97,6 +97,15 @@ def test_scrub_redaction_label_and_nested_notes():
     assert c["check"]["t"]["summary"] == ["", "plain"]
 
 
+def test_scrub_blanks_personal_lecturers_and_weighting():
+    data = {"check": {"s": {"lecturers": ["Dr Tan", "tan@gmail.com", "ABC2109123"], "weighting": "ABC2109123 Final 60%"},
+                      "t": {"lecturers": ["Dr Lim"], "weighting": "Final 50%, Midterm 50%"}}}
+    c = cache.scrub(data)
+    assert c["check"]["s"] == {"lecturers": ["Dr Tan", "", ""], "weighting": ""}
+    assert c["check"]["t"] == {"lecturers": ["Dr Lim"], "weighting": "Final 50%, Midterm 50%"}
+    assert "gmail" not in json.dumps(c) and "ABC2109123" not in json.dumps(c)
+
+
 PATH = "intake-cache/issue-7.json"
 
 

@@ -260,6 +260,39 @@ def test_a_missing_range_result_fails_the_whole_file():
     assert out == {1: None} and len(asked) == 1 and cache["check"] == {}
 
 
+def _box(page):
+    return {"page": page, "kind": "box", "box": [0, 0, 10, 10], "text": "", "what": "学号 | student ID"}
+
+
+def test_a_redaction_outside_its_range_fails_the_whole_file():
+    # part 2 has 25 pages: page 27 would have landed on the file's page 52, page 0 on page 25
+    for stray in (27, 0, -1, "3", 2.0, None, True):
+        asked, cache = [], {"check": {}}
+        answer = lambda c: dict(CHECK_OK, redactions=[_box(stray if _part(c) == 2 else 1)])
+        out = ai.check_items([BIG_60_PAGES], {1}, fake_ask(asked, answer), ai.Meter(FakeBudget(ok=True)), cache, max_b64=1_000)
+        assert out == {1: None} and len(asked) == 3 and cache["check"] == {}, stray
+    edge = lambda c: dict(CHECK_OK, redactions=[_box(10 if _part(c) == 3 else 25)])     # the last page of each range
+    out = ai.check_items([BIG_60_PAGES], {1}, fake_ask([], edge), ai.Meter(FakeBudget(ok=True)), {}, max_b64=1_000)
+    assert sorted(r["page"] for r in out[1]["redactions"]) == [25, 50, 60]
+    assert ai.merge_parts([(0, 25, dict(CHECK_OK, redactions=[_box(26)]))]) is None
+
+
+def test_a_redaction_outside_a_whole_file_fails_it():
+    for stray in (3, 0, "1"):                                       # ITEMS3[0] has 2 pages
+        asked, cache = [], {"check": {}}
+        out = ai.check_items(ITEMS3, {1}, fake_ask(asked, dict(CHECK_OK, redactions=[_box(stray)])), ai.Meter(FakeBudget(ok=True)), cache)
+        assert out == {1: None} and len(asked) == 1 and cache["check"] == {}, stray
+    asked = []                                                      # nor is such an answer trusted from the cache
+    cache = {"check": {ITEMS3[0].sha: dict(CHECK_OK, redactions=[_box(9)])}}
+    out = ai.check_items(ITEMS3, {1}, fake_ask(asked, dict(CHECK_OK, redactions=[_box(2)])), ai.Meter(FakeBudget(ok=True)), cache)
+    assert len(asked) == 1 and out[1]["redactions"] == [_box(2)] == cache["check"][ITEMS3[0].sha]["redactions"]
+
+
+def test_page_shifts_touch_pages_only():
+    assert ai._shift_pages("第 3 题 · 第3页 · 第 3–5 页 · 第 2 部分", 25) == "第 3 题 · 第28页 · 第 28–30 页 · 第 2 部分"
+    assert ai._shift_pages("page 3, Pages 4-5, p. 6, page12345", 25) == "page 28, Pages 29-30, p. 31, page12345"
+
+
 def test_files_without_a_view_or_unreadable_are_not_sent():
     no_view = Item(1, "a.docx", W / "a.docx", "7" * 64, "docx", 1, False, ["text"])                 # conversion failed
     broken = Item(2, "x.pdf", W / "x.pdf", "8" * 64, "pdf", 0, True, [], view=W / "x.pdf")          # PyMuPDF cannot open it
@@ -279,7 +312,9 @@ def test_check_schema_prompt_and_ask():
     flat = json.dumps(s)
     assert not any(w in flat for w in ("minItems", "maxItems", "minimum", "maximum"))   # not supported by structured outputs
     p = ai.CHECK_SYSTEM
-    for need in ("@xmu.edu.my", "untrusted", "EXACTLY", "0–1000", "学号 | student ID", "redactions", "weighting", "lecturers"):
+    for need in ("@xmu.edu.my", "untrusted", "EXACTLY", "0–1000", "学号 | student ID", "redactions", "weighting", "lecturers",
+                 "one entry for each page an item appears on, repeated headers and footers included, and one box per occurrence",
+                 "names only, no contact details"):
         assert need in p, need
     seen = []
     real = ai.cc.ask
