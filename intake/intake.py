@@ -219,16 +219,26 @@ def _skip(name: str) -> bool:
     return not parts[-1] or "__MACOSX" in parts or parts[-1].startswith(".")
 
 
-def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[str, Path]], list[tuple[str, str]]]:
-    """Expand zips, apply the whitelist and the limits. Returns (accepted (name, path), rejected (name, reason))."""
+ORIGIN_SEP = " › "   # "<attachment name> › <n>": how a zip member is named outside the zip
+
+
+def unpack(downloads: list[tuple[str, Path]], work: Path
+           ) -> tuple[list[tuple[str, Path]], list[tuple[str, str]], list[str]]:
+    """Expand zips, apply the whitelist and the limits.
+    Returns (accepted (name, path), rejected (name, reason), origins). `origins[i]` is where accepted file i came from:
+    the attachment's own name, or "<zip name> › <n>" for a zip member (n = 1-based position among the zip's
+    non-directory, non-skipped entries, shared by accepted and rejected members). Rejected zip members are named
+    that way too, so a name chosen by the uploader inside a zip never leaves this function."""
     ok: list[tuple[str, Path]] = []
     bad: list[tuple[str, str]] = []
+    origins: list[str] = []
     total = 0
 
-    def accept(name: str, path: Path) -> None:
+    def accept(name: str, path: Path, origin: str) -> None:
         nonlocal total
         total += path.stat().st_size
         ok.append((name, path))
+        origins.append(origin)
         if len(ok) > MAX_FILES:
             raise IntakeLimit(f"文件超过 {MAX_FILES} 份，请分几次提交 | more than {MAX_FILES} files, please split the submission")
         if total > MAX_BYTES:
@@ -246,13 +256,16 @@ def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[st
                 bad.append((name, "不是有效的 zip | not a valid zip file"))
                 continue
             with zf:
+                n = 0
                 for info in zf.infolist():
                     if info.is_dir() or _skip(info.filename):
                         continue
+                    n += 1
+                    label = f"{name}{ORIGIN_SEP}{n}"
                     inner = _basename(info.filename)
                     reason = _reject_reason(info.filename, _split_ext(inner)[1])
                     if reason:
-                        bad.append((info.filename, reason))
+                        bad.append((label, reason))
                         continue
                     if info.file_size > MAX_BYTES:
                         raise IntakeLimit(f"zip 里有单个文件超过 {MAX_BYTES // 2**20} MB | a file inside the zip exceeds {MAX_BYTES // 2**20} MB")
@@ -266,10 +279,10 @@ def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[st
                             dst.write(src.read())
                     except Exception as e:  # encrypted, corrupt, unsupported compression: reported, not fatal
                         dest.unlink(missing_ok=True)
-                        bad.append((info.filename, f"zip 里这一项读不出来，可能加密或损坏（{type(e).__name__}） "
+                        bad.append((label, f"zip 里这一项读不出来，可能加密或损坏（{type(e).__name__}） "
                                                    f"| this zip member could not be read, encrypted or corrupt ({type(e).__name__})"))
                         continue
-                    accept(inner, dest)
+                    accept(inner, dest, label)
             continue
         if _skip(base):
             continue
@@ -277,8 +290,8 @@ def unpack(downloads: list[tuple[str, Path]], work: Path) -> tuple[list[tuple[st
         if reason:
             bad.append((name, reason))
         else:
-            accept(base, path)
-    return ok, bad
+            accept(base, path, name)
+    return ok, bad, origins
 
 
 # ---------------------------------------------------------------- metadata, content checks, thumbnails
@@ -997,7 +1010,7 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
         downloads, rejected = download(f.links, work)
     else:
         downloads, rejected = [(p.name, p) for p in files], []
-    accepted, bad = unpack(downloads, work)
+    accepted, bad, _origins = unpack(downloads, work)
     rejected += bad
     if not accepted:
         raise NothingAccepted(rejected)

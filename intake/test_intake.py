@@ -144,9 +144,12 @@ def test_unpack_zip_rules():
         zf.writestr("a/b.pdf", b"%PDF"); zf.writestr("notes.PDF", b"%PDF"); zf.writestr("../evil.pdf", b"%PDF")
         zf.writestr("__MACOSX/._x.pdf", b"x"); zf.writestr("sub/", b""); zf.writestr("pic.jpg", b"\xff\xd8"); zf.writestr(".hidden.pdf", b"%PDF")
     (work / "final.pdf").write_bytes(b"%PDF")
-    ok, bad = intake.unpack([("final.pdf", work / "final.pdf"), ("bundle.zip", z)], work)
+    ok, bad, origins = intake.unpack([("final.pdf", work / "final.pdf"), ("bundle.zip", z)], work)
     assert [n for n, _ in ok] == ["final.pdf", "b.pdf", "notes.PDF"] and all(p.is_file() for _, p in ok)
-    assert {n for n, _ in bad} == {"../evil.pdf", "pic.jpg"} and all(" | " in r for _, r in bad)
+    # zip members are named "<zip> › <n>", n counting every non-directory, non-skipped entry (accepted and rejected alike)
+    assert {n for n, _ in bad} == {"bundle.zip › 3", "bundle.zip › 4"} and all(" | " in r for _, r in bad)
+    assert origins == ["final.pdf", "bundle.zip › 1", "bundle.zip › 2"]
+    assert not any("evil" in n or "pic" in n for n, _ in bad)
 
 
 def test_unpack_limits():
@@ -355,8 +358,8 @@ def test_unpack_reports_broken_zip_members():
     with zipfile.ZipFile(z, "w", zipfile.ZIP_STORED) as zf:
         zf.writestr("ok.pdf", b"%PDF ok"); zf.writestr("x.pdf", b"%PDF hello world")
     raw = bytearray(z.read_bytes()); i = raw.find(b"hello world"); raw[i:i + 5] = b"HELLO"; z.write_bytes(bytes(raw))   # bad CRC
-    ok, bad = intake.unpack([("b.zip", z)], work)
-    assert [n for n, _ in ok] == ["ok.pdf"] and [n for n, _ in bad] == ["x.pdf"] and " | " in bad[0][1]
+    ok, bad, _ = intake.unpack([("b.zip", z)], work)
+    assert [n for n, _ in ok] == ["ok.pdf"] and [n for n, _ in bad] == ["b.zip › 2"] and " | " in bad[0][1]
 
 
 def test_zip_entry_names_with_backslashes():
