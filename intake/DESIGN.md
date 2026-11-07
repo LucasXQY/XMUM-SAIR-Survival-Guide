@@ -6,6 +6,10 @@
 
 For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+> **2026-11-07 起，文件怎么落地以 [AI-PIPELINE.md](AI-PIPELINE.md) 为准**：每个文件由 Claude 分拣（课程、学期、类型）、检查后各自归位；拿不准的进「需要你看」或 `_待整理/issue-<n>/`，这时 PR 是草稿、状态 `intake/待整理` 不通过；维护者用 `/place`、`/skip`、`/keep`、`/approve`、`/retry` 留言指令处理；AI 结果缓存在 `bot-state` 的 `intake-cache/issue-<n>.json`。表单的课程代码、课程名称、学期、资料类型改为选填。本文 §4–§6 里"一次上传只放一门课、一个学期、一种类型"的做法和末尾「Claude 预检」一节已被取代，其余（下载、解包、清元数据、登记、作者规则、分支即纯函数）照旧。
+>
+> **Since 2026-11-07, [AI-PIPELINE.md](AI-PIPELINE.md) governs where files go**: Claude sorts (course, session, type) and checks each file, which is then filed on its own; doubtful ones go under "Needs you" or into `_待整理/issue-<n>/`, and the PR is then a draft with a failing `intake/待整理` status; maintainers answer with `/place`, `/skip`, `/keep`, `/approve` and `/retry` comments; AI results are cached on `bot-state` in `intake-cache/issue-<n>.json`. The form's course code, name, session and type are optional. The one-course-one-session-one-type placement of §4–§6 and the closing "Claude pre-check" section are superseded; the rest (download, unpacking, metadata, registration, author rules, the branch as a pure function) stands.
+
 ## 1. 目的 | Intent
 
 现在给仓库添资料只有两条路：会 git 的人开 PR，有 push 权限的人直接推。前者把大多数同学挡在门外，后者绕过了审核（2026-11-05 有协作者把 16 份文件直接推到了 main，放错了位置、没有改名、没有登记）。上传通道要做到：
@@ -158,10 +162,10 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 
 ## Claude 预检 | Claude pre-check（2026-11-06）
 
-每个上传文件交给 Claude 读一遍（PDF 原样发送，最多前 40 页；其他格式发文字，最多 6 万字符；doc/ppt/xls 旧格式不发），判断有没有答案或学生作答、个人信息（姓名、学号、签名、私人联系方式、Moodle 密钥、二维码）、评分标准，再加一句内容概述，写进 PR 正文的「Claude 预检」表。只是参考：不阻断、不删文件，维护者照常审核。
+每个上传文件交给 Claude 读一遍（PDF 原样发送，最多前 40 页；其他格式发文字，最多 6 万字符；doc/ppt/xls 旧格式不发），判断有没有答案或学生作答、个人信息（姓名、学号、签名、私人联系方式、Moodle 密钥、二维码）、评分标准，再加一句内容概述。（2026-11-07 起它决定去向，见 [AI-PIPELINE.md](AI-PIPELINE.md) §6：只检查分拣说要收的文件；有个人信息或拿不准、没检查成、只检查了一部分的文件不提交，列在 PR 的「需要你看」里。）
 
-- 结果按上传文件字节的 sha256 缓存在 PR 正文末尾的隐藏注释里；main 每次更新都会重建所有上传 PR，缓存保证同一个文件只付一次钱。
-- 按美元限额，不按文件个数：每个文件先预留 0.04 美元加每页 0.025 美元（PDF 最多按 40 页算），查完按实际花费结算。上传池每天 15、每月 60、每次运行 8 美元（仓库变量 `CLAUDE_USD_DAY_UPLOAD`、`CLAUDE_USD_MONTH_UPLOAD`、`CLAUDE_USD_RUN_UPLOAD` 可改，留空用默认值），记账在 `bot-state` 分支的 `claude-usage.json`；设计细节见 [AI-PIPELINE.md](AI-PIPELINE.md)。额度用完、没有 `ANTHROPIC_API_KEY`、调用失败时，表里写明原因，其余照旧。
+- 结果按上传文件字节的 sha256 缓存在 `bot-state` 分支的 `intake-cache/issue-<n>.json`（PR 关闭后删除）；main 每次更新都会重建所有上传 PR，缓存保证同一个文件只付一次钱。
+- 按美元限额，不按文件个数：每个文件先预留 0.04 美元加每页 0.025 美元（PDF 最多按 40 页算），查完按实际花费结算。上传池每天 15、每月 60、每次运行 8 美元（仓库变量 `CLAUDE_USD_DAY_UPLOAD`、`CLAUDE_USD_MONTH_UPLOAD`、`CLAUDE_USD_RUN_UPLOAD` 可改，留空用默认值），记账在 `bot-state` 分支的 `claude-usage.json`；设计细节见 [AI-PIPELINE.md](AI-PIPELINE.md)。额度用完、没有 `ANTHROPIC_API_KEY`、调用失败时，文件不提交，「需要你看」里写明原因，之后的重建或 `/retry` 再试。
 - 模型默认 Claude Opus 5.5，仓库变量 `CLAUDE_MODEL_UPLOAD` 可改。Claude 不复述个人信息，只说在哪一页。文件内容视为不可信输入。
-- 代码：`intake.py` 的 `precheck_input`、`precheck`、`precheck_lines`、`make_prechecker`；调用与计数在 `llm/claude_check.py`。
+- 代码：`intake.py` 的 `precheck_input`、`precheck`、`make_prechecker`；调用与计数在 `llm/claude_check.py`。
 

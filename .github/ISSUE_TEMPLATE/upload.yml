@@ -12,7 +12,7 @@ body:
 
         - 单个附件最大 **25 MB**；多份文件可以打成一个 zip。更大的文件请拆分，或发邮件到 `xieqiyi@ieee.org`。
         - 只收 pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv。**照片请先合成一个 PDF**，单独的图片不收。
-        - 一次提交只选一种资料类型；不同类型请分开提交。
+        - 什么都可以一起传：多份文件、zip、不同课程和不同类型都行，机器人会逐个分拣、改名、归位。课程代码、课程名称、学期、资料类型都是选填的提示。
         - 规则见 [CONTRIBUTING.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/CONTRIBUTING.md) 与 [DISCLAIMER.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/DISCLAIMER.md)。
         - 选「匿名」时仓库里不会出现你的名字，但 GitHub 本身仍会显示这个 Issue 和 PR 是谁发的。
 
@@ -20,7 +20,7 @@ body:
 
         - Each attachment is at most **25 MB**; several files can go in one zip. Split bigger files or email `xieqiyi@ieee.org`.
         - Accepted: pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv. **Combine photos into one PDF**; images on their own are not accepted.
-        - One type of material per submission; submit different types separately.
+        - Anything can go in together: several files, zips, different courses and types; the bot sorts, renames and files each one. Course code, name, session and type are optional hints.
         - Rules: [CONTRIBUTING.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/CONTRIBUTING.md) and [DISCLAIMER.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/DISCLAIMER.md).
         - "Anonymous" keeps your name out of the repository files, but GitHub itself still shows who opened this issue and the PR.
 
@@ -40,34 +40,34 @@ body:
     id: code
     attributes:
       label: "课程代码 | Course code"
-      description: "如 COM107、EEE212、MPU1.1、G0191 | e.g. COM107, EEE212, MPU1.1, G0191"
-      placeholder: "COM107"
+      description: "选填，给机器人的提示 | optional, a hint for the bot"
+      placeholder: "COM107、EEE212、MPU1.1、G0191"
     validations:
-      required: true
+      required: false
 
   - type: input
     id: name
     attributes:
       label: "课程名称 | Course name"
-      description: "试卷或大纲上的英文名 | The English name as printed on the paper or syllabus"
+      description: "选填，给机器人的提示 | optional, a hint for the bot"
       placeholder: "Circuits and Devices"
     validations:
-      required: true
+      required: false
 
   - type: input
     id: session
     attributes:
       label: "学期 | Session"
-      description: "资料上印的学期，YYYY-MM | The session printed on the material, YYYY-MM"
-      placeholder: "2022-04"
+      description: "选填，给机器人的提示 | optional, a hint for the bot"
+      placeholder: "YYYY-MM，如 2022-04 | e.g. 2022-04"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: type
     attributes:
       label: "资料类型 | Type"
-      description: "一次只选一种 | One type per submission"
+      description: "选填，给机器人的提示 | optional, a hint for the bot"
       options:
         - "Past-Papers"
         - "Syllabus"
@@ -79,7 +79,7 @@ body:
         - "Exam-Review"
         - "Tips"
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: files

@@ -1,10 +1,14 @@
 name: intake
 
-# 上传通道：把带 upload 标签的 Issue 整理成 PR；main 有新提交时把所有打开的上传 PR 重建一遍。见 intake/DESIGN.md
-# Upload channel: turns an issue labelled `upload` into a pull request; every push to main rebuilds all open upload PRs. See intake/DESIGN.md
+# 上传通道：把带 upload 标签的 Issue 整理成 PR；main 有新提交时把所有打开的上传 PR 重建一遍；维护者在上传 Issue 或它的 PR 下
+# 留 /place、/skip、/keep、/approve、/retry 指令。见 intake/DESIGN.md 与 intake/AI-PIPELINE.md
+# Upload channel: turns an issue labelled `upload` into a pull request; every push to main rebuilds all open upload PRs;
+# maintainers steer an upload with /place, /skip, /keep, /approve and /retry comments. See intake/DESIGN.md and intake/AI-PIPELINE.md
 on:
   issues:
     types: [opened, edited]
+  issue_comment:
+    types: [created]
   push:
     branches: [main]
   workflow_dispatch:
@@ -20,6 +24,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  statuses: write     # the failing `intake/待整理` status that holds a PR back
 
 jobs:
   intake:
@@ -28,7 +33,7 @@ jobs:
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'upload'))
       || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     # one group per issue (and one for the push-triggered sweep): a newer run for the same issue replaces the queued one,
     # runs for different issues touch different branches and may overlap. GitHub keeps a single queued run per group and
     # cancels older ones, so the sweep on push also picks up upload issues that never got an answer.
@@ -49,8 +54,10 @@ jobs:
       - name: Rebuild upload pull requests
         env:
           GH_TOKEN: ${{ github.token }}
-          # Claude pre-check of the uploaded files, written into the PR; without the key the PR just says it did not run
+          # Claude sorts (CLAUDE_MODEL_SORT) and pre-checks (CLAUDE_MODEL_UPLOAD) each file; without the key nothing is
+          # committed and every file waits under "Needs you"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL_SORT: ${{ vars.CLAUDE_MODEL_SORT }}
           CLAUDE_MODEL_UPLOAD: ${{ vars.CLAUDE_MODEL_UPLOAD }}
           CLAUDE_USD_DAY_UPLOAD: ${{ vars.CLAUDE_USD_DAY_UPLOAD }}
           CLAUDE_USD_MONTH_UPLOAD: ${{ vars.CLAUDE_USD_MONTH_UPLOAD }}
@@ -71,16 +78,102 @@ jobs:
           path: _intake/thumbs
           if-no-files-found: ignore
 
-  # a rejected upload must not stay on a public branch: delete the branch of an upload PR that was closed without merging
-  # ("Automatically delete head branches" only covers merged ones)
+  # A comment on a PR carries the PR's number, not the upload issue's: read the issue number from the PR's head branch
+  # so the command below queues in the same concurrency group as that issue's own runs.
+  command-target:
+    if: >-
+      vars.BOTS_PAUSED != '1' && github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      issue: ${{ steps.find.outputs.issue }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          IS_PR: ${{ github.event.issue.pull_request != null }}
+        run: |
+          n="$NUMBER"
+          if [ "$IS_PR" = true ]; then
+            head=$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName -q .headRefName)
+            case "$head" in upload/issue-*) n="${head#upload/issue-}";; esac
+          fi
+          case "$n" in ''|*[!0-9]*) n="$NUMBER";; esac
+          echo "issue=$n" >> "$GITHUB_OUTPUT"
+
+  command:
+    needs: command-target
+    if: >-
+      vars.BOTS_PAUSED != '1' && github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: intake-${{ needs.command-target.outputs.issue }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pymupdf>=1.24,<2" "markdown>=3.4,<4" "anthropic>=2.6,<3"
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Apply a maintainer command and rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL_SORT: ${{ vars.CLAUDE_MODEL_SORT }}
+          CLAUDE_MODEL_UPLOAD: ${{ vars.CLAUDE_MODEL_UPLOAD }}
+          CLAUDE_USD_DAY_UPLOAD: ${{ vars.CLAUDE_USD_DAY_UPLOAD }}
+          CLAUDE_USD_MONTH_UPLOAD: ${{ vars.CLAUDE_USD_MONTH_UPLOAD }}
+          CLAUDE_USD_RUN_UPLOAD: ${{ vars.CLAUDE_USD_RUN_UPLOAD }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # the comment is read from the event file by the script (author, permission, thread), never pasted into the shell
+        run: python intake/intake.py --comment-event "$GITHUB_EVENT_PATH"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: thumbnails
+          path: _intake/thumbs
+          if-no-files-found: ignore
+
+  # A closed upload PR, merged or not, drops its AI cache from bot-state. A rejected upload must not stay on a public
+  # branch either: the branch of a PR closed without merging is deleted ("Automatically delete head branches" only
+  # covers merged ones). Only PRs from this repository count: a fork's branch may carry the same name.
   cleanup:
     if: >-
-      vars.BOTS_PAUSED != '1' && github.event_name == 'pull_request_target' && github.event.pull_request.merged == false
+      vars.BOTS_PAUSED != '1' && github.event_name == 'pull_request_target'
+      && github.event.pull_request.head.repo.full_name == github.repository
       && startsWith(github.event.pull_request.head.ref, 'upload/issue-')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - env:
+      - name: Delete the branch of a PR closed without merging
+        if: github.event.pull_request.merged == false
+        env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
         run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"
+      - name: Delete the upload's cache from bot-state
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          n="${BRANCH#upload/issue-}"
+          case "$n" in ''|*[!0-9]*) echo "not an upload branch"; exit 0;; esac
+          path="intake-cache/issue-$n.json"
+          if ! sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=bot-state" -q .sha 2>err.txt); then
+            if grep -q "404" err.txt; then echo "no cache for #$n"; exit 0; fi
+            cat err.txt; exit 1
+          fi
+          if ! gh api -X DELETE "repos/$GITHUB_REPOSITORY/contents/$path" -f message="intake-cache: drop issue $n" \
+               -f branch=bot-state -f sha="$sha" > /dev/null 2>err.txt; then
+            if grep -q "404" err.txt; then echo "cache already gone"; exit 0; fi
+            cat err.txt; exit 1
+          fi
+          echo "dropped $path"

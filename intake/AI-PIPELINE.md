@@ -194,6 +194,8 @@ Builds on the upload channel in DESIGN.md and replaces its "Claude pre-check" se
 分三个 PR，按顺序合并：
 1. **花钱上限**：`llm/claude_check.py` 的美元记账和池子、现有 Haiku 任务和预检改用它、小帮手 Worker 的美元上限、文档。
 2. **分拣与落地**：表单改选填、分拣、按文件分别落地（多课程）、"需要你看"和 `_待整理/`、草稿 + 状态、留言指令、缓存挪到 bot-state、PR 正文改版。这一步的全文检查暂时沿用现有预检（只标记不打码），但已按 §6 规则不提交有个人信息的文件。
+   **已实现（2026-11-07）**：`intake/items.py`（编号与精确查重）、`ai.py`（分拣与每次运行的计费表）、`decide.py`（§6 的表）、`cache.py`（bot-state 缓存）、`commands.py`（留言指令），`intake.py` 串起整个流程。本期的实现细节：预检只发给会收的文件，只检查了前一部分（超过 40 页）的文件也按"没被检查"处理；预检仍按 Task 3 的方式自己预留和结算美元，所以每次运行 8 美元的上限暂时只管分拣，第三期把全文检查也放进同一个计费表；没有文件能提交时不开 PR，只在 Issue 下发一条原地更新的评论。
+   **Implemented (2026-11-07)**: numbering and exact duplicates (`items.py`), sorting within a per-run meter (`ai.py`), the §6 table (`decide.py`), the bot-state cache (`cache.py`) and the comment commands (`commands.py`), wired together in `intake.py`. In this phase only files that will be kept are pre-checked; a file checked only in part (over 40 pages) counts as not checked; the pre-check still reserves and settles its own dollars, so the 8-dollar per-run cap covers sorting only until phase 3 puts the full check under the same meter; with nothing committable there is no PR, just one issue comment kept up to date.
 3. **打码与查重**：全文检查新 schema、文字和扫描打码、核验、近似重复、LibreOffice 转换、页数上限 100。
 
 ## 13. 留给实现者 | Left to the builder
