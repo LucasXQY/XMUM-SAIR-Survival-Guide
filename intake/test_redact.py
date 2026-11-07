@@ -322,6 +322,181 @@ def test_render_draws_the_pages_as_displayed():
             pass
 
 
+# ---- fix round 1: line art, annotations and form fields, outline and labels, whole words, text_gone, stale output
+
+ID = "EEE2109300"
+
+
+def anywhere(path, s):
+    """Is `s` anywhere in the file: raw bytes, any object, any stream decompressed, the fully expanded file?"""
+    raw = s.encode()
+    if raw in pathlib.Path(path).read_bytes():
+        return True
+    with fitz.open(path) as d:
+        for x in range(1, d.xref_length()):
+            if s in (d.xref_object(x) or "") or (d.xref_is_stream(x) and raw in (d.xref_stream(x) or b"")):
+                return True
+        return raw in d.tobytes(expand=255)
+
+
+def _save(d):
+    p = tmp() / "in.pdf"; d.save(p); d.close()
+    return p
+
+
+def _field(pg, value=ID, rect=(72, 300, 300, 330), name="sid"):
+    w = fitz.Widget(); w.field_type = fitz.PDF_WIDGET_TYPE_TEXT; w.field_name = name; w.field_value = value
+    w.rect = fitz.Rect(rect); pg.add_widget(w)
+    return [x.xref for x in pg.widgets()][-1]
+
+
+def test_line_art_a_box_only_touches_is_removed():
+    d = fitz.open(); pg = d.new_page(width=600, height=800)
+    sh = pg.new_shape(); sh.draw_polyline([(100, 100), (200, 150), (300, 100), (400, 150)]); sh.finish(color=(0, 0, 0), width=4)
+    sh.commit()
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_box(1, [150, 100, 400, 200])])                   # covers x 78–252: the signature's left part
+    assert r.ok
+    with fitz.open(out) as o:
+        assert [x for x in o[0].get_drawings() if x["type"] == "s"] == []     # no stroke left, only the black fill
+    assert mean_pixel(out, 1, (0.5, 0.11, 0.7, 0.2)) > 250                   # nothing of it right of the box
+
+
+def test_a_form_field_on_a_redacted_page_is_gone_from_the_file():
+    for hidden in (False, True):
+        d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "Question 1")
+        x = _field(pg)
+        if hidden: d.xref_set_key(x, "F", "2")
+        p = _save(d); out = tmp() / "o.pdf"
+        r = redact.apply(p, out, [_box(1, [100, 340, 520, 410])])               # the box covers the field
+        assert r.ok and not anywhere(out, ID) and "Question 1" in text(out, 1), hidden
+        with fitz.open(out) as o:
+            assert list(o[0].widgets()) == [] and o.xref_get_key(o.pdf_catalog(), "AcroForm")[0] == "null", hidden
+        again = tmp() / "c.pdf"                                                 # a rebuild from the cache does the same
+        assert redact.apply(p, again, [], cached_rects=r.rects).ok and not anywhere(again, ID), hidden
+
+
+def test_a_parent_field_value_does_not_survive():
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "Question 1")
+    kid = _field(pg)
+    parent = d.get_new_xref(); d.update_object(parent, f"<</FT/Tx/T(student)/V({ID})/Kids[{kid} 0 R]>>")
+    for k, v in (("Parent", f"{parent} 0 R"), ("T", "null"), ("V", "null"), ("FT", "null")): d.xref_set_key(kid, k, v)
+    d.xref_set_key(d.pdf_catalog(), "AcroForm/Fields", f"[{parent} 0 R]")
+    p = _save(d)
+    assert anywhere(p, ID)
+    out = tmp() / "o.pdf"
+    assert redact.apply(p, out, [_box(1, [100, 340, 520, 410])]).ok and not anywhere(out, ID)
+    # still referenced from elsewhere (a tagged PDF's structure tree): emptied, not only dropped from /Fields
+    d = fitz.open(p)
+    d.xref_set_key(d.pdf_catalog(), "StructTreeRoot", f"<</K[<</Type/OBJR/Obj {parent} 0 R>><</Type/OBJR/Obj {kid} 0 R>>]>>")
+    p2 = _save(d); out = tmp() / "o2.pdf"
+    assert redact.apply(p2, out, [_box(1, [100, 340, 520, 410])]).ok and not anywhere(out, ID)
+
+
+def test_fields_on_other_pages_are_kept():
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "ID: " + ID); _field(pg)
+    other = d.new_page(); other.insert_text((72, 72), "Question 1")
+    _field(other, value="Answer here", rect=(72, 400, 300, 430), name="answer")
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_text(1, ID)])
+    assert r.ok and not anywhere(out, ID)
+    with fitz.open(out) as o:
+        assert list(o[0].widgets()) == [] and [w.field_value for w in o[1].widgets()] == ["Answer here"]
+        assert len(redact._refs(o, o.xref_get_key(o.pdf_catalog(), "AcroForm/Fields"))) == 1
+
+
+def test_notes_ink_and_free_text_on_a_redacted_page_are_gone():
+    d = fitz.open(); pg = d.new_page(width=600, height=800); pg.insert_text((72, 72), "Question 1")
+    pg.add_text_annot((500, 500), "note " + ID)                                  # a sticky note: get_text never reads it
+    pg.add_ink_annot([[(100, 600), (150, 650), (200, 600), (250, 650)]])         # a signature drawn with a pen tool
+    pg.add_freetext_annot(fitz.Rect(72, 400, 300, 430), "Student " + ID, fontsize=12)
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_box(1, [150, 730, 450, 830]), _text(1, ID)])     # the box covers the ink
+    assert not r.ok or not anywhere(out, ID)
+    r = redact.apply(p, out, [_box(1, [150, 730, 450, 830])])
+    assert r.ok and not anywhere(out, ID) and "Question 1" in text(out, 1)
+    with fitz.open(out) as o:
+        assert list(o[0].annots()) == [] and list(o[0].widgets()) == []
+    assert mean_pixel(out, 1, (0.2, 0.76, 0.38, 0.8)) < 20                       # the ink is not drawn over the black
+
+
+def test_a_note_or_an_author_on_another_page_is_caught():
+    for add in (lambda pg: pg.add_text_annot((500, 500), "note " + ID),
+                lambda pg: pg.add_highlight_annot(fitz.Rect(72, 60, 200, 76)).set_info(title="Tan Ah Kow")):
+        d = fitz.open(); d.new_page().insert_text((72, 72), "Name: Tan Ah Kow  ID: " + ID)
+        pg = d.new_page(); pg.insert_text((72, 72), "Question 1"); add(pg)
+        p = _save(d)
+        r = redact.apply(p, tmp() / "o.pdf", [_text(1, ID), _text(1, "Tan Ah Kow")])
+        assert not r.ok and any("page 2" in x for x in r.problems) and ID not in " ".join(r.problems)
+
+
+def test_outline_page_labels_and_page_extras_are_stripped():
+    d = fitz.open(); d.new_page().insert_text((72, 72), "ID: " + ID); d.new_page().insert_text((72, 72), "Question 1")
+    d.set_toc([[1, "Answers of " + ID, 1], [1, "Part 2", 2]])                    # page objects reload here
+    tx = d.get_new_xref(); d.update_object(tx, "<</Type/XObject/Subtype/Image/Width 2/Height 2/ColorSpace/DeviceGray/BitsPerComponent 8>>")
+    d.update_stream(tx, ID.encode()[:4]); d.xref_set_key(d[0].xref, "Thumb", f"{tx} 0 R")
+    mx = d.get_new_xref(); d.update_object(mx, "<</Type/Metadata/Subtype/XML>>"); d.update_stream(mx, f"<x>{ID}</x>".encode())
+    d.xref_set_key(d[0].xref, "Metadata", f"{mx} 0 R")
+    d.xref_set_key(d[1].xref, "PieceInfo", f"<</App<</Private({ID})>>>>")       # on the page without a redaction
+    d.xref_set_key(d.pdf_catalog(), "PageLabels", f"<</Nums[0<</P({ID})>>]>>")
+    p = _save(d)
+    assert anywhere(p, ID)
+    out = tmp() / "o.pdf"
+    assert redact.apply(p, out, [_text(1, ID)]).ok and not anywhere(out, ID)
+    with fitz.open(out) as o:
+        assert o.get_toc() == [] and o.xref_get_key(o.pdf_catalog(), "PageLabels")[0] == "null"
+        assert all(o.xref_get_key(page.xref, k)[0] == "null" for page in o for k in ("Thumb", "Metadata", "PieceInfo"))
+
+
+def test_the_word_fallback_matches_whole_words_only():
+    d = fitz.open(); pg = d.new_page()
+    pg.insert_text((150, 72), "KOW,"); pg.insert_text((72, 72), "Tan Ah")      # read as "KOW, / Tan Ah": not found whole
+    pg.insert_text((72, 120), "Find the important constant of integration")
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_text(1, "Tan Ah Kow")])
+    t = text(out, 1)
+    assert r.ok and "Tan" not in t and "KOW" not in t                            # any case, edge punctuation trimmed
+    assert "Find the important constant of integration" in t                     # "tan" inside words is left alone
+
+
+def test_text_gone_validates_and_checks_every_word():
+    p = pdf_pages(["Question 1", "Signed: Kow"])
+    assert not redact.text_gone(p, None) and not redact.text_gone(p, {"page": 1, "kind": "text", "text": "x"})
+    for bad in (_text(3, "Tan Ah Kow"), _text(0, "x"), dict(_text(1, "x"), kind="blur"), _box(1, [1, 2, 3]), "Tan", None):
+        assert not redact.text_gone(p, [bad]), bad
+    assert redact.text_gone(p, [_box(1, [0, 0, 100, 100])]) and redact.text_gone(p, [])
+    assert not redact.text_gone(p, [_text(1, "Tan Ah Kow")])                    # a word of it, on page 2
+    assert redact.text_gone(pdf_pages(["Kowloon", "tan x = 1"]), [_text(1, "Tan Ah Kow")])   # not whole words; case kept
+
+
+def test_a_stale_output_is_deleted_whenever_nothing_is_written():
+    p = pdf_pages(["ID: " + ID])
+    junk = tmp() / "x.pdf"; junk.write_bytes(b"not a pdf")
+    for src, reds in ((p, [_text(5, ID)]), (p, "no list"), (junk, [_text(1, ID)]), (tmp() / "missing.pdf", [])):
+        out = tmp() / "o.pdf"; out.write_bytes(b"stale output of an earlier run " + ID.encode())
+        r = redact.apply(src, out, reds)
+        assert not r.ok and r.out is None and not out.exists(), reds
+    out = tmp() / "o.pdf"; out.write_bytes(b"stale")
+    real = fitz.Page.apply_redactions
+    fitz.Page.apply_redactions = lambda *a, **k: (_ for _ in ()).throw(RuntimeError(ID))
+    try:
+        r = redact.apply(p, out, [_text(1, ID)])
+    finally:
+        fitz.Page.apply_redactions = real
+    assert not r.ok and r.out is None and not out.exists() and ID not in " ".join(r.problems)
+    out = tmp() / "o.pdf"; out.write_bytes(b"stale")
+    r = redact.apply(p, out, [], cached_rects=[{"page": 2, "rect": [0, 0, 1, 1]}])
+    assert not r.ok and not out.exists()
+
+
+def test_review_focus_2_an_id_broken_over_lines_is_refused():
+    for layout in ("ID: EEE2109\n300 end", "ID: EEE2109-\n300 end"):
+        p = pdf_pages([layout])
+        assert not redact.text_gone(p, [_text(1, ID)]), layout                  # the check sees it in the original
+        r = redact.apply(p, tmp() / "o.pdf", [_text(1, ID)])
+        assert not r.ok and ID not in " ".join(r.problems), layout
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests: t()
