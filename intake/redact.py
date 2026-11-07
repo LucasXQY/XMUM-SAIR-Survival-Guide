@@ -115,17 +115,22 @@ def _readable(page) -> list[str]:
 def _left(doc, redactions: list[dict], fallback_words=()) -> list[int]:
     """1-based pages of `doc` on which a text redaction's string can still be read anywhere, compared with all
     whitespace removed on both sides (so a string broken over lines or spaced out counts, and again with hyphenated
-    line breaks joined) and ignoring case; or one of `fallback_words` (the words the word fallback blacked out) as a
-    whole word, punctuation trimmed and case kept ("tan" in a formula is not the name "Tan"). Single words of strings
-    found whole are not checked: a lecturer "Dr Tan" must not fail a student "Tan Ah Kow"."""
+    line breaks joined) and ignoring case; or one of `fallback_words` (the words the word fallback blacked out, in any
+    case, as it does) as a whole word: equal to a page word (get_text("words")) or an annotation or field word, edge
+    punctuation trimmed, ignoring case ("important" is not "tan"). Single words of strings found whole are not
+    checked: a lecturer "Dr Tan" must not fail a student "Tan Ah Kow"."""
     texts = [r["text"] for r in redactions if r.get("kind") == "text"]
     strings = [s for s in (_squash(t).casefold() for t in texts) if s]
-    words = {w for x in fallback_words for w in _words(x)}
+    words = {w.casefold() for x in fallback_words for w in _words(x)}
     pages = []
     for i, page in enumerate(doc, 1):
         found = _readable(page)
         hay = [_squash(t).casefold() for t in found] + [_squash(_HYPHEN_BREAK.sub("", t)).casefold() for t in found]
-        if any(s in h for s in strings for h in hay) or words & {w for t in found for w in _words(t)}:
+        on_page = set()
+        if words:
+            on_page = {_EDGE.sub("", x[4]).casefold() for x in page.get_text("words")}
+            on_page |= {w.casefold() for t in found[1:] for w in _words(t)}
+        if any(s in h for s in strings for h in hay) or words & on_page:
             pages.append(i)
     return pages
 
@@ -189,48 +194,112 @@ def _plan(doc, redactions):
     return marks, sorted(boxes), list(dict.fromkeys(used)), problems
 
 
+def _top_refs(array: str) -> list[int]:
+    """Object numbers referenced by the top-level entries of a PDF array "[...]". What sits inside a direct dict,
+    a nested array or a string entry (an annotation's /P, /Popup, /Parent, /AP ...) is never followed."""
+    body = array.strip()
+    if not (body.startswith("[") and body.endswith("]")):
+        return []
+    body, flat, depth, i = body[1:-1], [], 0, 0
+    while i < len(body):
+        c = body[i]
+        if c == "(":                                            # a literal string: balanced, with escapes
+            n, i = 1, i + 1
+            while i < len(body) and n:
+                n += {"(": 1, ")": -1}.get(body[i], 0)
+                i += 2 if body[i] == "\\" else 1
+            flat.append(" ")
+        elif body.startswith("<<", i) or body.startswith(">>", i):
+            depth += 1 if c == "<" else -1
+            flat.append(" ")
+            i += 2
+        elif c == "<":                                          # a hex string
+            j = body.find(">", i)
+            flat.append(" ")
+            i = len(body) if j < 0 else j + 1
+        elif c in "[]":
+            depth += 1 if c == "[" else -1
+            flat.append(" ")
+            i += 1
+        else:
+            flat.append(c if depth == 0 else " ")
+            i += 1
+    return [int(m) for m in _REF.findall("".join(flat))]
+
+
 def _refs(doc, got) -> list[int]:
-    """Object numbers in an array from xref_get_key: a direct array, or a reference to an array (or to one object)."""
+    """Object numbers in an array from xref_get_key (top-level entries only, see _top_refs): a direct array, or a
+    reference to an array (or to one object)."""
     kind, val = got
     if kind == "xref":
         x = int(val.split()[0])
         obj = doc.xref_object(x) if 0 < x < doc.xref_length() else ""
-        return [int(m) for m in _REF.findall(obj)] if obj.lstrip().startswith("[") else [x]
-    return [int(m) for m in _REF.findall(val)] if kind == "array" else []
+        return _top_refs(obj) if obj.lstrip().startswith("[") else [x]
+    return _top_refs(val) if kind == "array" else []
+
+
+def _page_tree(doc) -> set[int]:
+    """The catalog, every page and every node of the page tree: never emptied, whatever a broken file lists."""
+    cat = doc.pdf_catalog()
+    out, todo = {cat}, _refs(doc, doc.xref_get_key(cat, "Pages"))
+    while todo:
+        x = todo.pop()
+        if x not in out and 0 < x < doc.xref_length():
+            out.add(x)
+            todo += _refs(doc, doc.xref_get_key(x, "Kids"))
+    return out | {doc.page_xref(i) for i in range(doc.page_count)}
+
+
+def _ours(doc, x: int, keep_out: set[int]) -> bool:
+    """Is object x an annotation or a form field (the only objects ever emptied)? Not the page tree, not a stream,
+    not anything typed other than /Annot (a font, an image ...)."""
+    if x in keep_out or not 0 < x < doc.xref_length() or doc.xref_is_stream(x):
+        return False
+    if doc.xref_get_key(x, "Type")[1] not in ("null", "/Annot"):
+        return False
+    return bool(set(doc.xref_get_keys(x)) & {"Subtype", "FT", "T", "Kids", "Parent", "V"})
 
 
 def _blank(doc, x: int) -> None:
     """Empty object x, so that nothing it held survives even if something still points at it."""
-    if 0 < x < doc.xref_length():
-        doc.update_object(x, "<<>>")
+    doc.update_object(x, "<<>>")
 
 
-def _drop_annots(doc, page) -> None:
-    """Every annotation of the page (widgets, links, notes, ink, pop-ups ...) off the page and emptied."""
+def _drop_annots(doc, page, keep_out: set[int]) -> None:
+    """Every annotation of the page (widgets, links, notes, ink, pop-ups ...) off the page, and every one that is an
+    object of its own emptied. Direct annotation dicts go with the /Annots array; refs inside them are not followed."""
     got = doc.xref_get_key(page.xref, "Annots")
     if got[0] == "null":
         return
     doc.xref_set_key(page.xref, "Annots", "null")
     for x in _refs(doc, got):
-        _blank(doc, x)
+        if _ours(doc, x, keep_out):
+            _blank(doc, x)
 
 
 def _prune_form(doc) -> None:
     """Keep in /AcroForm only the fields that still have a widget on a page; empty the others (a parent field's value
-    would otherwise survive garbage collection); no /AcroForm at all when none is left. /XFA and /CO go."""
+    would otherwise survive garbage collection); no /AcroForm at all when none is left. /XFA (which can hold any
+    field's data) and /CO always go, whether /AcroForm is a direct dict (as PyMuPDF writes it) or an object."""
     cat = doc.pdf_catalog()
     got = doc.xref_get_key(cat, "AcroForm")
     if got[0] == "null":
         return
     form, key = (int(got[1].split()[0]), "") if got[0] == "xref" else (cat, "AcroForm/")
+    for k in ("XFA", "CO"):
+        if doc.xref_get_key(form, key + k)[0] != "null":
+            doc.xref_set_key(form, key + k, "null")
+    keep_out = _page_tree(doc)
     live = {x for page in doc for x in _refs(doc, doc.xref_get_key(page.xref, "Annots"))
-            if doc.xref_get_key(x, "Subtype")[1] == "/Widget"}
+            if 0 < x < doc.xref_length() and doc.xref_get_key(x, "Subtype")[1] == "/Widget"}
     seen, dead = set(), []
 
     def keep(x: int) -> bool:
         if x in seen:
             return x in live
         seen.add(x)
+        if not _ours(doc, x, keep_out):         # not a field: dropped from /Fields, never followed or emptied
+            return False
         kids = _refs(doc, doc.xref_get_key(x, "Kids"))
         kept = [k for k in kids if keep(k)]
         if len(kept) != len(kids):
@@ -246,9 +315,6 @@ def _prune_form(doc) -> None:
         doc.xref_set_key(cat, "AcroForm", "null")
         return
     doc.xref_set_key(form, key + "Fields", "[" + " ".join(f"{f} 0 R" for f in fields) + "]")
-    for k in ("XFA", "CO"):
-        if doc.xref_get_key(form, k)[0] != "null":
-            doc.xref_set_key(form, key + k, "null")
 
 
 def _strip(doc) -> None:
@@ -328,12 +394,13 @@ def _apply(doc, out: Path, redactions, cached_rects) -> Redacted:
         found, box_pages, fallback, problems = _plan(doc, redactions)
         rects = [{"page": p, "rect": _outward(r)} for p, r in found]
         marks = [(x["page"], fitz.Rect(x["rect"])) for x in rects]
+    keep_out = _page_tree(doc)
     for pno in sorted({p for p, _ in marks}):
         page = doc[pno - 1]
         rot = page.rotation
         if rot:     # on a rotated page PyMuPDF draws the black fill ignoring a crop box offset: apply it unrotated
             page.set_rotation(0)
-        _drop_annots(doc, page)
+        _drop_annots(doc, page, keep_out)
         page = doc.reload_page(page)
         for p, r in marks:
             if p == pno:

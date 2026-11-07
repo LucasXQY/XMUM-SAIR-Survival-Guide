@@ -469,7 +469,8 @@ def test_text_gone_validates_and_checks_fallback_words_only_when_given():
     assert redact.text_gone(p, [_box(1, [0, 0, 100, 100])]) and redact.text_gone(p, [])
     assert redact.text_gone(p, [_text(1, "Tan Ah Kow")])                        # a single word of it: not checked
     assert not redact.text_gone(p, [_text(1, "Tan Ah Kow")], fallback_words=["Tan", "Kow"])   # unless the fallback used it
-    assert redact.text_gone(pdf_pages(["Kowloon", "tan x = 1"]), [], fallback_words=("Tan", "Kow"))  # whole words; case kept
+    assert redact.text_gone(pdf_pages(["Kowloon", "the important constant"]), [], fallback_words=("Tan", "Kow"))  # whole words
+    assert not redact.text_gone(pdf_pages(["Signed: KOW."]), [], fallback_words=["Kow"])    # in any case
 
 
 def test_a_common_surname_elsewhere_does_not_fail_a_full_match():
@@ -515,6 +516,93 @@ def test_review_focus_2_an_id_broken_over_lines_is_refused():
         assert not redact.text_gone(p, [_text(1, ID)]), layout                  # the check sees it in the original
         r = redact.apply(p, tmp() / "o.pdf", [_text(1, ID)])
         assert not r.ok and ID not in " ".join(r.problems), layout
+
+
+# ---- fix round 3: XFA in a direct /AcroForm, refs nested in direct annotations, fallback words in any case
+
+def _two_field_pages(indirect_form=False):
+    """Page 1: a field holding the ID; page 2: a field to keep; XFA datasets holding the ID. /AcroForm stays a direct
+    dict (as PyMuPDF writes it) unless `indirect_form`."""
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "Question 1"); _field(pg)
+    p2 = d.new_page(); p2.insert_text((72, 72), "Question 2"); _field(p2, value="Answer", rect=(72, 400, 300, 430), name="ans")
+    xs = d.get_new_xref(); d.update_object(xs, "<<>>"); d.update_stream(xs, f"<xfa:datasets><sid>{ID}</sid></xfa:datasets>".encode())
+    cat = d.pdf_catalog()
+    if indirect_form:
+        ax = d.get_new_xref(); d.update_object(ax, d.xref_get_key(cat, "AcroForm")[1]); d.xref_set_key(cat, "AcroForm", f"{ax} 0 R")
+        d.xref_set_key(ax, "XFA", f"[(datasets) {xs} 0 R]")
+    else:
+        d.xref_set_key(cat, "AcroForm/XFA", f"[(datasets) {xs} 0 R]")
+    return _save(d)
+
+
+def test_xfa_goes_from_a_direct_or_indirect_form_with_a_field_kept():
+    for indirect in (False, True):
+        p = _two_field_pages(indirect)
+        with fitz.open(p) as s:
+            assert s.xref_get_key(s.pdf_catalog(), "AcroForm")[0] == ("xref" if indirect else "dict") and anywhere(p, ID)
+        out = tmp() / "o.pdf"
+        r = redact.apply(p, out, [_box(1, [100, 340, 520, 410])])
+        assert r.ok and not anywhere(out, ID), indirect
+        with fitz.open(out) as o:
+            assert [w.field_value for w in o[1].widgets()] == ["Answer"], indirect
+            assert o.xref_get_key(o.pdf_catalog(), "AcroForm/XFA")[0] == "null", indirect
+
+
+def test_refs_inside_a_direct_annotation_are_not_followed():
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((72, 72), "ID: " + ID); pg.insert_text((72, 120), "Question 1")
+    d.new_page().insert_text((72, 72), "Question 2")
+    px = d[0].xref
+    d.xref_set_key(px, "Annots", f"[<</Type/Annot/Subtype/Text/Rect[500 500 520 520]/Contents({ID})/P {px} 0 R>>]")
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_text(1, ID)])
+    assert r.ok and not anywhere(out, ID)
+    with fitz.open(out) as o:
+        assert o.page_count == 2 and "Question 1" in o[0].get_text() and "Question 2" in o[1].get_text()
+        assert o.xref_get_key(o[0].xref, "Type")[1] == "/Page" and list(o[0].annots()) == []
+    r = redact.apply(p, tmp() / "o.pdf", [_text(1, "Zzyzx")])                       # not found: ok semantics unchanged
+    assert not r.ok and any("page 1" in x for x in r.problems)
+
+
+def test_only_top_level_array_entries_are_followed():
+    arr = "[1 0 R <</P 4 0 R /Popup 5 0 R /Contents (a\\) 6 0 R) /AP <</N 12 0 R>> >> 7 0 R [8 0 R] (9 0 R \\( 11 0 R) <0A3F> 10 0 R]"
+    assert redact._top_refs(arr) == [1, 7, 10] and redact._top_refs("<</P 4 0 R>>") == [] and redact._top_refs("[]") == []
+
+
+def test_a_parent_named_inside_a_direct_widget_dict_is_not_emptied():
+    d = fitz.open(); d.new_page().insert_text((72, 72), "ID: " + ID); p2 = d.new_page(); p2.insert_text((72, 72), "Question 2")
+    kid = _field(p2, value="Answer", name="ans")
+    parent = d.get_new_xref(); d.update_object(parent, f"<</FT/Tx/T(grp)/V(Answer)/Kids[{kid} 0 R]>>")
+    for k, v in (("Parent", f"{parent} 0 R"), ("T", "null"), ("V", "null"), ("FT", "null")): d.xref_set_key(kid, k, v)
+    d.xref_set_key(d.pdf_catalog(), "AcroForm/Fields", f"[{parent} 0 R]")
+    d.xref_set_key(d[0].xref, "Annots", f"[<</Type/Annot/Subtype/Widget/Rect[72 300 300 330]/Parent {parent} 0 R>>]")
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_text(1, ID)])
+    assert r.ok and not anywhere(out, ID)
+    with fitz.open(out) as o:                                                    # page 2's field keeps its parent's value
+        assert [w.field_value for w in o[1].widgets()] == ["Answer"]
+
+
+def test_a_page_or_the_page_tree_listed_as_an_annotation_or_field_is_never_emptied():
+    d = fitz.open(); d.new_page().insert_text((72, 72), "ID: " + ID); d.new_page().insert_text((72, 72), "Question 2")
+    _field(d[1], value="Answer", name="ans")
+    cat = d.pdf_catalog(); pages = int(d.xref_get_key(cat, "Pages")[1].split()[0]); p1, p2 = d[0].xref, d[1].xref
+    d.xref_set_key(p1, "Annots", f"[{p1} 0 R {pages} 0 R {p2} 0 R]")              # a broken file: pages as annotations
+    fields = d.xref_get_key(cat, "AcroForm/Fields")[1]
+    d.xref_set_key(cat, "AcroForm/Fields", fields[:-1] + f" {pages} 0 R {p1} 0 R]")
+    p = _save(d); out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_text(1, ID)])
+    assert r.ok and not anywhere(out, ID)
+    with fitz.open(out) as o:
+        assert o.page_count == 2 and "Question 2" in o[1].get_text() and [w.field_value for w in o[1].widgets()] == ["Answer"]
+        assert all(o.xref_get_key(pg.xref, "Type")[1] == "/Page" for pg in o)
+
+
+def test_a_fallback_word_in_another_case_on_another_page_fails():
+    d = fitz.open(); pg = d.new_page(); pg.insert_text((150, 72), "Kow,"); pg.insert_text((72, 72), "Tan Ah")
+    d.new_page().insert_text((72, 72), "Signed: KOW")
+    p = _save(d)
+    r = redact.apply(p, tmp() / "o.pdf", [_text(1, "Tan Ah Kow")])
+    assert not r.ok and any("page 2" in x for x in r.problems) and "KOW" not in " ".join(r.problems)
 
 
 if __name__ == "__main__":
