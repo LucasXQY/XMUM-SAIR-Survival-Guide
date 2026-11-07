@@ -282,6 +282,67 @@ def test_forbidden_words_checked_in_generator_not_content():
 UPLOAD_URL = "https://github.com/xmum-sair/xmum-sair.github.io/issues/new?template=upload.yml"
 
 
+# A minimal DOM for site.js's /upload/ helper: only the ids it reads, submit handlers kept so the test can fire them.
+UPLOAD_HARNESS = r"""
+const fs = require('fs');
+const els = {}, handlers = {};
+function el(id, value) {
+  return els[id] = { id, value: value || '', hidden: false, dataset: {}, textContent: '', firstChild: null,
+    addEventListener(ev, fn) { (handlers[id + ':' + ev] = handlers[id + ':' + ev] || []).push(fn); },
+    focus() {}, appendChild() {}, removeChild() {}, setAttribute() {}, getAttribute() { return null; }, contains() { return false; } };
+}
+const vals = JSON.parse(process.argv[3]);
+for (const id of ['up-form', 'up-code', 'up-name', 'up-name-row', 'up-course-note', 'up-lect', 'up-lects', 'up-year', 'up-term',
+                  'up-other', 'up-type', 'up-assess', 'up-assess-row', 'up-error', 'up-prog']) el(id, vals[id]);
+el('up-data').textContent = JSON.stringify({ courses: {}, lecturers: [] });
+els['up-form'].dataset.form = 'https://github.com/o/r/issues/new?template=upload.yml';
+global.document = { documentElement: el('html'), body: { dataset: {} }, querySelectorAll: () => [], querySelector: () => null,
+  getElementById: id => els[id] || null, createElement: () => el('x'), addEventListener() {} };
+global.window = {}; global.localStorage = { getItem() { throw new Error('blocked'); } };
+global.location = { pathname: '/upload/', href: '' };
+eval(fs.readFileSync(process.argv[2], 'utf8'));
+for (const fn of handlers['up-form:submit'] || []) fn({ preventDefault() {} });
+console.log(JSON.stringify({ href: location.href, error: els['up-error'].textContent }));
+"""
+
+
+def _submit_upload_helper(**values):
+    """Fill the /upload/ helper with values by element id, press Next; (prefilled GitHub URL or "", error text)."""
+    import shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        return None
+    harness = pathlib.Path(tempfile.mkdtemp()) / "harness.js"
+    harness.write_text(UPLOAD_HARNESS, encoding="utf-8")
+    r = subprocess.run([node, str(harness), str(ROOT / "site/static/site.js"), json.dumps(values)],
+                       capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    return out["href"], out["error"]
+
+
+def test_upload_helper_needs_only_the_programme():
+    """Spec §4: course code, name, session and type are optional hints. The helper asks only for the programme, leaves
+    empty hints out of the prefilled form, and still catches a hint given in the wrong shape."""
+    from urllib.parse import parse_qs, urlsplit
+    out = _submit_upload_helper(**{"up-prog": "AIT"})
+    if out is None:
+        print("node not found: upload helper behaviour not checked")
+        return
+    href, error = out
+    q = parse_qs(urlsplit(href).query)
+    assert error == "" and q["template"] == ["upload.yml"] and q["prog"] == ["AIT"], (href, error)
+    assert not {"code", "name", "session", "type", "lecturer", "assessment"} & set(q) and q["title"] == ["[上传 | Upload]"]
+    href, error = _submit_upload_helper(**{"up-prog": "EEE", "up-code": "com107", "up-name": "Circuits", "up-year": "2022",
+                                           "up-term": "04", "up-type": "Past-Papers", "up-assess": "Final"})
+    q = parse_qs(urlsplit(href).query)
+    assert (q["code"], q["name"], q["session"], q["type"], q["assessment"]) == (["COM107"], ["Circuits"], ["2022-04"], ["Past-Papers"], ["Final"])
+    assert q["title"] == ["[上传 | Upload] COM107 2022-04 Past-Papers"]
+    for bad in ({"up-code": "TBD_1"}, {"up-term": "other", "up-other": "April"}, {"up-year": "2022"}):
+        href, error = _submit_upload_helper(**{"up-prog": "EEE", **bad})
+        assert href == "" and " | " in error, (bad, error)
+
+
 def test_upload_page_suggests_courses_and_lecturers():
     """GitHub forms cannot suggest values, so /upload/ does: known courses and lecturers as you type, anything new is
     taken as new, and the answers ride along to the GitHub form, where only the files are left to add."""
