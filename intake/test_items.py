@@ -66,6 +66,52 @@ def test_zip_members_numbered_like_the_rejected_ones():
     assert items_mod.make_items(ok, origins)[0].source == "p.zip › 2"
 
 
+def docx(path, text="Hello world"):
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("word/document.xml", f"<w:document><w:t>{text}</w:t></w:document>")
+    return path
+
+
+def fake_soffice(w):
+    """A stand-in for soffice as an argv list (portable): writes <stem>.pdf with two pages into --outdir."""
+    script = w / "fake_soffice.py"
+    script.write_text("""import sys, pathlib, fitz
+a = sys.argv[1:]; out = pathlib.Path(a[a.index('--outdir') + 1]); src = pathlib.Path(a[-1])
+d = fitz.open()
+for t in ('First page', 'Second page'):
+    d.new_page().insert_text((72, 72), t + ' ' + 'filler text ' * 12)
+d.save(out / (src.stem + '.pdf'))
+""", encoding="utf-8")
+    return [sys.executable, str(script)]
+
+
+def test_office_conversion_is_optional_and_never_touches_the_original():
+    w = tmp(); d = docx(w / "a.docx")
+    assert items_mod.to_pdf(d, w, soffice="definitely-not-installed") is None
+    it = items_mod.make_items([("a.docx", d)], ["a.docx"], soffice="definitely-not-installed")[0]
+    assert it.view is None and it.path == d
+    if shutil.which("soffice"):
+        assert items_mod.to_pdf(d, w).suffix == ".pdf"
+
+
+def test_office_view_comes_from_the_converted_pdf():
+    w = tmp(); d = docx(w / "a.docx"); before = d.read_bytes(); soffice = fake_soffice(w)
+    out = items_mod.to_pdf(d, w / "out", soffice)
+    assert out is not None and out.suffix == ".pdf" and out.exists() and out.parent != d.parent
+    assert items_mod.to_pdf(d, w / "out", [sys.executable, "-c", "raise SystemExit(1)"]) is None
+    it = items_mod.make_items([("a.docx", d)], ["a.docx"], soffice=soffice, work=w / "v")[0]
+    assert it.view is not None and it.view.suffix == ".pdf" and it.path == d and it.ext == "docx"
+    assert it.pages == 2 and "Second page" in it.page_text[1] and not it.scanned
+    assert d.read_bytes() == before
+
+
+def test_pdf_view_is_itself_and_text_files_have_none():
+    w = tmp(); a = pdf(w / "a.pdf", ["one"]); t = w / "n.txt"; t.write_text("hi", encoding="utf-8")
+    x, y = items_mod.make_items([("a.pdf", a), ("n.txt", t)], ["a.pdf", "n.txt"])
+    assert x.view == a and y.view is None
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
