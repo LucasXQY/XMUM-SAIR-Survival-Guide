@@ -2,8 +2,8 @@
 annotations, applied so that the text, image pixels and any line art they touch are removed, not just covered. Every
 annotation and form field on a redacted page goes first (a field's value would survive under the black box), and the
 outline, page labels, page thumbnails and piece info, metadata, XMP and embedded files go from the whole file. Every
-page is read again afterwards and every blacked-out string, and each of its words, must be gone. Problems name pages
-or redaction numbers, never the text; the rectangles kept for the cache hold no text."""
+page is read again afterwards: every blacked-out string, and every word the word fallback blacked out, must be gone.
+Problems name pages or redaction numbers, never the text; the rectangles kept for the cache hold no text."""
 from __future__ import annotations
 
 import math
@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 WIDEN = 0.02        # each side of a box grows by this share of the displayed page's width / height
-MIN_WORD = 3        # the word fallback, and the check, use the words of at least this many characters
+MIN_WORD = 3        # the word fallback searches the words of at least this many characters
 BLACK = (0, 0, 0)
 PAGE_KEYS = ("PieceInfo", "Metadata", "Thumb")      # removed from every page
 _REF = re.compile(r"(\d+)\s+\d+\s+R")
@@ -112,14 +112,15 @@ def _readable(page) -> list[str]:
     return out
 
 
-def _left(doc, redactions: list[dict]) -> list[int]:
-    """1-based pages of `doc` on which a text redaction can still be read: its string anywhere, compared with all
+def _left(doc, redactions: list[dict], fallback_words=()) -> list[int]:
+    """1-based pages of `doc` on which a text redaction's string can still be read anywhere, compared with all
     whitespace removed on both sides (so a string broken over lines or spaced out counts, and again with hyphenated
-    line breaks joined) and ignoring case; or any of its words of MIN_WORD+ characters as a whole word (punctuation
-    trimmed, case kept: "tan" in a formula is not the name "Tan")."""
+    line breaks joined) and ignoring case; or one of `fallback_words` (the words the word fallback blacked out) as a
+    whole word, punctuation trimmed and case kept ("tan" in a formula is not the name "Tan"). Single words of strings
+    found whole are not checked: a lecturer "Dr Tan" must not fail a student "Tan Ah Kow"."""
     texts = [r["text"] for r in redactions if r.get("kind") == "text"]
     strings = [s for s in (_squash(t).casefold() for t in texts) if s]
-    words = {w for t in texts for w in _long_words(t)}
+    words = {w for x in fallback_words for w in _words(x)}
     pages = []
     for i, page in enumerate(doc, 1):
         found = _readable(page)
@@ -129,18 +130,21 @@ def _left(doc, redactions: list[dict]) -> list[int]:
     return pages
 
 
-def text_gone(pdf: Path, redactions: list[dict]) -> bool:
-    """True when no text redaction's string, nor any of its words of MIN_WORD+ characters, can be read on ANY page of
-    `pdf` (not only the page it names; see _left). False for an unreadable PDF, a `redactions` that is not a list, or
-    any malformed entry (the same rules as apply)."""
+def text_gone(pdf: Path, redactions: list[dict], fallback_words: list[str] | None = None) -> bool:
+    """True when no text redaction's string, nor any of `fallback_words` (the words apply's word fallback used), can
+    be read on ANY page of `pdf` (not only the page it names; see _left). False for an unreadable PDF, a `redactions`
+    that is not a list, any malformed entry (the same rules as apply), or `fallback_words` that is not a list of
+    non-blank strings."""
     import fitz
-    if not isinstance(redactions, list):
+    words = [] if fallback_words is None else fallback_words
+    if not isinstance(redactions, list) or not isinstance(words, (list, tuple)) \
+            or not all(isinstance(w, str) and _words(w) for w in words):
         return False
     try:
         with fitz.open(pdf) as doc:
             if not all(_valid(r, doc.page_count) for r in redactions):
                 return False
-            return not _left(doc, redactions)
+            return not _left(doc, redactions, words)
     except Exception:
         return False
 
@@ -158,12 +162,13 @@ def _cached_marks(cached, n: int):
 
 
 def _plan(doc, redactions):
-    """(marks [(page, Rect)], box pages, problems) for the check's redactions. Text: every hit of the
-    whitespace-normalised string on its page (MuPDF's search ignores case and follows a string over line breaks); when
-    there is none, every page word equal (ignoring case and edge punctuation) to one of its words of MIN_WORD+
-    characters, and the target fails when it has no such word or one is not on the page. Boxes: see _box_rect."""
+    """(marks [(page, Rect)], box pages, words the fallback used, problems) for the check's redactions. Text: every
+    hit of the whitespace-normalised string on its page (MuPDF's search ignores case and follows a string over line
+    breaks); when there is none, every page word equal (ignoring case and edge punctuation) to one of its words of
+    MIN_WORD+ characters, and the target fails when it has no such word or one is not on the page. Boxes: see
+    _box_rect."""
     import fitz
-    marks, boxes, problems = [], set(), []
+    marks, boxes, used, problems = [], set(), [], []
     for r in redactions:
         page = doc[r["page"] - 1]
         if r["kind"] == "box":
@@ -173,14 +178,15 @@ def _plan(doc, redactions):
         needle = _norm(r["text"])
         hits = page.search_for(needle)
         if not hits:
-            words = [w.casefold() for w in _long_words(needle)]
+            words = _long_words(needle)
+            used += words
             on_page = [(fitz.Rect(x[:4]), _EDGE.sub("", x[4]).casefold()) for x in page.get_text("words")]
-            found = [[rect for rect, pw in on_page if pw == w] for w in words]
+            found = [[rect for rect, pw in on_page if pw == w.casefold()] for w in words]
             hits = [h for f in found for h in f]
             if not words or not all(found):
                 problems.append(NOT_FOUND.format(p=r["page"]))
         marks += [(r["page"], h) for h in hits]
-    return marks, sorted(boxes), problems
+    return marks, sorted(boxes), list(dict.fromkeys(used)), problems
 
 
 def _refs(doc, got) -> list[int]:
@@ -312,14 +318,14 @@ def _apply(doc, out: Path, redactions, cached_rects) -> Redacted:
         if marks is None:
             return Redacted(False, None, problems=problems)
         rects = [{"page": p, "rect": [float(v) for v in r]} for p, r in marks]
-        box_pages = sorted({p for p, _ in marks})
+        box_pages, fallback = sorted({p for p, _ in marks}), []
     else:
         if not isinstance(redactions, list):
             return Redacted(False, None, problems=[LIST_BAD])
         bad = [i for i, r in enumerate(redactions, 1) if not _valid(r, n)]
         if bad:
             return Redacted(False, None, problems=[ENTRY_BAD.format(i=i) for i in bad])
-        found, box_pages, problems = _plan(doc, redactions)
+        found, box_pages, fallback, problems = _plan(doc, redactions)
         rects = [{"page": p, "rect": _outward(r)} for p, r in found]
         marks = [(x["page"], fitz.Rect(x["rect"])) for x in rects]
     for pno in sorted({p for p, _ in marks}):
@@ -342,7 +348,7 @@ def _apply(doc, out: Path, redactions, cached_rects) -> Redacted:
         return Redacted(False, None, problems=[METADATA])
     if cached_rects is None:
         with fitz.open(out) as done:
-            problems += [STILL.format(p=p) for p in _left(done, redactions)]
+            problems += [STILL.format(p=p) for p in _left(done, redactions, fallback)]
     return Redacted(not problems, out, rects, box_pages, list(dict.fromkeys(problems)))
 
 

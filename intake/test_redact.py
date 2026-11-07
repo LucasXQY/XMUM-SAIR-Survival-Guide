@@ -459,14 +459,34 @@ def test_the_word_fallback_matches_whole_words_only():
     assert "Find the important constant of integration" in t                     # "tan" inside words is left alone
 
 
-def test_text_gone_validates_and_checks_every_word():
+def test_text_gone_validates_and_checks_fallback_words_only_when_given():
     p = pdf_pages(["Question 1", "Signed: Kow"])
     assert not redact.text_gone(p, None) and not redact.text_gone(p, {"page": 1, "kind": "text", "text": "x"})
     for bad in (_text(3, "Tan Ah Kow"), _text(0, "x"), dict(_text(1, "x"), kind="blur"), _box(1, [1, 2, 3]), "Tan", None):
         assert not redact.text_gone(p, [bad]), bad
+    for bad in ("Kow", [None], ["  "], [3], {"Kow": 1}):
+        assert not redact.text_gone(p, [], fallback_words=bad), bad
     assert redact.text_gone(p, [_box(1, [0, 0, 100, 100])]) and redact.text_gone(p, [])
-    assert not redact.text_gone(p, [_text(1, "Tan Ah Kow")])                    # a word of it, on page 2
-    assert redact.text_gone(pdf_pages(["Kowloon", "tan x = 1"]), [_text(1, "Tan Ah Kow")])   # not whole words; case kept
+    assert redact.text_gone(p, [_text(1, "Tan Ah Kow")])                        # a single word of it: not checked
+    assert not redact.text_gone(p, [_text(1, "Tan Ah Kow")], fallback_words=["Tan", "Kow"])   # unless the fallback used it
+    assert redact.text_gone(pdf_pages(["Kowloon", "tan x = 1"]), [], fallback_words=("Tan", "Kow"))  # whole words; case kept
+
+
+def test_a_common_surname_elsewhere_does_not_fail_a_full_match():
+    p = pdf_pages(["Name: Tan Ah Kow   Lecturer: Dr Tan", "Prepared by Dr Tan", "TAN TABLE: Sin Cos Tan"])
+    out = tmp() / "o.pdf"
+    r = redact.apply(p, out, [_text(1, "Tan Ah Kow")])                          # found whole: no word fallback
+    assert r.ok and r.problems == [] and "Tan Ah Kow" not in text(out, 1)
+    assert "Dr Tan" in text(out, 1) and "Dr Tan" in text(out, 2)
+
+
+def test_a_fallback_after_a_hyphenated_break_still_checks_its_words():
+    page = "Name: Tan Ah-\nKow end"                                              # not found whole: the fallback runs
+    out = tmp() / "o.pdf"
+    r = redact.apply(pdf_pages([page]), out, [_text(1, "Tan Ah Kow")])
+    assert r.ok and "Tan" not in text(out, 1) and "Kow" not in text(out, 1)
+    r = redact.apply(pdf_pages([page, "Signed: Kow"]), tmp() / "o.pdf", [_text(1, "Tan Ah Kow")])
+    assert not r.ok and any("page 2" in x for x in r.problems) and "Kow" not in " ".join(r.problems)
 
 
 def test_a_stale_output_is_deleted_whenever_nothing_is_written():
