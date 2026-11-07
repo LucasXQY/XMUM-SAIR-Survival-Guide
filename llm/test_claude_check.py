@@ -131,6 +131,17 @@ def test_ledger_totals_stay_exact_and_never_negative():
     assert b.spent("haiku") == (0, 0)                                      # never below 0
 
 
+def test_a_run_that_started_before_midnight_never_rolls_the_ledger_back():
+    store = FakeStore(branch=True)
+    late = cc.Budget("o/r", gh=store.gh, today="2026-11-30")
+    assert late.reserve("upload", 5)
+    assert cc.Budget("o/r", gh=store.gh, today="2026-12-01").reserve("upload", 7)
+    late.settle("upload", 1)                                               # the old run settles after the new month began
+    assert cc.Budget("o/r", gh=store.gh, today="2026-12-01").spent("upload") == (8, 8)
+    assert late.reserve("upload", 6) and cc.Budget("o/r", gh=store.gh, today="2026-12-01").spent("upload") == (14, 14)
+    assert not late.reserve("upload", 2)                                   # caps are checked against the newer day's totals
+
+
 class FakeClient:
     def __init__(self, text='{"verdict": "hide"}', stop="end_turn", error=None):
         self.kw, self.path = None, None

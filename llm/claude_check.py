@@ -164,11 +164,15 @@ class Budget:
         data, sha = self.file.read()
         if not isinstance(data, dict):
             raise ValueError("usage file is not an object")
-        same_day, same_month = data.get("day") == self.today, data.get("month") == self.month
-        return {"day": self.today, "month": self.month,
-                "calls": _table(data.get("calls", {})) if same_day else {},
-                "usd_day": _table(data.get("usd_day", {})) if same_day else {},
-                "usd_month": _table(data.get("usd_month", {})) if same_month else {}}, sha
+        # An older stored day or month is cleared; a LATER one (another run started after midnight) is kept and this
+        # run's spend is added on top of it, so a late write never rolls the ledger back or counts less than was spent.
+        def kept(stored, mine):
+            return stored if isinstance(stored, str) and stored >= mine else None
+        day, month = kept(data.get("day"), self.today), kept(data.get("month"), self.month)
+        return {"day": day or self.today, "month": month or self.month,
+                "calls": _table(data.get("calls", {})) if day else {},
+                "usd_day": _table(data.get("usd_day", {})) if day else {},
+                "usd_month": _table(data.get("usd_month", {})) if month else {}}, sha
 
     def _update(self, change) -> bool:
         """Read, let change(ledger) edit it (False = refuse), write with the sha; read again on a Conflict."""
