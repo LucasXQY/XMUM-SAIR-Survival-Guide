@@ -16,6 +16,7 @@ Run `python scripts/update_index.py AIT` from the repo root after adding files; 
 <!-- COURSE-INDEX -->
 | 代码 / Code | 课程 / Course | 修课学期 / Taken in | 资料学期 / Sessions covered | 资料 / Material |
 |---|---|---|---|---|
+| AIT304 | [Advanced Computer Vision](AIT304_Advanced_Computer_Vision/) | 2024-04 | [2024-04](AIT304_Advanced_Computer_Vision/2024-04) | [README](AIT304_Advanced_Computer_Vision/README.md)<br>[Assignments (1)](AIT304_Advanced_Computer_Vision/2024-04/Assignments) |
 <!-- /COURSE-INDEX -->
 
 ## 修课时间表 | Course timeline
@@ -23,3 +24,9 @@ Run `python scripts/update_index.py AIT` from the repo root after adding files; 
 还没有人整理。格式见 [EEE/README.md](../EEE/README.md)：每位贡献者一节 `### <昵称>`，按修读学期（`YYYY-MM`）列课程，有资料的行加链接。
 
 None added yet. Follow the format in [EEE/README.md](../EEE/README.md): one `### <nickname>` section per contributor, courses listed by the session taken (`YYYY-MM`), rows with material linked.
+
+### 其他同学 | Other contributors
+
+| 学期 / Session | 代码 / Code | 课程 / Course | 贡献者 / Contributor |
+|---|---|---|---|
+| 2024-04 | [AIT304](AIT304_Advanced_Computer_Vision/) | [Advanced Computer Vision](AIT304_Advanced_Computer_Vision/) | [WeiChenNg](https://github.com/WeiChenNg) |
