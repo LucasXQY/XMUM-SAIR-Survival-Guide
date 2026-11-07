@@ -130,6 +130,23 @@ def test_candidates_cache_reads_each_pdf_once():
         fitz.open = real
 
 
+def test_the_run_cache_holds_two_pages_for_the_comparison():
+    import fitz
+    root, course = repo()
+    d = fitz.open(); d.new_page().insert_text((72, 72), A); d.new_page().insert_text((72, 72), "Question 2 second page")
+    d.new_page().insert_text((72, 72), "third page"); d.save(str(course / "Past-Papers" / "a.pdf")); d.close()
+    cache = {}
+    (rel, _), = dedupe.candidates(item(A), course, root, cache=cache)
+    opens, real = [], fitz.open
+    fitz.open = lambda *a, **k: (opens.append(a), real(*a, **k))[1]
+    try:
+        pages = dedupe.first_pages(root / rel, cache)
+    finally:
+        fitz.open = real
+    assert opens == [] and len(pages) == 2 and "Final Examination" in pages[0] and "second page" in pages[1]
+    assert dedupe.first_pages(root / "missing.pdf") is None and dedupe.first_page_text(course / "Past-Papers" / "a.pdf").startswith("Final")
+
+
 def test_chinese_only_pages_match():
     zh = "期末考试 电路分析 第一题 求电流"
     assert dedupe.normalise(zh)[:2] == ["期", "末"] and dedupe.classify(dedupe.similarity(zh, zh)) == "same"

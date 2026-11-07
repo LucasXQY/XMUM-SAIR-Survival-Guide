@@ -192,6 +192,13 @@ def test_a_small_pdf_is_sent_whole_with_its_source_only():
     assert content[1]["text"] == "File: papers.zip › 1"
 
 
+def test_a_fresh_answer_keeps_only_the_schema_keys():
+    asked, cache = [], {}
+    extra = dict(CHECK_OK, redactions_rects=[], redactions_ok=True, verify="no", anything="x")
+    out = ai.check_items(ITEMS3, {1}, fake_ask(asked, extra), ai.Meter(FakeBudget(ok=True)), cache)
+    assert set(out[1]) == set(ai.CHECK_KEYS) and cache["check"][ITEMS3[0].sha] is out[1]
+
+
 def test_cached_results_are_reused_without_a_call():
     asked = []
     b = FakeBudget(ok=True)
@@ -410,7 +417,7 @@ def test_compare_pair_falls_back_to_different():
 
 def test_compare_schema_prompt_and_ask():
     assert ai.COMPARE_SCHEMA["properties"]["relation"]["enum"] == ["same", "different_set", "different_version", "different"]
-    for need in ("Set A", "revised", "untrusted"):
+    for need in ("Set A", "revised", "untrusted", "first two pages"):
         assert need in ai.COMPARE_SYSTEM, need
     seen = []
     real = ai.cc.ask

@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "llm"))
 sys.path.insert(0, str(HERE))
 import claude_check as cc
-from intake import PII_RE
+from intake import VALUE_RE, personal
 
 NOTE_KEYS = ("summary", "notes", "note", "weighting", "lecturers")   # Claude's free text
 WHAT_MAX = 40
@@ -20,9 +20,9 @@ TRIES = 5          # writes retried after a Conflict
 
 def _note(v):
     """Every string beneath a NOTE_KEYS key (summary, notes, note, weighting, lecturers) is free text: blank the ones
-    that look personal."""
+    that look personal (a keyword or a value: intake.personal)."""
     if isinstance(v, str):
-        return "" if PII_RE.search(v) else v
+        return "" if personal(v) else v
     if isinstance(v, dict):
         return {k: _note(x) for k, x in v.items()}
     if isinstance(v, list):
@@ -31,9 +31,11 @@ def _note(v):
 
 
 def _what(v):
+    """A redaction's label ("学号 | student ID"): blank when it holds a value (intake.VALUE_RE: an ID, an email, a phone
+    number, a run of 6+ digits), else capped. Category words are the label, so keywords are not held against it."""
     if not isinstance(v, str):
         return v
-    return "" if PII_RE.search(v) else v[:WHAT_MAX]
+    return "" if VALUE_RE.search(v) or VALUE_RE.search(v[:WHAT_MAX]) else v[:WHAT_MAX]
 
 
 def _redaction(r):
@@ -107,6 +109,23 @@ class IntakeCache:
                 return None
             try:
                 self._file.write(scrub({**stored, "overrides": new}), sha, msg)
+                return new
+            except cc.Conflict:
+                continue
+        raise cc.Conflict(f"{self.name} kept changing")
+
+    def update(self, change) -> dict | None:
+        """Compare-and-swap of the whole file, for `/retry`: `change(data)` gets a copy of the stored file and returns
+        the new contents (None: nothing to write), written scrubbed with the sha that copy was read with. On a Conflict
+        the file is read again and `change` applied again, up to TRIES times. Returns what was written, or None."""
+        msg = f"intake-cache: /retry on issue {int(self.issue)}"
+        for _ in range(TRIES):
+            stored, sha = self._file.read()
+            new = change(copy.deepcopy(stored))
+            if new is None:
+                return None
+            try:
+                self._file.write(scrub(new), sha, msg)
                 return new
             except cc.Conflict:
                 continue

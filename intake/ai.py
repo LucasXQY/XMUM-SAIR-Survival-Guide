@@ -281,8 +281,8 @@ def sort_items(items, form, cat, ask, meter, cache: dict) -> dict:
 RELATIONS = ("same", "different_set", "different_version", "different")
 COMPARE_MAX_CHARS = 6000
 COMPARE_SYSTEM = """You compare two files from XMUM SAIR Survival Guide, a public archive of course material. File A was \
-just uploaded; file B is already in the archive. Their first-page text follows in <file_a> and <file_b> blocks. Decide how \
-A relates to B:
+just uploaded; file B is already in the archive. The text of their first two pages follows in <file_a> and <file_b> \
+blocks. Decide how A relates to B:
 - same: the same paper or document (re-scans, re-exports and different file names of one thing).
 - different_set: another set of the same assessment, such as Set A against Set B of one exam, with different questions.
 - different_version: a revised or updated version of the same document.
@@ -303,7 +303,8 @@ def _tagged(tag: str, text) -> str:
 
 
 def compare_pair(a_text: str, b_text: str, ask, meter) -> str:
-    """How two first pages relate: same | different_set | different_version | different. Any failure is "different"."""
+    """How two files relate, from the text of their first two pages: same | different_set | different_version |
+    different. Any failure is "different"."""
     try:
         if not meter.reserve(RESERVE_PER_ITEM):
             return "different"
@@ -417,6 +418,7 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
     A complete answer cached in cache["check"][sha] is reused without a call. No call (None) for an item without a view,
     an unreadable PDF, or more than CHECK_MAX_PAGES pages (recorded as cache["check_skipped"][sha] = "too_long").
     An answer (fresh or cached) with a redaction on a page the file, or its range, does not have counts as no answer.
+    A fresh answer keeps exactly CHECK_KEYS (anything else Claude adds is dropped).
     Each other item, in order, reserves check_estimate(pages) on `meter`; a refused reservation leaves that item None
     and the next one is still tried. A view whose base64 would exceed `max_b64` goes in page ranges, one call each, merged by
     merge_parts. Up to WORKERS calls at once, each call's cost added to `meter`. Answers are cached as given (the
@@ -461,8 +463,8 @@ def check_items(items, keep: set[int], ask, meter, cache: dict, max_b64: int = C
         n = len(ranges) if ranges else 1
         got = results[at:at + n]
         at += n
-        if ranges is None:
-            v = got[0] if check_ok(got[0]) and pages_in_range(got[0], it.pages) else None
+        if ranges is None:     # exactly the schema's keys: the bookkeeping keys a rebuild trusts are never Claude's
+            v = {k: got[0][k] for k in CHECK_KEYS} if check_ok(got[0]) and pages_in_range(got[0], it.pages) else None
         else:
             v = merge_parts([(a, b - a + 1, g) for (a, b), g in zip(ranges, got)])
         if v is not None:

@@ -106,6 +106,19 @@ def test_scrub_blanks_personal_lecturers_and_weighting():
     assert "gmail" not in json.dumps(c) and "ABC2109123" not in json.dumps(c)
 
 
+def test_redaction_labels_are_filtered_by_value_and_free_text_by_both():
+    labels = ["学号 | student ID", "Moodle 密钥 | enrolment key", "微信 | WeChat", "姓名 | name", "签名 | signature"]
+    values = ["学号 2109300123", "身份证 990101-14-5678", "电话 012-345 6789", "ID EEE2109300", "mail a@gmail.com"]
+    data = {"check": {"s": {"redactions": [{"page": 1, "kind": "box", "what": w} for w in labels + values],
+                            "summary": "身份证 990101-14-5678", "notes": "电话 012-345 6789",
+                            "weighting": "学号 2109300123 Final 60%", "lecturers": ["Dr Tan", "Dr 2109300123"]},
+                      "t": {"summary": "student id on page 2", "notes": "Final 60% | page 3"}}}
+    c = cache.scrub(data)["check"]
+    assert [r["what"] for r in c["s"]["redactions"]] == labels + [""] * len(values)
+    assert c["s"]["summary"] == c["s"]["notes"] == c["s"]["weighting"] == "" and c["s"]["lecturers"] == ["Dr Tan", ""]
+    assert c["t"] == {"summary": "", "notes": "Final 60% | page 3"}             # keywords still blank free text
+
+
 PATH = "intake-cache/issue-7.json"
 
 

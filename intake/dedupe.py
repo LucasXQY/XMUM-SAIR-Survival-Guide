@@ -10,6 +10,7 @@ import ai   # for the PyMuPDF lock (ai._FITZ), shared with every other fitz user
 
 SAME_AT = 0.9
 ASK_AT = 0.6
+PAGES = 2           # pages of each file the comparison is given (spec §5 step 5); the score uses the first
 _WORD = re.compile(r"[a-z0-9]{2,}|[一-鿿]")
 
 
@@ -29,19 +30,38 @@ def classify(score: float) -> str:
     return "same" if score >= SAME_AT else "ask" if score >= ASK_AT else "different"
 
 
-def first_page_text(path: Path) -> str | None:
-    """Text of the first page of a PDF, None when it cannot be read."""
+def _read_pages(path: Path, n: int = PAGES) -> list[str] | None:
+    """Text of the first n pages of a PDF; None when it cannot be read or has no page."""
     try:
         import fitz
         with ai._FITZ, fitz.open(path) as doc:
-            return doc[0].get_text() if len(doc) else None
+            return [doc[i].get_text() for i in range(min(n, len(doc)))] or None
     except Exception:
         return None
 
 
+def first_pages(path: Path, cache: dict | None = None) -> list[str] | None:
+    """Text of the first PAGES pages of a PDF (None when unreadable), from `cache` (str(path) -> pages, the run's
+    cache candidates fills) when it is there, else read (and stored in `cache`)."""
+    key = str(path)
+    if cache is not None and key in cache:
+        return cache[key]
+    pages = _read_pages(path)
+    if cache is not None:
+        cache[key] = pages
+    return pages
+
+
+def first_page_text(path: Path) -> str | None:
+    """Text of the first page of a PDF, None when it cannot be read."""
+    pages = _read_pages(path, 1)
+    return pages[0] if pages else None
+
+
 def candidates(item, course_dir: Path | None, root: Path | None = None, cache: dict | None = None) -> list[tuple[str, float]]:
     """[(repo-relative posix path, score)] of PDFs under course_dir whose first page scores >= ASK_AT against the item's,
-    best first. `cache` (path -> first-page text or None) is filled and reused, so a run reads each repo PDF once. Safe to
+    best first. `cache` (str(path) -> the first PAGES pages' text, or None; see first_pages) is filled and reused, so a
+    run reads each repo PDF once, the comparison's second page included. Safe to
     call from worker threads: PDFs are opened under ai._FITZ. Scanned items, items without page text and a missing folder give []. Unreadable PDFs are skipped."""
     if course_dir is None or item.scanned or not item.page_text or not Path(course_dir).is_dir():
         return []
@@ -54,16 +74,10 @@ def candidates(item, course_dir: Path | None, root: Path | None = None, cache: d
     for p in sorted(course_dir.rglob("*")):
         if not p.is_file() or p.suffix.lower() != ".pdf":
             continue
-        key = str(p)
-        if cache is not None and key in cache:
-            text = cache[key]
-        else:
-            text = first_page_text(p)
-            if cache is not None:
-                cache[key] = text
-        if text is None:
+        pages = first_pages(p, cache)
+        if not pages:
             continue
-        score = similarity(mine, text)
+        score = similarity(mine, pages[0])
         if score >= ASK_AT:
             try:
                 rel = p.relative_to(root).as_posix()

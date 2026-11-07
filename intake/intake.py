@@ -290,7 +290,22 @@ PII_RE = re.compile(
     r"|\b(?:\+?6?01\d[- ]?\d{7,8}|1[3-9]\d{9})\b"            # Malaysian / Chinese mobile numbers
     r"|enrolment key|passcode|password|zoom|meeting id|wechat|whatsapp",
     re.I)
-ANS_RE = re.compile(r"marking scheme|answer scheme|model answer|suggested answer|solution|answer key|答案|评分标准|参考解答", re.I)
+# Value-shaped personal data only, no keywords: what the label of a redaction ("学号 | student ID") must never hold.
+# Claude's free text (summaries, notes, lecturers, weighting) is held to both: see personal().
+VALUE_RE = re.compile(
+    r"\b[A-Z]{3}\d{7,10}\b"                                  # student id
+    r"|[\w.+-]+@(?!xmu\.edu\.my\b)[\w-]+(?:\.[\w-]+)+"       # any email except the university's
+    r"|\b(?:\+?6?01\d[- ]?\d{7,8}|1[3-9]\d{9})\b"            # Malaysian / Chinese mobile numbers
+    r"|\d(?:[ -]?\d){5,}",                                   # 6+ digits, single spaces or hyphens between groups
+    re.I)
+
+
+def personal(text: str) -> bool:
+    """Does Claude's free text look personal: a keyword (PII_RE) or a value (VALUE_RE)?"""
+    return bool(PII_RE.search(text) or VALUE_RE.search(text))
+
+
+ANS_RE =re.compile(r"marking scheme|answer scheme|model answer|suggested answer|solution|answer key|答案|评分标准|参考解答", re.I)
 OFFICE_TEXT_RE = re.compile(r"<(?:w:t|a:t|t)(?:\s[^>]*)?>([^<]*)</(?:w:t|a:t|t)>")
 
 
@@ -870,6 +885,8 @@ VERIFIED_TEXT = {
     "failed": "复查没通过 | re-check did not pass",
     "not_needed": "只涂了文字、页上没有图片：已确认文字抽不到，不用复查 | text only, on pages without pictures: "
                   "confirmed gone, no re-check needed",
+    "later": "没复查成（额度用完或调用失败），之后的重建会再试 | not re-checked (budget used up or a failed call); a later "
+             "rebuild tries again",
     "not_run": "没有复查 | not re-checked",
 }
 COMMAND_HELP = (
@@ -882,8 +899,9 @@ COMMAND_HELP = (
     "- `/keep #k`：把不收的文件（包括近似重复）捞回来，重新检查 | take a skipped file (near-duplicates too) back and check it",
     "- `/approve #k`：我看过了，提交；风险由批准人承担，PR 里会写明 | I looked at it, commit it; on the approver's "
     "responsibility, named in the PR",
-    "- `/retry`：只重跑没检查过或失败的文件，已有结果的不重复花钱，不提高额度 | reruns only unchecked or failed files; "
-    "earlier results cost nothing, no cap is raised",
+    "- `/retry`：只重跑没检查过或失败的文件；打码没完成或复查没通过的文件从头再查一遍；已有结果的不重复花钱，不提高额度 "
+    "| reruns only unchecked or failed files; files whose redaction failed or whose re-check did not pass are checked "
+    "again from scratch; earlier results cost nothing, no cap is raised",
     "",
     f"类型 | Types: {' / '.join(SUBS)}",
 )
@@ -924,9 +942,9 @@ class Result:
 
 def _ai_text(text: str) -> str:
     """Claude's free text for the PR or the issue comment: a code span, so it cannot close an issue (#12), ping
-    anyone (@x), link or render HTML; dropped entirely when it looks like personal data."""
+    anyone (@x), link or render HTML; dropped entirely when it looks like personal data (a keyword or a value)."""
     text = str(text or "").strip()
-    return "" if not text or PII_RE.search(text) else _code(text)
+    return "" if not text or personal(text) else _code(text)
 
 
 def _row_of(*cells: str) -> str:
@@ -942,15 +960,17 @@ def _pages(notes: str, redactions=()) -> list[str]:
 
 
 def _kinds(redactions) -> str:
-    """What was blacked out, by kind and count ("`学号 | student ID` ×2"): the check's `what` labels, through the same
-    filter the bot-state cache uses (cache._what: nothing that looks personal, capped) and then _ai_text. Never the
-    text itself; labels that do not survive the filter count as "other"."""
+    """What was blacked out, by kind and count ("`学号 | student ID` ×2"): the check's `what` labels through the very
+    filter the bot-state cache applies to them (cache._what: blank when it holds a value such as an ID, an email, a
+    phone number or a run of 6+ digits (VALUE_RE), else capped), shown as a code span. Category words such as
+    "student ID" or "WeChat" are kept: they are the label. Never the redacted text; labels that do not survive the
+    filter count as "other"."""
     from cache import _what
     counts: dict[str, int] = {}
     for x in redactions or ():
         w = x.get("what") if isinstance(x, dict) else None
-        label = _ai_text(_what(w)) if isinstance(w, str) else ""
-        label = label or "其他 | other"
+        kept = _what(w).strip() if isinstance(w, str) else ""
+        label = _code(kept) if kept else "其他 | other"
         counts[label] = counts.get(label, 0) + 1
     return "、".join(f"{label} ×{n}" for label, n in counts.items())
 
@@ -1016,6 +1036,9 @@ def report_sections(r: Report, linked: bool) -> list[str]:
     for d in ordered:
         if d.outcome == "review":
             extra = [NOT_CHECKED[r.why[d.k]]] if d.k in r.why else []
+            b = r.redactions.get(d.k)
+            if b is not None and b.status != "ok":
+                extra.append("可用 `/retry` 从头再查 | `/retry` checks it again from scratch")
             if d.code:
                 extra.append(f"可能的位置 | likely place: `{d.code} {d.session} {d.type}`")
             source = by_k[d.k].source
@@ -1188,10 +1211,11 @@ LECTURERS_MAX, LECTURER_CHARS, WEIGHTING_CHARS = 5, 80, 200   # Claude's text bo
 
 
 def _public(text: str, limit: int) -> str:
-    """Claude's text for a README cell: stripped and capped, or "" when it (or what is kept of it) looks personal."""
+    """Claude's text for a README cell: stripped and capped, or "" when it (or what is kept of it) looks personal (a
+    keyword or a value, see personal())."""
     text = str(text or "").strip()
     cut = text[:limit].strip()
-    return "" if PII_RE.search(text) or PII_RE.search(cut) else cut
+    return "" if personal(text) or personal(cut) else cut
 
 
 def _check_of(raw):
@@ -1244,8 +1268,9 @@ class Blackout:
     """What blacking out one PDF's redactions gave. `status` is decide()'s `redaction`: "ok", "failed" or
     "verify_unsure". `out` is the redacted copy, kept when the status is not "ok" too (an /approve commits it, spec §7);
     None when no copy could be made. `pages`: the pages the check named. `verified`: "passed" (the re-check said nothing
-    personal is left), "failed", "not_needed" (text only, on pages without pictures: the text check is enough) or
-    "not_run". `look`: the pages the re-check has to see (every box page and every redacted page with a picture)."""
+    personal is left), "failed" (it answered something else), "later" (it could not run: budget, a failed call),
+    "not_needed" (text only, on pages without pictures: the text check is enough) or "not_run". `look`: the pages the
+    re-check has to see (every box page and every redacted page with a picture)."""
     status: str
     out: Path | None
     pages: list[int]
@@ -1265,13 +1290,6 @@ def _found(cache: dict, key: str) -> dict:
     return cache[key] if isinstance(cache.get(key), dict) else {}
 
 
-def _forget(cache: dict, sha: str) -> None:
-    """No redacted copy can be rebuilt from this check: drop it (and any verdict), so the next run or /retry asks again
-    (failures are never cached)."""
-    _found(cache, "check").pop(sha, None)
-    _found(cache, "verify").pop(sha, None)
-
-
 def _picture_pages(pdf: Path, pages) -> set[int]:
     """Those of `pages` (from 1) that show a picture of any kind, inline images included; all of them when the PDF
     cannot be read (then every one is re-checked)."""
@@ -1285,34 +1303,40 @@ def _picture_pages(pdf: Path, pages) -> set[int]:
 
 def _redact_one(it, c, raw, cache: dict, out_dir: Path) -> Blackout:
     """Black out check `c`'s redactions in a copy of the PDF Claude read (`it.view`) at out_dir/item-<k>.pdf.
-    A fresh answer (its text still in memory) is applied as given, and the rectangles that gave are written into the raw
-    cached answer `raw` (`redactions_rects`, plus `redactions_ok`): the bot-state cache keeps them, as they hold no text.
-    A rebuild, whose cached answer lost the text, applies exactly those rectangles and keeps the first run's verdict.
-    Fails closed ("failed", no copy, the check forgotten) on a redaction page outside 1..it.pages (checked here too, as
-    redact.apply does), when there is neither text nor rectangles, or when redact.apply writes nothing. Single-threaded:
-    redact is not thread-safe."""
+    A fresh answer (its text still in memory; ai.check_items keeps only the schema's keys of it) is applied as given,
+    and the rectangles that gave are written into the raw cached answer `raw` (`redactions_rects`, plus
+    `redactions_ok`): the bot-state cache keeps them, as they hold no text. A rebuild, whose cached answer lost the text,
+    applies exactly those rectangles and keeps the first run's verdict. Fails closed ("failed", no copy) on a redaction
+    page outside 1..it.pages (checked here too, as redact.apply does), with neither text nor rectangles, with no
+    rectangle at all, or when redact.apply writes nothing; the check stays cached with `redactions_ok` False, so ordinary
+    rebuilds pay nothing more and `/retry` checks it again (store_commands). Single-threaded: redact is not thread-safe."""
     import redact
+    raw = raw if isinstance(raw, dict) else {}
     pages = sorted({x["page"] for x in c.redactions if isinstance(x, dict) and type(x.get("page")) is int})
     if not all(isinstance(x, dict) and type(x.get("page")) is int and 1 <= x["page"] <= it.pages for x in c.redactions):
-        _forget(cache, it.sha)
+        raw["redactions_ok"] = False
         return Blackout("failed", None, pages)
-    raw = raw if isinstance(raw, dict) else {}
     rects = raw.get("redactions_rects")
     texts = all(isinstance(x.get("text"), str) for x in c.redactions if x.get("kind") == "text")
     out = Path(out_dir) / f"item-{it.k}.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
-    r = None
+    r, ok = None, False
     if isinstance(rects, list):                     # a rebuild: what the first run applied, nothing else
-        r = redact.apply(it.view, out, [], cached_rects=rects)
-        ok = r.ok and raw.get("redactions_ok") is True
+        if rects:
+            r = redact.apply(it.view, out, [], cached_rects=rects)
+            ok = r.ok and raw.get("redactions_ok") is True
     elif texts:                                     # the check's own answer, this run
+        _found(cache, "verify").pop(it.sha, None)   # a verdict belongs to the rectangles it saw
         r = redact.apply(it.view, out, c.redactions)
         ok = r.ok
-        if r.out is not None:
+        if r.out is not None and r.rects:
             raw["redactions_rects"], raw["redactions_ok"] = r.rects, r.ok
-            _found(cache, "verify").pop(it.sha, None)       # a verdict belongs to the rectangles it saw
-    if r is None or r.out is None:
-        _forget(cache, it.sha)
+    if r is None or r.out is None or not r.rects:   # nothing blacked out: there is no redacted copy
+        raw["redactions_ok"] = False
+        try:
+            out.unlink(missing_ok=True)
+        except OSError:
+            pass
         return Blackout("failed", None, pages)
     boxes = {x["page"] for x in c.redactions if x.get("kind") == "box"}
     done = sorted({x["page"] for x in r.rects})
@@ -1337,11 +1361,26 @@ def _page_png(pdf: Path, page: int) -> bytes | None:
 def _verify(pdf: Path, pages: list[int], ask, meter) -> str:
     """The re-check of a redacted copy (spec §5 step 4): "no" only when every call answers "no". The pages go in calls of
     at most VERIFY_BATCH images and VERIFY_CALL_MAX bytes, each image at most VERIFY_PNG_MAX bytes (see _page_png);
-    the first call that is not "no" ends it (the rest is not sent). "unsure" too without pages, `ask` or `meter`, or
-    when a page cannot be rendered small enough. Every call reserves on `meter` (ai.verify_pages)."""
+    the first call that is not "no" ends it (the rest is not sent). "unsure" when Claude answered anything else, or a
+    page cannot be rendered (small enough): a verdict, kept until /retry. "not_run" when it could not be asked at all:
+    no pages, `ask` or `meter`, a refused reservation, a failed call or no usable answer (a later rebuild tries again).
+    Every call reserves on `meter` (ai.verify_pages)."""
     import ai
     if not pages or ask is None or meter is None:
-        return "unsure"
+        return "not_run"
+    answers = []
+
+    def asked(content, on_cost=None):
+        answers.append(ask(content, on_cost=on_cost))
+        return answers[-1]
+
+    def call(batch) -> str:
+        n = len(answers)
+        if ai.verify_pages(batch, asked, meter) == "no":
+            return "no"
+        got = answers[n:]
+        answered = bool(got) and isinstance(got[-1], dict) and got[-1].get("readable") in ai.CHECK_ENUM
+        return "unsure" if answered else "not_run"
     batch, size = [], 0
     try:
         for p in pages:
@@ -1349,23 +1388,25 @@ def _verify(pdf: Path, pages: list[int], ask, meter) -> str:
             if png is None:
                 return "unsure"
             if batch and (len(batch) >= VERIFY_BATCH or size + len(png) > VERIFY_CALL_MAX):
-                if ai.verify_pages(batch, ask, meter) != "no":
-                    return "unsure"
+                v = call(batch)
+                if v != "no":
+                    return v
                 batch, size = [], 0
             batch.append(png)
             size += len(png)
     except Exception as e:                          # never print e: it may quote the file
         print(f"verify: a page could not be rendered ({type(e).__name__})", file=sys.stderr)
         return "unsure"
-    return ai.verify_pages(batch, ask, meter)
+    return call(batch)
 
 
 def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | None, dict | None]:
     """(repo path it duplicates, None), or (None, variant), for a file about to be committed as decision `d` (spec §5
     step 5). It is compared with the PDFs in d's course folder (none when the course has no folder yet); the best match
-    decides: SAME_AT or more is the same file; from ASK_AT the two first pages go to the comparison (`ask`, on `meter`),
+    decides: SAME_AT or more is the same file; from ASK_AT the first two pages of both go to the comparison (`ask`, on
+    `meter`),
     whose "same" is a duplicate, "different_set" the next free set letter, "different_version" the next version number,
-    anything else nothing. `seen` holds the repo's first pages for the whole run."""
+    anything else nothing. `seen` holds the repo files' first pages for the whole run (dedupe.first_pages)."""
     import ai
     import dedupe
     from decide import stem_label
@@ -1378,7 +1419,8 @@ def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | No
         return path, None
     if ask is None or meter is None:
         return None, None
-    rel = ai.compare_pair(it.page_text[0], dedupe.first_page_text(repo / path) or "", ask, meter)
+    theirs = dedupe.first_pages(repo / path, seen) or []      # the run's cache: read when it was scored
+    rel = ai.compare_pair("\n".join(it.page_text[:dedupe.PAGES]), "\n".join(theirs), ask, meter)
     label = stem_label(d.type, d.label)
     if rel == "same":
         return path, None
@@ -1392,15 +1434,14 @@ def _near_duplicate(it, d, repo: Path, ask, meter, seen: dict) -> tuple[str | No
 def _guarded(d, c, b):
     """The anti-goal, once more: a file the check found personal data in (or something to black out) is committed only
     as a redacted copy that was confirmed (re-checked, or text only), or when a maintainer approved it."""
-    from decide import Decision
+    from dataclasses import replace
     if d.outcome not in ("commit", "inbox") or c is None or (c.personal_data == "no" and not c.redactions):
         return d
     if any(str(x).startswith("approved_by:") for x in d.flags):
         return d
     if b is not None and b.status == "ok" and b.out is not None and b.verified in ("passed", "not_needed"):
         return d
-    return Decision(d.k, "review", d.code, d.name, d.session, d.type, d.label, d.set,
-                    "需要你看：打码没完成 | needs a look: redaction incomplete", d.flags, True)
+    return replace(d, outcome="review", reason="需要你看：打码没完成 | needs a look: redaction incomplete", blocking=True)
 
 
 def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list[Path] | None = None,
@@ -1492,13 +1533,15 @@ def process(f: Form, issue: int, login: str, repo: Path, work: Path, files: list
             continue
         if decided(it, redaction="ok").outcome not in ("commit", "inbox"):
             continue                       # it is not going in even with a good redaction: no money on a re-check
-        if _found(cache, "verify").get(it.sha) == "no":     # a rebuild with the same rectangles
-            b.verified = "passed"
-        elif _verify(b.out, b.look, asks.get("verify"), meter) == "no":
-            _store(cache, "verify")[it.sha] = "no"          # only a clear "no" is kept
+        verdict = _found(cache, "verify").get(it.sha)     # a rebuild with the same rectangles: no new call
+        if verdict not in ("no", "unsure"):
+            verdict = _verify(b.out, b.look, asks.get("verify"), meter)
+            if verdict in ("no", "unsure"):                 # Claude's answer is kept (until /retry); "not_run" is not
+                _store(cache, "verify")[it.sha] = verdict
+        if verdict == "no":
             b.verified = "passed"
         else:
-            b.status, b.verified = "verify_unsure", "failed"
+            b.status, b.verified = "verify_unsure", "failed" if verdict == "unsure" else "later"
     verify_usd = spent() - before
 
     before = spent()
@@ -1844,6 +1887,21 @@ UNAUTHORIZED = ("只有仓库的 OWNER、MEMBER 或 COLLABORATOR 能用这些指
                 "| Only the repository's owners, members and collaborators can use these commands; nothing was done.")
 
 
+def retry_failed(data: dict) -> dict | None:
+    """What `/retry` changes in the cache: the checks whose redaction failed (`redactions_ok` False) and the checks with
+    a re-check verdict other than "no" are dropped, with their verdicts, so the rebuild checks those files again from
+    scratch (ordinary rebuilds keep them and pay nothing). Everything else, overrides included, stays as read. None
+    when there is nothing to drop."""
+    checks = data.get("check") if isinstance(data.get("check"), dict) else {}
+    verdicts = data.get("verify") if isinstance(data.get("verify"), dict) else {}
+    drop = {sha for sha, v in checks.items() if isinstance(v, dict) and v.get("redactions_ok") is False}
+    drop |= {sha for sha, v in verdicts.items() if v != "no"}
+    if not drop:
+        return None
+    return {**data, "check": {s: v for s, v in checks.items() if s not in drop},
+            "verify": {s: v for s, v in verdicts.items() if s not in drop}}
+
+
 def store_commands(event: dict, gh) -> int | None:
     """The first half of a maintainer command (spec §7), run outside the issue's concurrency group so a queued rebuild
     can never cancel it: store the commands, answer the comment, and return the issue to rebuild (None: nothing to do).
@@ -1851,8 +1909,9 @@ def store_commands(event: dict, gh) -> int | None:
     issue nor a PR from `upload/issue-<n>`. An author who is not OWNER / MEMBER / COLLABORATOR gets one bilingual reply
     and nothing else. Commands are compare-and-swapped into the cache's `overrides` by file hash (`#k` resolved through
     cache["items"] of the same read), retried on a Conflict; every other key stays as stored. The comment gets 👍, or
-    a reply naming what could not be done. `/retry` stores nothing and only asks for the rebuild: failed or unbudgeted
-    AI results were never cached, so only those are asked again."""
+    a reply naming what could not be done. `/retry` asks for the rebuild: failed or unbudgeted AI results were never
+    cached, so those are asked again; and it compare-and-swaps out of the cache every check whose redaction failed and
+    every re-check verdict that is not "no" (retry_failed), so those files are checked again from scratch."""
     import commands
     c = event.get("comment") or {}
     if not str(c.get("body") or "").lstrip().startswith("/"):
@@ -1900,6 +1959,8 @@ def store_commands(event: dict, gh) -> int | None:
         return overrides if changed else None
     if todo and gh.intake_cache(n).update_overrides(apply) is not None:
         rebuild = True
+    if any(x.kind == "retry" for x in cmds):
+        gh.intake_cache(n).update(retry_failed)
     errors = parse_errors + unknown
     if errors:
         done = "\n\n其余指令已执行 | The other commands were applied." if rebuild else ""
