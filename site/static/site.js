@@ -41,12 +41,6 @@
     if (t === 'light' || t === 'dark') return t;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
-  function tellGiscus(theme) {
-    var frame = document.querySelector('iframe.giscus-frame');
-    if (frame && frame.contentWindow) {
-      frame.contentWindow.postMessage({ giscus: { setConfig: { theme: theme } } }, 'https://giscus.app');
-    }
-  }
   var btn = document.querySelector('.theme-toggle');
   function paint() {
     var t = effective();
@@ -55,7 +49,6 @@
       btn.setAttribute('aria-label', t === 'dark' ? '切换到浅色 | Switch to light' : '切换到深色 | Switch to dark');
       btn.title = btn.getAttribute('aria-label');
     }
-    tellGiscus(t);
   }
   if (btn) {
     btn.addEventListener('click', function () {
@@ -124,14 +117,5 @@
       location.href = up.dataset.form.split('?')[0] + '?' + p.toString().replace(/\+/g, '%20');
     });
     onCode();
-  }
-
-  // giscus arrives after this script: once its iframe exists, tell it the chosen theme
-  if (stored() && !document.querySelector('iframe.giscus-frame') && window.MutationObserver) {
-    var mo = new MutationObserver(function () {
-      var f = document.querySelector('iframe.giscus-frame');
-      if (f) { f.addEventListener('load', function () { tellGiscus(effective()); }); mo.disconnect(); }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
   }
 })();
