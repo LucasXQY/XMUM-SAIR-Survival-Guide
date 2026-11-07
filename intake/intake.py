@@ -290,10 +290,9 @@ PII_RE = re.compile(
     r"|\b(?:\+?6?01\d[- ]?\d{7,8}|1[3-9]\d{9})\b"            # Malaysian / Chinese mobile numbers
     r"|enrolment key|passcode|password|zoom|meeting id|wechat|whatsapp",
     re.I)
-# Value-shaped personal data only, no keywords: what the label of a redaction ("学号 | student ID") must never hold.
-# Claude's free text (summaries, notes, lecturers, weighting) is held to both: see personal().
-# Its digit classes are ASCII ([0-9]), as in CODE_RE and SESSION_RE; \w stays Unicode, so an email is caught whatever
-# its letters.
+# Value-shaped personal data only, no keywords. Claude's free text (summaries, notes, lecturers, weighting) and the
+# sort's names (label, assessment, set, course name) are held to both: see personal(). Its digit classes are ASCII
+# ([0-9]), as in CODE_RE and SESSION_RE; \w stays Unicode, so an email is caught whatever its letters.
 VALUE_RE = re.compile(
     r"\b[A-Z]{3}[0-9]{7,10}\b"                               # student id
     r"|[\w.+-]+@(?!xmu\.edu\.my\b)[\w-]+(?:\.[\w-]+)+"       # any email except the university's
