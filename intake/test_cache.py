@@ -83,6 +83,20 @@ def test_scrub_blanks_pii_notes_everywhere_and_does_not_mutate():
     assert data["extra"]["k"] == [1]
 
 
+def test_scrub_redaction_label_and_nested_notes():
+    data = {"check": {"s": {"redactions": [{"page": 1, "kind": "text", "what": "student ID EEE2109300"},
+                                           {"page": 2, "kind": "text", "what": "学号"},
+                                           {"page": 3, "kind": "text", "what": "x" * 60}],
+                            "notes": {"p1": "email a@gmail.com", "p2": "fine", "deep": [{"z": "call 13812345678"}, "ok"]}},
+                      "t": {"summary": ["mail b@gmail.com", "plain"]}}}
+    before = copy.deepcopy(data)
+    c = cache.scrub(data)
+    assert data == before
+    assert [r["what"] for r in c["check"]["s"]["redactions"]] == ["", "学号", "x" * 40]
+    assert c["check"]["s"]["notes"] == {"p1": "", "p2": "fine", "deep": [{"z": ""}, "ok"]}
+    assert c["check"]["t"]["summary"] == ["", "plain"]
+
+
 def test_cache_round_trip_on_bot_state():
     store = FakeStore(branch=True); c = cache.IntakeCache("o/r", 7, gh=store.gh)
     c.save({"items": [{"k": 1, "sha": "s", "source": "a.pdf"}], "overrides": {"s": {"kind": "skip"}}})

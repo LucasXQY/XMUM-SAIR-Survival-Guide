@@ -14,18 +14,40 @@ import claude_check as cc
 from intake import PII_RE
 
 NOTE_KEYS = ("summary", "notes", "note")
+WHAT_MAX = 40
+
+
+def _note(v):
+    """Every string beneath a summary/notes/note key is free text: blank the ones that look personal."""
+    if isinstance(v, str):
+        return "" if PII_RE.search(v) else v
+    if isinstance(v, dict):
+        return {k: _note(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_note(x) for x in v]
+    return copy.deepcopy(v)
+
+
+def _what(v):
+    if not isinstance(v, str):
+        return v
+    return "" if PII_RE.search(v) else v[:WHAT_MAX]
+
+
+def _redaction(r):
+    if not isinstance(r, dict):
+        return _scrub(r)
+    return {a: (_what(b) if a == "what" else _scrub(b)) for a, b in r.items() if a != "text"}
 
 
 def _scrub(v):
     if isinstance(v, dict):
         out = {}
         for k, x in v.items():
-            if k in NOTE_KEYS and isinstance(x, str):
-                out[k] = "" if PII_RE.search(x) else x
-            elif k in NOTE_KEYS and isinstance(x, list):
-                out[k] = ["" if isinstance(i, str) and PII_RE.search(i) else _scrub(i) for i in x]
+            if k in NOTE_KEYS:
+                out[k] = _note(x)
             elif k == "redactions" and isinstance(x, list):
-                out[k] = [{a: _scrub(b) for a, b in r.items() if a != "text"} if isinstance(r, dict) else _scrub(r) for r in x]
+                out[k] = [_redaction(r) for r in x]
             else:
                 out[k] = _scrub(x)
         return out
