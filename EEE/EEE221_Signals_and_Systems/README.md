@@ -7,6 +7,7 @@ One row per session. Add a row when contributing material from a new session.
 | 学期 / Session | 老师 / Lecturer | 考核 / Assessment | 资料来自 / Contributed by | 备注 / Notes |
 |---|---|---|---|---|
 | [2025-09](2025-09/) | | | [niconiconi-nico](https://github.com/niconiconi-nico) | 期中回忆版题目，6 页 / Reconstructed midterm questions, 6 pages |
+| [2026-04](2026-04/) |  |  | [LucasXQY](https://github.com/LucasXQY) | [Labs](2026-04/Labs/) |
 
 ## 资料说明 | Material notes
 
