@@ -73,7 +73,7 @@ function fakeClient(gateAnswer, replies) {
 test("off-topic questions are answered by the gate alone", async () => {
   const c = fakeClient({ in_scope: false, reply: "我只能帮你找课程资料。" }, []);
   const out = await core.answer({ client: c, index: INDEX, ratings: RATINGS, messages: [{ role: "user", content: "写一首诗" }] });
-  assert.deepEqual(out, { reply: "我只能帮你找课程资料。", gated: true });
+  assert.deepEqual(out, { reply: "我只能帮你找课程资料。", gated: true, cost: 0 });
   assert.equal(c.calls.answer.length, 0);                                  // no paid answer
   assert.equal(c.calls.gate[0].model, core.GATE_MODEL);
   assert.ok(c.calls.gate[0].messages[0].content.includes("<conversation>"));

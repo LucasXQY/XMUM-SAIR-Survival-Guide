@@ -11,7 +11,7 @@
 // login, a human check per post, a first look by Haiku (board.js). (4) the discussion area at /forum: no login, keyword
 // lists and Haiku check every thread and reply (forum.js). Keys and the admin token are Worker secrets only.
 import Anthropic from "@anthropic-ai/sdk";
-import { SITE, validate, signSession, verifySession, hashKey, answer } from "./core.js";
+import { SITE, validate, signSession, verifySession, hashKey, answer, RESERVE_USD } from "./core.js";
 import { reviewsApi } from "./reviews.js";
 import { ADMIN_HTML } from "./admin.js";
 import { boardApi, validate as validateBoard, moderate } from "./board.js";
@@ -192,13 +192,17 @@ async function chatRoute(body, request, env, deps, origin) {
     session = await signSession(secret);
   }
   // daily caps: per visitor (a hash of the address, never the address itself) and for the whole site
-  const day = new Date().toISOString().slice(0, 10);
+  // and a dollar cap per day and per month (UTC). Each question reserves RESERVE_USD at once, so parallel questions cannot all
+  // slip under the cap; the real cost replaces the reservation when the answer is done (a failed answer keeps its reservation).
+  const day = new Date().toISOString().slice(0, 10), month = day.slice(0, 7);
   const stub = env.LIMITER.get(env.LIMITER.idFromName("global"));
-  const take = await stub.fetch("https://limiter/take", { method: "POST", body: JSON.stringify({
-    visitor: await hashKey(ip, day, env.TURNSTILE_SECRET), day,
-    perVisitor: Number(env.PER_VISITOR_DAILY || 15), global: Number(env.GLOBAL_DAILY || 150) }) }).then((r) => r.json());
+  const ask = (msg) => stub.fetch("https://limiter/" + msg.op, { method: "POST", body: JSON.stringify(msg) }).then((r) => r.json());
+  const take = await ask({ op: "take", visitor: await hashKey(ip, day, env.TURNSTILE_SECRET), day, month,
+    perVisitor: Number(env.PER_VISITOR_DAILY || 15), global: Number(env.GLOBAL_DAILY || 150),
+    usdDay: Number(env.HELPER_USD_DAY || 2), usdMonth: Number(env.HELPER_USD_MONTH || 60) });
   if (!take.ok) {
-    const msg = take.reason === "visitor" ? say("你今天的提问次数用完了，明天再来。", "You have used today's questions; come back tomorrow.")
+    const msg = take.reason === "budget" ? say("小帮手今天的额度用完了，明天再来。", "The helper has used today's budget; come back tomorrow.")
+              : take.reason === "visitor" ? say("你今天的提问次数用完了，明天再来。", "You have used today's questions; come back tomorrow.")
                                           : say("小帮手今天的总次数用完了，明天再来。", "The helper has used today's questions; come back tomorrow.");
     return json({ error: "limit", message: msg, session }, 429, origin);
   }
@@ -207,6 +211,7 @@ async function chatRoute(body, request, env, deps, origin) {
     const ratings = env.REVIEWS ? (await reviews(env, { op: "ratings", site: catalog })).data : {};
     const client = deps.client || new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 60_000 });
     const out = await answer({ client, index, ratings, messages: v.messages });
+    await ask({ op: "spend", day, month, usd: out.cost || 0 }).catch((e) => console.log("spend not recorded:", e && e.message));
     return json({ reply: out.reply, session }, 200, origin);
   } catch (e) {
     console.log("answer failed:", e && e.message);
@@ -247,22 +252,34 @@ export async function handle(request, env, deps = {}) {
 export default { fetch: (request, env) => handle(request, env) };
 export { Forum } from "./forum.js";   // the discussion area's Durable Object
 
-// One Durable Object counts every helper question: strongly consistent, and it stores only today's counts.
+// One Durable Object counts every helper question and its dollars: strongly consistent, and it stores only today's counts
+// and spend plus this month's spend.
 export class Limiter {
   constructor(ctx) { this.ctx = ctx; }
 
   async fetch(request) {
-    const { visitor, day, perVisitor, global } = await request.json();
-    const g = (await this.ctx.storage.get(`g:${day}`)) || 0;
-    const u = (await this.ctx.storage.get(`u:${day}:${visitor}`)) || 0;
+    const msg = await request.json(), st = this.ctx.storage;
+    const stored = await st.get("day");
+    const day = !stored || msg.day > stored ? msg.day : stored;   // roll forward only: a late request counts in the current day
+    const month = day.slice(0, 7);
+    if (day !== stored) {                                          // a new day: drop old counts and spend, and older months
+      const old = [...(await st.list()).keys()].filter((k) => k !== "day" && k !== `m:${month}` && !k.includes(`:${day}`));
+      for (let i = 0; i < old.length; i += 128) await st.delete(old.slice(i, i + 128));   // delete takes at most 128 keys
+      await st.put("day", day);
+    }
+    const s = (await st.get(`s:${day}`)) || 0, m = (await st.get(`m:${month}`)) || 0;
+    if (msg.op === "spend") {                                      // settle: the real cost replaces the reservation
+      const usd = Number(msg.usd) - RESERVE_USD;
+      await st.put({ [`s:${day}`]: Math.max(0, s + usd), [`m:${month}`]: Math.max(0, m + usd) });
+      return Response.json({ ok: true });
+    }
+    const { visitor, perVisitor, global } = msg;
+    const g = (await st.get(`g:${day}`)) || 0;
+    const u = (await st.get(`u:${day}:${visitor}`)) || 0;
+    if (s + RESERVE_USD > msg.usdDay || m + RESERVE_USD > msg.usdMonth) return Response.json({ ok: false, reason: "budget" });
     if (g >= global) return Response.json({ ok: false, reason: "global" });
     if (u >= perVisitor) return Response.json({ ok: false, reason: "visitor" });
-    await this.ctx.storage.put({ [`g:${day}`]: g + 1, [`u:${day}:${visitor}`]: u + 1 });
-    if ((await this.ctx.storage.get("day")) !== day) {        // a new day: drop yesterday's counts
-      const old = await this.ctx.storage.list();
-      await this.ctx.storage.delete([...old.keys()].filter((k) => k !== "day" && !k.includes(`:${day}`)));
-      await this.ctx.storage.put("day", day);
-    }
+    await st.put({ [`g:${day}`]: g + 1, [`u:${day}:${visitor}`]: u + 1, [`s:${day}`]: s + RESERVE_USD, [`m:${month}`]: m + RESERVE_USD });
     return Response.json({ ok: true, used: g + 1 });
   }
 }

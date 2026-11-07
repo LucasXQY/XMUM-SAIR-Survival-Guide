@@ -5,7 +5,7 @@ name: assistant
 on:
   push:
     branches: [main]
-    paths: ["assistant/**", ".github/workflows/assistant.yml"]
+    paths: ["assistant/**", "llm/prices.json", ".github/workflows/assistant.yml"]
   workflow_dispatch:
 
 permissions:
@@ -31,6 +31,7 @@ jobs:
         with:
           sparse-checkout: |
             assistant
+            llm
             reviews
       - if: steps.ready.outputs.go == 'true'
         uses: actions/setup-node@v4
@@ -47,7 +48,7 @@ jobs:
           workingDirectory: assistant
           wranglerVersion: "4.152.0"
           # BOTS_PAUSED=1 deploys the helper paused: it answers "paused" and calls no model
-          command: deploy --var PAUSED:${{ vars.BOTS_PAUSED == '1' && '1' || '0' }}
+          command: deploy --var PAUSED:${{ vars.BOTS_PAUSED == '1' && '1' || '0' }} --var HELPER_USD_DAY:${{ vars.HELPER_USD_DAY || '2' }} --var HELPER_USD_MONTH:${{ vars.HELPER_USD_MONTH || '60' }}
           secrets: |
             ANTHROPIC_API_KEY
             TURNSTILE_SECRET

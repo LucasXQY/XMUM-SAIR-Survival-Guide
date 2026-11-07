@@ -138,6 +138,31 @@ def test_cli_dry_run_prints_actions_without_gh():
     assert r.returncode == 0 and "nothing to do" in r.stdout
 
 
+def test_the_moderation_judge_reserves_its_estimate_and_settles_the_real_cost():
+    import os
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "llm"))
+    import claude_check as cc
+    calls = []
+
+    class FakeBudget:
+        def __init__(self, repo): pass
+        def take(self, task, n, limit, usd=0.0): calls.append(("take", task, n, usd)); return True
+        def settle(self, pool, delta): calls.append(("settle", pool, round(delta, 6)))
+    real = (cc.Budget, cc.ask, os.environ.get("ANTHROPIC_API_KEY"))
+    cc.Budget = FakeBudget
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+    try:
+        cc.ask = lambda *a, on_cost=None, **k: (on_cost(0.0005), {"verdict": "ok", "reason": "r"})[1]
+        judge = m.make_judge("r/r")
+        assert judge("text", []) == {"verdict": "ok", "reason": "r"}
+        assert calls == [("take", "moderation", 1, m.JUDGE_ESTIMATE_USD), ("settle", "haiku", round(0.0005 - m.JUDGE_ESTIMATE_USD, 6))]
+        calls.clear(); cc.ask = lambda *a, on_cost=None, **k: None                   # no response: the whole reservation comes back
+        assert judge("text", []) is None and calls[-1] == ("settle", "haiku", -m.JUDGE_ESTIMATE_USD)
+    finally:
+        cc.Budget, cc.ask = real[0], real[1]
+        os.environ.pop("ANTHROPIC_API_KEY", None) if real[2] is None else os.environ.__setitem__("ANTHROPIC_API_KEY", real[2])
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

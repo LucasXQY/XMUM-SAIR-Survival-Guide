@@ -34,6 +34,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL_TOPICS: ${{ vars.CLAUDE_MODEL_TOPICS }}
           CLAUDE_DAILY_TOPICS: ${{ vars.CLAUDE_DAILY_TOPICS }}
+          CLAUDE_USD_DAY_HAIKU: ${{ vars.CLAUDE_USD_DAY_HAIKU }}
+          CLAUDE_USD_MONTH_HAIKU: ${{ vars.CLAUDE_USD_MONTH_HAIKU }}
         run: python topics/topics.py
       - if: steps.index.outputs.changed == 'true'
         env:

@@ -22,6 +22,7 @@ SITE = "https://xmum-sair.github.io/"
 SKIP_AUTHORS = {"giscus", "giscus[bot]", "github-actions[bot]"}   # giscus makes one thread per page; those stay where they are
 PREFIX_RE = re.compile(r"^\s*[\[【]\s*([^\]】]+?)\s*[\]】]")
 BOARD_COLOR, COURSE_COLOR = "0E8A16", "1D76DB"
+CLASSIFY_ESTIMATE_USD = 0.002  # reserved before each call, settled against the real cost
 CLASSIFY_DEFAULT_LIMIT = 200   # posts per day unless CLAUDE_DAILY_CLASSIFY says otherwise
 
 
@@ -138,9 +139,14 @@ def make_judge(repo: str, courses: list[dict]):
     budget = cc.Budget(repo)
 
     def judge(title: str, body: str) -> dict | None:
-        if not budget.take("classify", 1, cc.daily_limit("classify", CLASSIFY_DEFAULT_LIMIT)):
+        if not budget.take("classify", 1, cc.daily_limit("classify", CLASSIFY_DEFAULT_LIMIT), usd=CLASSIFY_ESTIMATE_USD):
             return None
-        return cc.ask("classify", CLASSIFY_SYSTEM, classify_prompt(title, body, courses), CLASSIFY_SCHEMA, max_tokens=1000)
+        spent = []
+        try:
+            return cc.ask("classify", CLASSIFY_SYSTEM, classify_prompt(title, body, courses), CLASSIFY_SCHEMA, max_tokens=1000,
+                          on_cost=spent.append)
+        finally:
+            budget.settle(cc.pool_of("classify"), sum(spent) - CLASSIFY_ESTIMATE_USD)
     return judge
 
 
