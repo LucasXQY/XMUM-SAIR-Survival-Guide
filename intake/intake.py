@@ -22,8 +22,8 @@ PROGS = ("EEE", "AIT", "ROBO")
 SHARED = "GE"   # university-wide courses: G electives and MPU compulsory subjects, whichever programme uploads them
 SUBS =("Past-Papers", "Syllabus", "Assignments", "Labs", "Tutorials",
         "Handbooks", "Notes", "Exam-Review", "Tips")
-CODE_RE = re.compile(r"^[A-Z]{1,4}(?:\d{3,4}|\d\.\d)$")
-SESSION_RE = re.compile(r"^\d{4}-\d{2}$")
+CODE_RE = re.compile(r"^[A-Z]{1,4}(?:\d{3,4}|\d\.\d)$", re.ASCII)     # ASCII digits only: these shape repo paths
+SESSION_RE = re.compile(r"^\d{4}-\d{2}$", re.ASCII)
 
 # form field titles are the parse keys; .github/ISSUE_TEMPLATE/upload.yml must use them byte for byte
 FIELDS = {
@@ -292,14 +292,16 @@ PII_RE = re.compile(
     re.I)
 # Value-shaped personal data only, no keywords: what the label of a redaction ("学号 | student ID") must never hold.
 # Claude's free text (summaries, notes, lecturers, weighting) is held to both: see personal().
+# Its digit classes are ASCII ([0-9]), as in CODE_RE and SESSION_RE; \w stays Unicode, so an email is caught whatever
+# its letters.
 VALUE_RE = re.compile(
-    r"\b[A-Z]{3}\d{7,10}\b"                                  # student id
+    r"\b[A-Z]{3}[0-9]{7,10}\b"                               # student id
     r"|[\w.+-]+@(?!xmu\.edu\.my\b)[\w-]+(?:\.[\w-]+)+"       # any email except the university's
-    r"|\b(?:\+?6?01\d[- ]?\d{7,8}|1[3-9]\d{9})\b"            # Malaysian / Chinese mobile numbers
-    r"|(?<![A-Za-z0-9])(?<!\d\.)\d(?:[ -]?\d){6,}"            # 7+ digits, single spaces or hyphens between groups (an
+    r"|\b(?:\+?6?01[0-9][- ]?[0-9]{7,8}|1[3-9][0-9]{9})\b"     # Malaysian / Chinese mobile numbers
+    r"|(?<![A-Za-z0-9])(?<![0-9]\.)[0-9](?:[ -]?[0-9]){6,}"  # 7+ digits, single spaces or hyphens between groups (an
                                                              # IC or phone number; not "2022-04", "Quiz 1 10%"), never
                                                              # starting inside a word ("COM107 2022-04", "MPU3.1 2022-04")
-    r"|(?<=[A-Za-z])\d{7,}",                                 # 7+ digits glued to letters ("ID2109300123")
+    r"|(?<=[A-Za-z])[0-9]{7,}",                              # 7+ digits glued to letters ("ID2109300123")
     re.I)
 
 
@@ -308,7 +310,11 @@ def personal(text: str) -> bool:
     return bool(PII_RE.search(text) or VALUE_RE.search(text))
 
 
-ANS_RE =re.compile(r"marking scheme|answer scheme|model answer|suggested answer|solution|answer key|答案|评分标准|参考解答", re.I)
+# what a redaction is (the check's `what`, a closed list: ai.CHECK_SCHEMA), and how the PR names it
+WHAT_TEXT = {"name": "姓名 | name", "student_id": "学号 | student ID", "signature": "签名 | signature", "photo": "照片 | photo",
+             "qr_code": "二维码 | QR code", "phone": "电话 | phone", "email": "邮箱 | email", "address": "地址 | address",
+             "other": "其他 | other"}
+ANS_RE = re.compile(r"marking scheme|answer scheme|model answer|suggested answer|solution|answer key|答案|评分标准|参考解答", re.I)
 OFFICE_TEXT_RE = re.compile(r"<(?:w:t|a:t|t)(?:\s[^>]*)?>([^<]*)</(?:w:t|a:t|t)>")
 
 
@@ -964,17 +970,14 @@ def _pages(notes: str, redactions=()) -> list[str]:
 
 
 def _kinds(redactions) -> str:
-    """What was blacked out, by kind and count ("`学号 | student ID` ×2"): the check's `what` labels through the very
-    filter the bot-state cache applies to them (cache._what: blank when it holds a value such as an ID, an email, a
-    phone number or a run of 6+ digits (VALUE_RE), else capped), shown as a code span. Category words such as
-    "student ID" or "WeChat" are kept: they are the label. Never the redacted text; labels that do not survive the
-    filter count as "other"."""
+    """What was blacked out, by kind and count ("学号 | student ID ×2"): the check's `what` is one of a closed list
+    (WHAT_TEXT's keys, the schema's enum), read through the very filter the bot-state cache applies (cache._what) and
+    shown with our own fixed label, never Claude's words; anything else (an old free-text label, a value, not a string)
+    counts as "其他 | other". Never the redacted text."""
     from cache import _what
     counts: dict[str, int] = {}
     for x in redactions or ():
-        w = x.get("what") if isinstance(x, dict) else None
-        kept = _what(w).strip() if isinstance(w, str) else ""
-        label = _code(kept) if kept else "其他 | other"
+        label = WHAT_TEXT[_what(x.get("what") if isinstance(x, dict) else None) or "other"]
         counts[label] = counts.get(label, 0) + 1
     return "、".join(f"{label} ×{n}" for label, n in counts.items())
 

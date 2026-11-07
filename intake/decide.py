@@ -66,7 +66,9 @@ def _label(value) -> str:
 
 
 def validate_sort(raw, cat_codes: set[str]) -> Sort | None:
-    """Untrusted model output in, a Sort whose path-shaping fields are safe out."""
+    """Untrusted model output in, a Sort whose path-shaping fields are safe out: a code, session or type that does not
+    fit is dropped, and so is a label, assessment, set or course name that looks personal (intake.personal: a keyword
+    or a value such as a student ID); either way the sort is no longer confident."""
     if not isinstance(raw, dict):
         return None
     confident = raw.get("confident") is True
@@ -91,7 +93,12 @@ def validate_sort(raw, cat_codes: set[str]) -> Sort | None:
         if any(bad in text for bad in ("/", "\\", "..")):
             confident = False
         parts[key] = _label(text)
-    return Sort(course_code=code, course_name=str(raw.get("course_name") or "").strip()[:80], session=session,
+        if intake.personal(text) or intake.personal(parts[key]):
+            parts[key], confident = "", False
+    name = str(raw.get("course_name") or "").strip()
+    if intake.personal(name):
+        name, confident = "", False
+    return Sort(course_code=code, course_name=name[:80], session=session,
                 type=typ, label=parts["label"], assessment=parts["assessment"],
                 set=parts["set"], keep=keep, skip_reason=reason, confident=confident,
                 note=str(raw.get("note") or "").strip()[:200])

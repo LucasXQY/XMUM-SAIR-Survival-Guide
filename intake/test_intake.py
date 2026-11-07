@@ -878,7 +878,7 @@ def test_personal_text_in_lecturers_or_weighting_reaches_no_readme_and_no_cache(
 SECRET_PAGE = "Name: Zhang San  ID: EEE2109300  COM107 Final Examination April 2022"
 FOUND = dict(CHECK_OK, personal_data="yes", notes="第 1 页页眉 | page 1 header", redactions=[
     {"page": 1, "kind": "text", "text": "EEE2109300", "box": [0, 0, 0, 0], "what": "学号 EEE2109300 | student ID EEE2109300"},
-    {"page": 1, "kind": "text", "text": "Zhang San", "box": [0, 0, 0, 0], "what": "姓名 | name"}])
+    {"page": 1, "kind": "text", "text": "Zhang San", "box": [0, 0, 0, 0], "what": "name"}])
 FINAL = "EEE/COM107_Circuits_and_Devices/2022-04/Past-Papers/COM107_202204_Final_Question.pdf"
 
 
@@ -903,7 +903,7 @@ def test_redaction_targets_never_leave_the_run():                           # th
     body = pr_body_of(gh)
     record = _section(body, "## 打码记录", "## 登记")
     line = next(l for l in record.splitlines() if l.startswith("- #1"))
-    assert "第 1 页" in line and "`姓名 | name` ×1" in line and "学号" not in line      # the page and the kind, never the text
+    assert "第 1 页" in line and "姓名 | name ×1" in line and "其他 | other ×1" in line and "学号" not in line   # page and kind only
     assert "#1" not in _section(body, "## 需要你看", "## 打码记录").split("不挡合并")[0]
     stored = gh.cache["check"][_sha_of(gh, 1)]
     assert [r.get("text") for r in stored["redactions"]] == [None, None] and [r["page"] for r in stored["redactions"]] == [1, 1]
@@ -957,8 +957,8 @@ def test_an_old_pre_check_result_is_checked_again():
 
 # ---- redaction, re-check and near-duplicates in the run (spec §5 steps 3–5)
 
-TEXT_ID = [{"page": 1, "kind": "text", "text": "EEE2109300", "what": "学号"}]
-BOX_SIG = [{"page": 1, "kind": "box", "box": [0, 0, 500, 100], "what": "签名"}]
+TEXT_ID = [{"page": 1, "kind": "text", "text": "EEE2109300", "what": "student_id"}]
+BOX_SIG = [{"page": 1, "kind": "box", "box": [0, 0, 500, 100], "what": "signature"}]
 
 
 def test_redacted_copy_is_what_gets_committed():
@@ -1008,7 +1008,7 @@ def test_a_box_redaction_that_passes_the_re_check_is_committed_and_rebuilt_for_f
         assert sum(top) / len(top) < 20
     body = pr_body_of(gh)
     line = next(l for l in _section(body, "## 打码记录", "## 登记").splitlines() if l.startswith("- #1"))
-    assert "复查通过 | re-check passed" in line and "`签名` ×1" in line
+    assert "复查通过 | re-check passed" in line and "签名 | signature ×1" in line
     assert "已打码" in _section(body, "## 需要你看", "## 打码记录")                       # worth a look, not blocking
     assert ("draft", 1, False) in gh.calls and gh.cache["verify"] == {_sha_of(gh, 1): "no"}
     first = (tmp / FINAL).read_bytes()
@@ -1271,18 +1271,26 @@ def test_value_re_matches_values_not_words():
     assert kept["check"]["s"]["notes"] == "" and [r["what"] for r in kept["check"]["s"]["redactions"]] == ["", ""]
 
 
-def test_redaction_labels_are_kept_or_blanked_by_value_in_the_pr_and_the_cache():
-    reds = [{"page": 1, "kind": "box", "box": [0, 0, 300, 50 + 10 * i], "what": w} for i, w in enumerate(PROMPT_LABELS + VALUE_LABELS)]
+KINDS = {"name": "姓名 | name", "student_id": "学号 | student ID", "signature": "签名 | signature", "photo": "照片 | photo",
+         "qr_code": "二维码 | QR code", "phone": "电话 | phone", "email": "邮箱 | email", "address": "地址 | address"}
+
+
+def test_redaction_kinds_are_shown_with_fixed_labels_and_anything_else_is_other():   # final review, fold-in 8
+    assert intake.WHAT_TEXT == dict(KINDS, other="其他 | other")
+    reds = [{"page": 1, "kind": "box", "box": [0, 0, 300, 50 + 10 * i], "what": w}
+            for i, w in enumerate(list(KINDS) + PROMPT_LABELS + VALUE_LABELS + ["other", 3])]
     found = dict(CHECK_OK, personal_data="yes", redactions=reds, summary="身份证 990101-14-5678 | ID 990101-14-5678",
                  notes="电话 012-345 6789")
     git, gh, tmp = run_with_fakes({1: SORT_OK}, {1: found}, scanned=True, verify="no")
     body = pr_body_of(gh)
     line = next(l for l in _section(body, "## 打码记录", "## 登记").splitlines() if l.startswith("- #1"))
-    for label in PROMPT_LABELS:
-        assert f"`{label}` ×1" in line, label
-    assert "其他 | other ×3" in line
+    for label in KINDS.values():
+        assert f"{label} ×1" in line, label
+    assert f"其他 | other ×{len(PROMPT_LABELS + VALUE_LABELS) + 2}" in line and "`" not in line   # our labels, not Claude's
+    for label in PROMPT_LABELS[1:3]:
+        assert label not in line, label
     saved = gh.cache_writes[-1]["check"][_sha_of(gh, 1)]
-    assert [r["what"] for r in saved["redactions"]] == PROMPT_LABELS + [""] * 3
+    assert [r["what"] for r in saved["redactions"]] == list(KINDS) + [""] * len(PROMPT_LABELS + VALUE_LABELS) + ["other", ""]
     assert saved["summary"] == "" and saved["notes"] == ""                         # digit runs in free text too
     for v in ("2109300123", "990101-14-5678", "012-345 6789"):
         for where in (gh.calls, gh.cache_writes, git.calls):

@@ -106,6 +106,27 @@ def test_hostile_fields_never_shape_a_path():
     assert decide.validate_sort(dict(SORT_OK), CAT).course_code == "COM107"
 
 
+def test_personal_data_never_shapes_a_file_or_folder_name():                   # final review, finding 2
+    for key, value in (("label", "Assignment1_EEE2109300"), ("assessment", "Final_2109300123"), ("set", "a.b@gmail.com"),
+                       ("course_name", "Circuits EEE2109300"), ("label", "Quiz 012-345 6789"), ("course_name", "Ask on WeChat")):
+        s = decide.validate_sort(dict(SORT_OK, **{key: value}), CAT)
+        assert getattr(s, key) == "" and s.confident is False, (key, value)
+    s = decide.validate_sort(dict(SORT_OK, label="Assignment1", course_name="Circuits and Devices", set="B"), CAT)
+    assert (s.label, s.course_name, s.set, s.confident) == ("Assignment1", "Circuits and Devices", "B", True)
+    s = decide.validate_sort(dict(SORT_OK, label="Assignment1_EEE2109300"), CAT)
+    d = decide.decide(ITEM, s, CLEAN, FORM, None, None)
+    assert d.outcome == "inbox" and "2109300" not in d.label + d.name                # unsure: never named by it
+
+
+def test_codes_and_sessions_take_ascii_digits_only():                         # final review, fold-in 9
+    assert intake.CODE_RE.fullmatch("EEE202") and not intake.CODE_RE.fullmatch("EEE２０２")
+    assert intake.SESSION_RE.fullmatch("2022-04") and not intake.SESSION_RE.fullmatch("２０２２-０４")
+    s = decide.validate_sort(dict(SORT_OK, course_code="COM１０７", session="٢٠٢٢-٠٤"), CAT)
+    assert (s.course_code, s.session, s.confident) == ("", "unknown", False)
+    assert intake.VALUE_RE.search("2109300123") and not intake.VALUE_RE.search("٢١٠٩٣٠٠١٢٣")   # its digit classes too
+    assert "\\d" not in intake.VALUE_RE.pattern
+
+
 def test_checks_fail_closed():
     for bad in ("yes", "Yes", "", "maybe", None):
         d = decide.decide(ITEM, S(), replace(CLEAN, personal_data=bad), FORM, None, None)

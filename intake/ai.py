@@ -13,6 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "llm"))
 import claude_check as cc
+from intake import WHAT_TEXT    # the redaction kinds (the schema's enum) and how the PR names them
 
 cc.DEFAULT_MODELS.setdefault("sort", "claude-haiku-5-5")   # maintainer: Haiku sorts, Opus checks
 
@@ -135,8 +136,8 @@ an item appears on, repeated headers and footers included, and one box per occur
 shortest string that covers it (just the ID or just the name, not the whole line); box = [0, 0, 0, 0].
   - On a scanned page, and for photos, signatures, QR codes or handwriting: kind "box", and box = [x0, y0, x1, y1] in \
 0–1000 page coordinates (origin at the top left, x to the right, y down), generously covering the item; text = "".
-  - what: a short category label in the form "中文 | English", such as "学号 | student ID", "姓名 | name", \
-"签名 | signature", "二维码 | QR code". NEVER the value itself.
+  - what: the kind of item, one of name, student_id, signature, photo, qr_code, phone, email, address, other \
+(other: a Moodle enrolment key, handwriting that names someone, anything else). NEVER the value itself.
 - lecturers: the lecturers' names printed on a syllabus or course introduction (public academic staff); names only, no \
 contact details; an empty list for any other file.
 - weighting: the assessment breakdown as printed, such as "Final 50%, Midterm 30%, Coursework 20%"; "" when the file \
@@ -158,7 +159,8 @@ CHECK_SCHEMA = {
         "redactions": {"type": "array", "items": {
             "type": "object",
             "properties": {"page": {"type": "integer"}, "kind": {"type": "string", "enum": ["text", "box"]}, "text": _STR,
-                           "box": {"type": "array", "items": {"type": "integer"}}, "what": _STR},
+                           "box": {"type": "array", "items": {"type": "integer"}},
+                           "what": {"type": "string", "enum": list(WHAT_TEXT)}},
             "required": ["page", "kind", "text", "box", "what"],
             "additionalProperties": False}},
     },
