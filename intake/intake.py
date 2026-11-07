@@ -1443,11 +1443,14 @@ class GH:
             self._run("label", "create", name, "--repo", self.repo, "--color", color, "--description", desc, "--force")
 
     def open_upload_prs(self) -> list[int]:
-        prs = json.loads(self._run("pr", "list", "--repo", self.repo, "--state", "open", "--limit", "200", "--json", "headRefName"))
+        """Issues of this repository's open `upload/issue-<n>` PRs. A fork's PR may use the same branch name: skipped
+        (and so is any PR whose origin is not stated)."""
+        prs = json.loads(self._run("pr", "list", "--repo", self.repo, "--state", "open", "--limit", "200",
+                                   "--json", "headRefName,isCrossRepository"))
         out = []
         for pr in prs:
-            m = re.fullmatch(r"upload/issue-(\d+)", pr["headRefName"])
-            if m:
+            m = re.fullmatch(r"upload/issue-(\d+)", pr.get("headRefName") or "")
+            if m and pr.get("isCrossRepository") is False:
                 out.append(int(m.group(1)))
         return sorted(out)
 
@@ -1574,6 +1577,9 @@ def run_issue(n: int, repo: Path, gh: GH, git: Git, run_url: str | None, work: P
         iss = gh.issue(n)
         if iss["state"] != "open":
             print(f"#{n} is {iss['state']}, skipped")
+            return
+        if LABEL_UPLOAD not in iss["labels"]:   # whatever asked (a fork PR's branch name, a dispatch): not an upload
+            print(f"#{n} has no `{LABEL_UPLOAD}` label, skipped")
             return
         f = parse_form(iss["body"])
         branch = f"upload/issue-{n}"
@@ -1736,13 +1742,19 @@ def set_output(name: str, value) -> None:
             out.write(f"{name}={'' if value is None else value}\n")
 
 
-def dispatch_open(gh) -> list[int]:
+def dispatch_open(gh) -> tuple[list[int], list[int]]:
     """The push sweep: one workflow run per open upload (PRs, and upload issues the bot has not answered), each in its
-    issue's own concurrency group, instead of rebuilding them all here outside those groups."""
-    issues = sorted(set(gh.open_upload_prs()) | set(gh.open_upload_issues()))
-    for n in issues:
-        gh.dispatch(n)
-    return issues
+    issue's own concurrency group, instead of rebuilding them all here outside those groups. A failed dispatch is
+    reported and the sweep goes on. Returns (dispatched, failed)."""
+    done, failed = [], []
+    for n in sorted(set(gh.open_upload_prs()) | set(gh.open_upload_issues())):
+        try:
+            gh.dispatch(n)
+            done.append(n)
+        except Exception as e:
+            print(f"#{n}: could not start its rebuild: {e}", file=sys.stderr)
+            failed.append(n)
+    return done, failed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1813,9 +1825,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"rebuild #{n}" if n else "nothing to rebuild")
         return 0
     if args.dispatch_open:
-        issues = dispatch_open(gh)
-        print(f"dispatched {len(issues)} rebuild(s): {' '.join(f'#{n}' for n in issues) or 'none'}")
-        return 0
+        done, failed = dispatch_open(gh)
+        print(f"dispatched {len(done)} rebuild(s): {' '.join(f'#{n}' for n in done) or 'none'}"
+              + (f"; failed: {' '.join(f'#{n}' for n in failed)}" if failed else ""))
+        return 1 if failed else 0
     gh.ensure_labels()
     issues = [args.issue] if args.issue else sorted(set(gh.open_upload_prs()) | set(gh.open_upload_issues())) if args.all_open else []
     if not issues:

@@ -865,13 +865,56 @@ def test_a_command_stored_while_a_rebuild_runs_survives_it():
 
 def test_the_push_sweep_only_dispatches_one_run_per_issue():
     gh = FakeGH(prs=[5, 9], issues=[9, 12])
-    assert intake.dispatch_open(gh) == [5, 9, 12] and gh.calls == [("dispatch", 5), ("dispatch", 9), ("dispatch", 12)]
+    assert intake.dispatch_open(gh) == ([5, 9, 12], []) and gh.calls == [("dispatch", 5), ("dispatch", 9), ("dispatch", 12)]
     yml = (ROOT / ".github/workflows/intake.yml").read_text(encoding="utf-8")
     target, rest = yml.split("\n  command-target:")[1].split("\n  command:")
     assert "--dispatch-open" in yml and "actions: write" in yml and "--all-open" not in yml
     assert '--comment-event "$GITHUB_EVENT_PATH"' in target and "concurrency" not in target     # stored ungrouped
     command = rest.split("\n  cleanup:")[0]
     assert "group: intake-${{ needs.command-target.outputs.issue }}" in command and '--issue "$ISSUE"' in command
+
+
+def test_a_failed_dispatch_does_not_stop_the_sweep():
+    class Flaky(FakeGH):
+        def dispatch(self, n):
+            if n == 9:
+                raise RuntimeError("gh workflow run failed (1): HTTP 500")
+            super().dispatch(n)
+    gh = Flaky(prs=[5, 9], issues=[12])
+    assert intake.dispatch_open(gh) == ([5, 12], [9]) and gh.calls == [("dispatch", 5), ("dispatch", 12)]
+    real = intake.GH
+    intake.GH = lambda: Flaky(prs=[9])
+    try:
+        assert intake.main(["--dispatch-open"]) == 1                          # the sweep job fails visibly
+        intake.GH = lambda: Flaky(prs=[5])
+        assert intake.main(["--dispatch-open"]) == 0
+    finally:
+        intake.GH = real
+
+
+def test_fork_prs_never_name_an_upload():
+    """Anyone can open a PR from a fork whose branch is called upload/issue-<n>: only this repository's PRs count."""
+    seen = []
+
+    class Listing(intake.GH):
+        def _run(self, *args, input=None):
+            seen.append(args)
+            return json.dumps([{"headRefName": "upload/issue-5", "isCrossRepository": False},
+                               {"headRefName": "upload/issue-6", "isCrossRepository": True},
+                               {"headRefName": "upload/issue-7"},                       # field missing: not trusted
+                               {"headRefName": "feature/x", "isCrossRepository": False}])
+    assert Listing("o/r").open_upload_prs() == [5]
+    assert "isCrossRepository" in seen[0][seen[0].index("--json") + 1]
+
+
+def test_run_issue_leaves_issues_without_the_upload_label_alone():
+    gh = FakeGH(_body(), labels=("question",)); git = FakeGit()
+    asks, checker = fake_claude(gh, {1: SORT_OK}, {1: CHECK_OK})
+    intake.run_issue(5, _repo_copy(), gh, git, None, pathlib.Path(tempfile.mkdtemp()), asks=asks, checker=checker, budget=FakeBudget())
+    assert gh.calls == [] and git.calls == [] and gh.cache_writes == [] and gh.cache is None and gh.ai_calls == []
+    bad = FakeGH(_body().replace("2022-04", "soon"), labels=())                # an invalid "form" on a stray issue: still silent
+    intake.run_issue(6, _repo_copy(), bad, FakeGit(), None, pathlib.Path(tempfile.mkdtemp()), asks={})
+    assert bad.calls == []
 
 
 def test_the_precheck_checks_what_fits_and_leaves_the_rest_for_later():
