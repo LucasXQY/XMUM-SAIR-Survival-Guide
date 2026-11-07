@@ -75,7 +75,7 @@ For whoever builds the upload channel. Content rules live in [CONTRIBUTING.md](.
 | 昵称 \| Nickname | input | 选②时填 |
 | 入学年份 \| Intake year | dropdown | 2019 … 2026，可不选 |
 | 备注 / 小贴士 \| Notes | textarea | 写进课程 README 的备注列 |
-| ★ 确认 \| Checklist | checkboxes（每项必勾） | ① 没有答案、评分标准、参考解答；② 没有学生姓名、学号、签名，没有老师私人联系方式和 Moodle 密钥；③ 这门课是我自己修的，或我有权分享这些文件；④ 我已读 DISCLAIMER，同意这些文件免费公开、非商业使用 |
+| ★ 确认 \| Checklist | checkboxes（每项必勾） | ① 没有答案、评分标准、参考解答；② 我知道附件任何人都能下载，已尽量涂掉学号、姓名、签名、私人联系方式和 Moodle 密钥（进仓库前机器人还会再查一遍；2026-11-07 改，旧说法仍被接受）；③ 这门课是我自己修的，或我有权分享这些文件；④ 我已读 DISCLAIMER，同意这些文件免费公开、非商业使用 |
 
 表单顶部一段说明：单文件 25 MB 上限；提交后几分钟内机器人会在这个 Issue 下回复一个 PR 链接或者需要补充的信息；维护者审核后合并，网站随即更新。
 

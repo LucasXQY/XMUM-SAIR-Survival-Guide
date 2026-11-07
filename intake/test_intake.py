@@ -98,6 +98,17 @@ def test_validate_reports_each_problem_bilingually():
     assert len(problems) == 2, problems
 
 
+def test_personal_data_box_says_attachments_are_public_and_old_wording_still_counts():
+    # the box says what the bot cannot do: an attachment is public from the moment it is uploaded (AI-PIPELINE.md §3)
+    assert "任何人都能下载" in intake.CHECKS[1] and "can be downloaded by anyone" in intake.CHECKS[1]
+    assert "机器人还会再查一遍" in intake.CHECKS[1]
+    old = "没有学生姓名、学号、签名，没有老师的私人联系方式和 Moodle 密钥 | No student names, IDs or signatures; no lecturers' private contacts or Moodle keys"
+    f = intake.parse_form(_body().replace(intake.CHECKS[1], old))     # an issue opened before the change still rebuilds
+    assert f.checked == [True] * 4 and intake.validate(f) == []
+    g = intake.parse_form(_body().replace("- [x] " + intake.CHECKS[1], "- [ ] " + intake.CHECKS[1]))
+    assert any("Unticked" in p for p in intake.validate(g))
+
+
 def test_validate_unticked_box_and_missing_nickname():
     body = _body().replace("- [x] " + intake.CHECKS[2], "- [ ] " + intake.CHECKS[2]).replace("Joyce", "_No response_")
     problems = intake.validate(intake.parse_form(body))

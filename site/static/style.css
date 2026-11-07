@@ -221,6 +221,9 @@ details.timeline[open] summary { border-bottom: 1px solid var(--line); margin-bo
 .up-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .up-row select, .up-row input { flex: 1 1 8em; width: auto; }
 .up-form [hidden] { display: none; }
+.up-hints { margin: 16px 0 4px; border: 1px solid var(--line); border-radius: 10px; padding: 2px 14px 10px; background: var(--card); }
+.up-hints summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.up-hints summary small { font-weight: 400; margin-left: .4em; color: var(--muted); }
 .hint { color: var(--accent); font-size: .88rem; min-height: 1.2em; margin: 6px 0 0; }
 .error { color: #cf222e; min-height: 1.2em; }
 .rv-group { margin: 10px 0 2px; font-weight: 600; color: var(--muted); font-size: .88rem; }

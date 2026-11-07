@@ -476,19 +476,18 @@ def upload_page(site: Site) -> str:
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     content = (
         "<h1>上传资料 | Upload material</h1>"
-        "<p>一次可以传很多份，zip 也行，不同课程、不同类型可以混在一起：机器人会逐个分拣、改名、归位，拿不准的留给维护者。"
-        "下面填的课程、学期和类型只是给机器人的提示。"
-        "<br><small>Many files, zips and mixed courses or types are fine: the bot sorts each file, renames and files it, "
-        "and leaves the ones it is unsure about to a maintainer. The course, session and type below are only hints for the bot.</small></p>"
+        "<p>只要选专业、拖文件，剩下的交给机器人。<br><small>Pick your programme and drop your files; the bot does the rest.</small></p>"
         '<ol class="rate-steps">'
-        "<li>在这里填主要那门课的课程、老师、学期和资料类型。已有的课和老师边打字边提示；列表里没有的直接写完，会当作新的。"
-        "<br><small>Fill in the course, lecturer, session and type of the main course. Known courses and lecturers are suggested as you type; anything not listed is taken as new.</small></li>"
-        "<li>点「下一步」，跳到已经填好的 GitHub 表单，把文件拖进「文件」框，勾选确认后提交（需要 GitHub 账号）。"
-        "<br><small>Press Next: the GitHub form opens filled in; drag your files into the Files box, tick the checklist and submit (needs a GitHub account).</small></li>"
+        "<li>选你的专业，点「下一步」。知道课程、老师、学期的话可以写在「给机器人的提示」里，不写也行。"
+        "<br><small>Pick your programme and press Next. If you know the course, lecturer or session, add them under Hints; you can also leave them out.</small></li>"
+        "<li>GitHub 表单会打开：把文件拖进「文件」框，勾选确认后提交（需要 GitHub 账号）。多份文件、zip、不同课程混在一起都行。"
+        "<br><small>The GitHub form opens: drag your files into the Files box, tick the checklist and submit (needs a GitHub account). "
+        "Several files, zips and mixed courses are all fine.</small></li>"
         "<li>几分钟内机器人回复一个整理好的 PR，维护者审核合并后网站更新。"
         "<br><small>Within minutes the bot replies with a pull request; once a maintainer merges it, the site updates.</small></li></ol>"
         f'<form id="up-form" class="up-form" data-form="{UPLOAD_URL}" novalidate>'
         f'<label for="up-prog">你的专业 | Your programme</label><select id="up-prog">{progs}</select>'
+        '<details class="up-hints"><summary>给机器人的提示（选填）<small>Hints for the bot (optional)</small></summary>'
         '<label for="up-code">课程代码 | Course code</label>'
         '<input id="up-code" list="up-codes" autocomplete="off" placeholder="例如 COM107、MPU1.1、G0191 | e.g. COM107">'
         f'<datalist id="up-codes">{codes}</datalist>'
@@ -504,15 +503,31 @@ def upload_page(site: Site) -> str:
         '<option value="02">02</option><option value="04">04</option><option value="09">09</option>'
         '<option value="other">其他 | Other</option></select>'
         '<input id="up-other" hidden placeholder="YYYY-MM" aria-label="其他学期 | Other session"></div>'
-        f'<label for="up-type">资料类型 | Type</label><select id="up-type"><option value="">选一种 | Pick one</option>{types}</select>'
+        f'<label for="up-type">资料类型 | Type</label><select id="up-type"><option value="">不确定 | Not sure</option>{types}</select>'
         '<div id="up-assess-row" hidden><label for="up-assess">考核名称 | Assessment</label>'
-        '<input id="up-assess" placeholder="Final、Midterm、Test 1…"></div>'
+        '<input id="up-assess" placeholder="Final、Midterm、Test 1…"></div></details>'
         '<p id="up-error" class="error" role="alert"></p>'
-        '<p><button type="submit" class="btn big">下一步：到 GitHub 加文件 | Next: add files on GitHub</button></p></form>'
+        '<p><button type="submit" class="btn big">下一步：到 GitHub 拖文件 | Next: drop your files on GitHub</button></p></form>'
         f'<script type="application/json" id="up-data">{blob}</script>'
-        f'<p class="muted">什么都不想填？<a href="{UPLOAD_URL}">直接打开空白表单</a>，选好专业、拖进文件就行。没有 GitHub 账号？发邮件到 <code>xieqiyi@ieee.org</code>，我们帮你传并署名。'
-        f'<br>Rather not fill anything in? <a href="{UPLOAD_URL}">Open the blank form</a>: pick your programme and drop the files. No GitHub account? Email <code>xieqiyi@ieee.org</code> and we upload it for you, with credit.</p>')
-    return page(site, "上传资料 | Upload material", content, "上传试卷、大纲、笔记：选好课程和老师，再到 GitHub 加文件 | upload material")
+        "<h2>机器人会做什么 | What the bot does</h2><ul>"
+        "<li>逐个分拣：认出每个文件是哪门课、哪个学期、什么类型，按规则改名、放好、登记。"
+        "<br><small>Sorts each file: works out its course, session and type, then renames, files and registers it.</small></li>"
+        "<li>逐页检查：有没有答案和评分标准，有没有个人信息。"
+        "<br><small>Checks every page for answers, marking schemes and personal data.</small></li>"
+        "<li>PDF 里的学号、姓名、签名等自动涂黑，放进仓库的是涂黑后的副本；Word / PPT 里有个人信息的交给维护者处理。"
+        "<br><small>Blacks out student IDs, names, signatures and the like in PDFs, and commits the blacked-out copy; "
+        "a Word or PPT file with personal data goes to a maintainer.</small></li>"
+        "<li>仓库里已有的同一份文件不重复收；另一套题或新版本自动加后缀。"
+        "<br><small>Skips a file the repo already has; another set or a new version gets a suffix.</small></li>"
+        "<li>拿不准的留在 PR 里，交给维护者。<br><small>Leaves anything it is unsure about in the PR for a maintainer.</small></li></ul>"
+        '<p class="notice"><strong>注意：拖进 GitHub 的附件任何人都能下载</strong>，这一点机器人改不了。文件上有你或同学的学号、名字，'
+        "最好先涂掉再传（手机扫描 App、Acrobat 都能涂）；不方便的话发邮件给我们。"
+        "<br><strong>Note: anyone can download the files you attach on GitHub</strong>, and the bot cannot change that. "
+        "If a file shows your or a classmate's student ID or name, black it out before uploading (a phone scanner app or Acrobat can do it), "
+        "or email it to us instead.</p>"
+        '<p class="muted">没有 GitHub 账号，或者不想公开原文件？发邮件到 <code>xieqiyi@ieee.org</code>，我们帮你处理后上传并署名。'
+        '<br>No GitHub account, or rather not make the original public? Email <code>xieqiyi@ieee.org</code>: we clean it up, upload it and credit you.</p>')
+    return page(site, "上传资料 | Upload material", content, "上传试卷、大纲、笔记：选专业、拖文件，机器人用 AI 分拣、打码、查重 | upload material")
 
 
 def prog_cards(site: Site) -> str:
@@ -931,9 +946,9 @@ def root_page(site: Site, md: str) -> str:
     else:
         body = render_md(site, text, md)
     if md == "CONTRIBUTING.md":
-        body = (f'<p class="notice">最简单的方式：用<a href="{site.prefix}upload/">上传页</a>选好课程，再到 GitHub 加文件，机器人会整理并开一个 PR 等维护者审核。<br>'
-                f'Easiest way: pick the course on the <a href="{site.prefix}upload/">upload page</a> and add the files on GitHub; '
-                'the bot files everything and opens a PR for review.</p>') + body
+        body = (f'<p class="notice">最简单的方式：在<a href="{site.prefix}upload/">上传页</a>选好专业，把文件拖到 GitHub。机器人用 AI 分拣、改名、打码、查重，开一个 PR 等维护者审核。<br>'
+                f'Easiest way: pick your programme on the <a href="{site.prefix}upload/">upload page</a> and drop your files on GitHub. '
+                'The bot sorts, renames, redacts and de-duplicates them with AI and opens a PR for review.</p>') + body
     return page(site, m.group(1).strip() if m else md, body)
 
 

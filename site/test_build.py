@@ -354,7 +354,9 @@ def test_upload_page_suggests_courses_and_lecturers():
     data = json.loads(re.search(r'<script type="application/json" id="up-data">(.*?)</script>', up, flags=re.S).group(1))
     assert data["courses"]["COM106"]["lecturers"] == ["Wong Shen Yuong"] and data["courses"]["G0191"]["prog"] == "GE"
     assert "Wong Shen Yuong" in data["lecturers"]
-    assert "the bot sorts each file" in up and "机器人会逐个分拣" in up                   # mixed uploads are fine
+    assert up.index('id="up-prog"') < up.index('<details class="up-hints">') < up.index('id="up-code"')   # only the programme up front
+    assert "逐个分拣" in up and "Sorts each file" in up and "自动涂黑" in up and "Blacks out" in up    # what the bot does
+    assert "任何人都能下载" in up and "anyone can download" in up        # what it cannot do: attachments are public
     js = (out / "static/site.js").read_text(encoding="utf-8")
     assert "up-data" in js and "URLSearchParams" in js and "up-name-row" in js
     for p in ["index.html", "EEE/index.html", "contributing/index.html", "wanted/index.html"]:

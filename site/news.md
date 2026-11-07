@@ -5,6 +5,12 @@
      Add a section at the top for every release: "## vN · YYYY-MM-DD", then one line per item, "Chinese | English",
      saying what students can now do, as short as possible. The home page shows the first three items of the newest section. -->
 
+## v5 · 2026-11-07
+
+- [上传](/upload/)更省事：选专业、拖文件就行，机器人用 AI 认出每个文件的课程、学期和类型，自动改名归位 | [Uploading](/upload/) is simpler: pick your programme and drop your files; the bot works out each file's course, session and type with AI and files it
+- PDF 里的学号、姓名、签名会先自动涂黑，再放进仓库 | Student IDs, names and signatures in PDFs are blacked out automatically before anything enters the repo
+- 已有的文件不会重复收；另一套题或新版本自动加后缀 | Files the site already has are not added twice; another set or a new version gets a suffix
+
 ## v4 · 2026-11-07
 
 - 新的[博客](/blog/)：写科研、实习、求职、升学、比赛的经验，支持小标题、列表和最多 6 张图片，不用登录 | A new [blog](/blog/): write up research, internships, job hunting, grad school or competitions with headings, lists and up to 6 images, no login

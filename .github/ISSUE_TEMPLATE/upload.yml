@@ -8,19 +8,35 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢分享！填好下面的表、把文件拖进「文件」框、点 **Submit new issue**。几分钟内机器人会在这个 Issue 下回复：要么是一个整理好的 PR 链接，要么是需要补充的信息。维护者审核合并后网站随即更新。
+        感谢分享！只要**选专业、把文件拖进「文件」框、勾选确认**，再点 **Submit new issue**，其余都可以空着。几分钟内机器人会在这个 Issue 下回复一个整理好的 PR 链接，维护者审核合并后网站随即更新。
 
-        - 单个附件最大 **25 MB**；多份文件可以打成一个 zip。更大的文件请拆分，或发邮件到 `xieqiyi@ieee.org`。
+        机器人借助 AI 做这些事：
+        - 逐个分拣：认出每个文件是哪门课、哪个学期、什么类型，按规则改名、放好、登记。多份文件、zip、不同课程和类型混在一起都行。
+        - 逐页检查：有没有答案和评分标准，有没有个人信息。
+        - PDF 里的学号、姓名、签名等自动涂黑，放进仓库的是涂黑后的副本；Word / PPT 里有个人信息的交给维护者处理。
+        - 仓库里已有的同一份文件不重复收；另一套题或新版本自动加后缀。
+        - 拿不准的留在 PR 里，交给维护者。
+
+        注意：
+        - **拖进来的附件任何人都能下载**，这一点机器人改不了。文件上有你或同学的学号、名字，最好先涂掉再传（手机扫描 App、Acrobat 都能涂）；不方便的话发邮件到 `xieqiyi@ieee.org`。
+        - 单个附件最大 **25 MB**；多份文件可以打成一个 zip。更大的文件请拆分，或发邮件。
         - 只收 pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv。**照片请先合成一个 PDF**，单独的图片不收。
-        - 什么都可以一起传：多份文件、zip、不同课程和不同类型都行，机器人会逐个分拣、改名、归位。课程代码、课程名称、学期、资料类型都是选填的提示。
         - 规则见 [CONTRIBUTING.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/CONTRIBUTING.md) 与 [DISCLAIMER.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/DISCLAIMER.md)。
         - 选「匿名」时仓库里不会出现你的名字，但 GitHub 本身仍会显示这个 Issue 和 PR 是谁发的。
 
-        Thanks for sharing! Fill in the form, drag your files into the **Files** box and press **Submit new issue**. Within a few minutes the bot replies here with either a link to the pull request it filed or a list of things to fix. Once a maintainer merges it, the website updates.
+        Thanks for sharing! Just **pick your programme, drag your files into the Files box and tick the checklist**, then press **Submit new issue**; everything else can stay empty. Within a few minutes the bot replies here with a link to the pull request it filed, and once a maintainer merges it the website updates.
 
-        - Each attachment is at most **25 MB**; several files can go in one zip. Split bigger files or email `xieqiyi@ieee.org`.
+        What the bot does, with AI:
+        - Sorts each file: works out its course, session and type, then renames, files and registers it. Several files, zips, and different courses and types mixed together are all fine.
+        - Checks every page for answers, marking schemes and personal data.
+        - Blacks out student IDs, names, signatures and the like in PDFs, and commits the blacked-out copy; a Word or PPT file with personal data goes to a maintainer.
+        - Skips a file the repo already has; another set or a new version gets a suffix.
+        - Leaves anything it is unsure about in the PR for a maintainer.
+
+        Please note:
+        - **Anyone can download the attachments you add here**; the bot cannot change that. If a file shows your or a classmate's student ID or name, black it out before uploading (a phone scanner app or Acrobat can do it), or email `xieqiyi@ieee.org` instead.
+        - Each attachment is at most **25 MB**; several files can go in one zip. Split bigger files or email us.
         - Accepted: pdf / docx / pptx / xlsx / doc / ppt / xls / txt / md / csv. **Combine photos into one PDF**; images on their own are not accepted.
-        - Anything can go in together: several files, zips, different courses and types; the bot sorts, renames and files each one. Course code, name, session and type are optional hints.
         - Rules: [CONTRIBUTING.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/CONTRIBUTING.md) and [DISCLAIMER.md](https://github.com/xmum-sair/xmum-sair.github.io/blob/main/DISCLAIMER.md).
         - "Anonymous" keeps your name out of the repository files, but GitHub itself still shows who opened this issue and the PR.
 
@@ -162,7 +178,7 @@ body:
       options:
         - label: "没有答案、评分标准、参考解答 | No answers, marking schemes or model solutions"
           required: true
-        - label: "没有学生姓名、学号、签名，没有老师的私人联系方式和 Moodle 密钥 | No student names, IDs or signatures; no lecturers' private contacts or Moodle keys"
+        - label: "我知道附件任何人都能下载，已尽量涂掉学号、姓名、签名、私人联系方式和 Moodle 密钥（进仓库前机器人还会再查一遍） | I know attachments can be downloaded by anyone, and have blacked out student IDs, names, signatures, private contacts and Moodle keys where I could (the bot checks again before anything enters the repo)"
           required: true
         - label: "这门课是我自己修的，或我有权分享这些文件 | I took this course myself, or I have the right to share these files"
           required: true
