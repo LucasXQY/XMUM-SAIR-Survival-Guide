@@ -147,7 +147,7 @@ def _usable_place(p) -> dict | None:
     return {"code": code, "session": session, "type": typ, "label": _label(p.get("label"))}
 
 
-def decide(item, sort, check, form, override, dup) -> Decision:
+def decide(item, sort, check, form, override, dup, variant=None) -> Decision:
     override = override or {}
     k = item.k
     flags: list[str] = []
@@ -229,6 +229,19 @@ def decide(item, sort, check, form, override, dup) -> Decision:
             return done("review", f"需要你看：{zh} | needs a look: {en}", **placed)
         flags.append(f"approved_by:{approved}")
 
+    variant = variant if isinstance(variant, dict) else {}
+    if variant.get("set"):
+        flags.append("new_set")
+    elif variant.get("version"):
+        flags.append("new_version")
     if not code:
         return done("inbox", "课程不明，放入待整理 | course unknown, held in the inbox")
+    if variant.get("set"):
+        letter = _strip_set(str(variant["set"]))
+        if typ == "Past-Papers":
+            placed["set"] = letter
+        else:
+            placed["label"] = _label(f"{label or typ.replace('-', '')}_Set{letter}")
+    elif variant.get("version"):
+        placed["label"] = _label(f"{label or typ.replace('-', '')}_v{int(variant['version'])}")
     return done("commit", "提交 | committed", **placed)
