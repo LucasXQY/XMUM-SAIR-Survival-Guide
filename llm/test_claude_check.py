@@ -214,6 +214,11 @@ def test_cost_usd_uses_the_price_table():
     assert cc.cost_usd("claude-new-thing", u) == cc.cost_usd("claude-fable-5-1", u)
 
 
+def test_the_worker_reads_the_same_price_table():
+    js = (pathlib.Path(__file__).parent.parent / "assistant/src/core.js").read_text(encoding="utf-8")
+    assert '"../../llm/prices.json"' in js
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

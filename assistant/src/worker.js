@@ -124,13 +124,16 @@ async function chatRoute(body, request, env, deps, origin) {
     session = await signSession(secret);
   }
   // daily caps: per visitor (a hash of the address, never the address itself) and for the whole site
-  const day = new Date().toISOString().slice(0, 10);
+  // and a dollar cap per day and per month (UTC), checked before the call; one answer may overshoot it
+  const day = new Date().toISOString().slice(0, 10), month = day.slice(0, 7);
   const stub = env.LIMITER.get(env.LIMITER.idFromName("global"));
-  const take = await stub.fetch("https://limiter/take", { method: "POST", body: JSON.stringify({
-    visitor: await hashKey(ip, day, env.TURNSTILE_SECRET), day,
-    perVisitor: Number(env.PER_VISITOR_DAILY || 15), global: Number(env.GLOBAL_DAILY || 150) }) }).then((r) => r.json());
+  const ask = (msg) => stub.fetch("https://limiter/" + msg.op, { method: "POST", body: JSON.stringify(msg) }).then((r) => r.json());
+  const take = await ask({ op: "take", visitor: await hashKey(ip, day, env.TURNSTILE_SECRET), day, month,
+    perVisitor: Number(env.PER_VISITOR_DAILY || 15), global: Number(env.GLOBAL_DAILY || 150),
+    usdDay: Number(env.HELPER_USD_DAY || 2), usdMonth: Number(env.HELPER_USD_MONTH || 60) });
   if (!take.ok) {
-    const msg = take.reason === "visitor" ? say("你今天的提问次数用完了，明天再来。", "You have used today's questions; come back tomorrow.")
+    const msg = take.reason === "budget" ? say("小帮手今天的额度用完了，明天再来。", "The helper has used today's budget; come back tomorrow.")
+              : take.reason === "visitor" ? say("你今天的提问次数用完了，明天再来。", "You have used today's questions; come back tomorrow.")
                                           : say("小帮手今天的总次数用完了，明天再来。", "The helper has used today's questions; come back tomorrow.");
     return json({ error: "limit", message: msg, session }, 429, origin);
   }
@@ -139,6 +142,7 @@ async function chatRoute(body, request, env, deps, origin) {
     const ratings = env.REVIEWS ? (await reviews(env, { op: "ratings", site: catalog })).data : {};
     const client = deps.client || new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 60_000 });
     const out = await answer({ client, index, ratings, messages: v.messages });
+    await ask({ op: "spend", day, month, usd: out.cost || 0 }).catch((e) => console.log("spend not recorded:", e && e.message));
     return json({ reply: out.reply, session }, 200, origin);
   } catch (e) {
     console.log("answer failed:", e && e.message);
@@ -170,22 +174,31 @@ export async function handle(request, env, deps = {}) {
 
 export default { fetch: (request, env) => handle(request, env) };
 
-// One Durable Object counts every helper question: strongly consistent, and it stores only today's counts.
+// One Durable Object counts every helper question and its dollars: strongly consistent, and it stores only today's counts
+// and spend plus this month's spend.
 export class Limiter {
   constructor(ctx) { this.ctx = ctx; }
 
   async fetch(request) {
-    const { visitor, day, perVisitor, global } = await request.json();
-    const g = (await this.ctx.storage.get(`g:${day}`)) || 0;
-    const u = (await this.ctx.storage.get(`u:${day}:${visitor}`)) || 0;
+    const msg = await request.json();
+    const { day, month } = msg, st = this.ctx.storage;
+    if ((await st.get("day")) !== day) {                        // a new day: drop yesterday's counts and spend, and older months
+      const old = await st.list();
+      await st.delete([...old.keys()].filter((k) => k !== "day" && k !== `m:${month}` && !k.includes(`:${day}`)));
+      await st.put("day", day);
+    }
+    if (msg.op === "spend") {
+      const usd = Number(msg.usd);
+      if (usd > 0) await st.put({ [`s:${day}`]: ((await st.get(`s:${day}`)) || 0) + usd, [`m:${month}`]: ((await st.get(`m:${month}`)) || 0) + usd });
+      return Response.json({ ok: true });
+    }
+    const { visitor, perVisitor, global } = msg;
+    const g = (await st.get(`g:${day}`)) || 0;
+    const u = (await st.get(`u:${day}:${visitor}`)) || 0;
+    if (((await st.get(`s:${day}`)) || 0) >= msg.usdDay || ((await st.get(`m:${month}`)) || 0) >= msg.usdMonth) return Response.json({ ok: false, reason: "budget" });
     if (g >= global) return Response.json({ ok: false, reason: "global" });
     if (u >= perVisitor) return Response.json({ ok: false, reason: "visitor" });
-    await this.ctx.storage.put({ [`g:${day}`]: g + 1, [`u:${day}:${visitor}`]: u + 1 });
-    if ((await this.ctx.storage.get("day")) !== day) {        // a new day: drop yesterday's counts
-      const old = await this.ctx.storage.list();
-      await this.ctx.storage.delete([...old.keys()].filter((k) => k !== "day" && !k.includes(`:${day}`)));
-      await this.ctx.storage.put("day", day);
-    }
+    await st.put({ [`g:${day}`]: g + 1, [`u:${day}:${visitor}`]: u + 1 });
     return Response.json({ ok: true, used: g + 1 });
   }
 }

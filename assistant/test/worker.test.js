@@ -1,8 +1,8 @@
 // Checks for src/worker.js request handling with fakes for Turnstile, the limiter and Claude: npm test.
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { handle, Limiter } from "../src/worker.js";
-import { signSession } from "../src/core.js";
+import { signSession, costUsd } from "../src/core.js";
 
 const ORIGIN = "https://xmum-sair.github.io";
 
@@ -67,6 +67,34 @@ test("daily caps stop a visitor, then the whole site", async () => {
   assert.equal((await handle(other, e, deps())).status, 200);                   // the site's third question of the day
   const fourth = new Request(other.url, { method: "POST", headers: { Origin: ORIGIN, "CF-Connecting-IP": "9.9.9.9" }, body: JSON.stringify({ ...Q, session }) });
   assert.equal((await (await handle(fourth, e, deps())).json()).message.includes("总次数"), true);
+});
+
+test("dollar caps stop the helper for the day, then the month", async (t) => {
+  t.after(() => mock.timers.reset());
+  mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-06T10:00:00Z") });
+  const e = env({ PER_VISITOR_DAILY: "99", GLOBAL_DAILY: "99", HELPER_USD_DAY: "2", HELPER_USD_MONTH: "3" });
+  const d = deps();
+  d.client.beta.messages.create = async () => ({ stop_reason: "end_turn", content: [{ type: "text", text: "你好" }],
+                                                 usage: { input_tokens: 300_000, output_tokens: 0 } });   // opus: $1.20 an answer
+  const status = async () => (await handle(ask({ ...Q, session: await signSession("ts|session") }), e, d)).status;
+  assert.equal(await status(), 200);
+  assert.equal(await status(), 200);          // 1.2 spent < 2 before the call
+  const third = await handle(ask({ ...Q, session: await signSession("ts|session") }), e, d);
+  assert.equal(third.status, 429);
+  const data = await third.json();
+  assert.equal(data.error, "limit");
+  assert.ok(data.message.includes("额度"));
+  mock.timers.setTime(Date.parse("2026-11-07T10:00:00Z"));
+  assert.equal(await status(), 200);          // month so far 2.4 < 3
+  assert.equal(await status(), 429);          // 3.6 >= 3
+});
+
+test("costUsd matches the shared price table", () => {
+  assert.equal(costUsd("claude-opus-5-5", { input_tokens: 1_000_000, output_tokens: 100_000 }), 6);
+  assert.equal(costUsd("claude-mystery", { input_tokens: 1_000_000 }), costUsd("claude-fable-5-1", { input_tokens: 1_000_000 }));
+  assert.equal(costUsd("claude-opus-5-5", { input_tokens: null, cache_read_input_tokens: 1_000_000 }), 0.2);
+  assert.equal(costUsd("claude-opus-5-5", undefined), 0);
+  assert.equal(costUsd("claude-haiku-5-5", { input_tokens: 200_000, output_tokens: 1000 }), 0.1025);
 });
 
 // ---- course reviews on the same Worker
