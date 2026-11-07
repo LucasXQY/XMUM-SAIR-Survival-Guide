@@ -158,7 +158,7 @@ Builds on the upload channel in DESIGN.md and replaces its "Claude pre-check" se
 - **GitHub 上的机器人**：`claude-usage.json`（bot-state 分支）改成按池子记当天和当月的美元数。为了不对 GitHub API 写几百次，采用"先按批预留、跑完一次结算"：每一批调用前按页数估算并预留，超过上限就不预留、这批文件标"额度用完"；跑完按实际花费结算多退少补。
 - **每次上传 8 美元是每次运行的上限**（每次重建重新计），作用是几个上传同时排队时不让一个上传吃掉当天的 15 美元。总量由每天 15、每月 60 管住。所以一个 60 个文件的大上传会在几次重建（或几天）里陆续查完，不需要维护者手动批准。
 - 上传池**取消按文件数的旧上限**（`CLAUDE_DAILY_UPLOAD` 每天 30 个、每次 20 个），否则它们会比美元上限先卡住大上传。
-- **小帮手**：Limiter Durable Object 记当天和当月花费；开始回答前检查没超上限，回答完加上实际花费（最多超出一个问题的钱，约 0.2 美元）。超了就回复"今天的额度用完了"。变量 `HELPER_USD_DAY`、`HELPER_USD_MONTH` 写在 `wrangler.toml`，部署工作流可用仓库变量覆盖。
+- **小帮手**：Limiter Durable Object 记当天和当月花费。每个问题接收时先在 Limiter 里预留 0.25 美元：若已花费加 0.25 会超过当天或当月上限，就拒绝并回复"今天的额度用完了"；回答完按实际花费结算（实际减 0.25，多退少补），按实际回答的那个模型计价；回答失败则保留这 0.25 的预留。因为先预留，并发的问题也不会一起冲过上限。`llm/prices.json` 改动时，部署工作流会重新部署 Worker。变量 `HELPER_USD_DAY`、`HELPER_USD_MONTH` 写在 `wrangler.toml`，部署工作流可用仓库变量覆盖。
 - 小帮手和 Haiku 任务现有的按次数上限（`GLOBAL_DAILY`、`PER_VISITOR_DAILY`、`CLAUDE_DAILY_MODERATION` 等）保留作第二道保险。
 - **兜底**：维护者在 Claude Console 给 API 组织设每月 150 美元支出上限。记账有偏差时 API 直接报错，各功能的代码已经把报错当"没有结果"处理。
 
